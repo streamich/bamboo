@@ -6,7 +6,6 @@
   "bin": "./bin/full",
   "preferGlobal": true,
   "dependencies": {
-    "libjs": "*",
     "buffer": "4.6.0",
     "static-buffer": "*",
     "libsys": "*",

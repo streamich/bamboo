@@ -31,6 +31,7 @@ Verbatim copy from Node.js
 
  - [X] `EventEmitter`
 
+
 ### [`process`](https://nodejs.org/api/process.html)
 
 *Depends on:* `process.syscall`, `events`
@@ -40,6 +41,7 @@ Extra:
  - [X] `process.syscall(number, ...args): number`
  - [X] `process.syscall64(number, ...args): number`
  - [ ] `process.asyscall(number, ...args, callback)`
+ - [ ] `process.asyscall64(number, ...args, callback)`
  - [ ] `process.malloc(address, size): Buffer`
 
 Standard:
@@ -99,16 +101,27 @@ Standard:
  - [X] `process.features`
  - [ ] `Exit Codes`
 
+
 ### [`Buffer`](https://nodejs.org/api/buffer.html)
 
 *Depends on:* `ArrayBuffer`
 
-Use `buffer` package, which was originally written for Browserify. Internally
+Use `buffer` *npm* package, which was originally written for Browserify. Internally
 it uses `ArrayBuffer`, which is what we need. `buffer` has also a fallback
 for older browsers to emulate `ArrayBuffer` with plain JavaScript objects, we may
-want to remove that option, as it is no-no for use.
+want to remove that option, as it is no-no for us.
 
 TODO: check all methods work correctly, including the `.slice()` method.
+
+ - [X] `Buffer`
+
+
+### `StaticBuffer`
+
+*Depends on:* `Buffer`, `process.syscall`, `process.malloc`
+
+ - [ ] `StaticBuffer`
+ 
 
 ### [`util`](https://nodejs.org/api/util.html)
 
@@ -150,20 +163,25 @@ Extra:
  - [X] `util.extend(...objects)` 
 
 
-### [`Console`](https://nodejs.org/api/console.html)
+### [`assert`](https://nodejs.org/api/assert.html)
 
-*Depends on:* `util`, `stream`, `fs`
+*Depends on:* `util`, `Buffer`
 
- - [ ] `new Console(stdout[, stderr])`
- - [ ] `console.assert(value[, message][, ...])`
- - [ ] `console.dir(obj[, options])`
- - [ ] `console.error([data][, ...])`
- - [ ] `console.info([data][, ...])`
- - [ ] `console.log([data][, ...])`
- - [ ] `console.time(label)`
- - [ ] `console.timeEnd(label)`
- - [ ] `console.trace(message[, ...])`
- - [ ] `console.warn([data][, ...])`
+ - [X] `assert(value[, message])`
+ - [X] `assert.deepEqual(actual, expected[, message])`
+ - [X] `assert.deepStrictEqual(actual, expected[, message])`
+ - [X] `assert.doesNotThrow(block[, error][, message])`
+ - [X] `assert.equal(actual, expected[, message])`
+ - [X] `assert.fail(actual, expected, message, operator)`
+ - [X] `assert.ifError(value)`
+ - [X] `assert.notDeepEqual(actual, expected[, message])`
+ - [X] `assert.notDeepStrictEqual(actual, expected[, message])`
+ - [X] `assert.notEqual(actual, expected[, message])`
+ - [X] `assert.notStrictEqual(actual, expected[, message])`
+ - [X] `assert.ok(value[, message])`
+ - [X] `assert.strictEqual(actual, expected[, message])`
+ - [X] `assert.throws(block[, error][, message])`
+
 
 ### [`path`](https://nodejs.org/api/path.html)
 
@@ -173,6 +191,7 @@ Verbatim copy from Node.js
 
  - [X] `path`
 
+
 ### [`stream`](https://nodejs.org/api/stream.html)
 
 *Depends on:* `events`, `util`, `Buffer`
@@ -180,10 +199,18 @@ Verbatim copy from Node.js
 Almost verbatim copy from Node.js
 
  - [X] `stream`
+ 
+ 
+### [`libjs`](http://www.npmjs.com/package/libjs)
+
+*Depends on:* `process.syscall`, `process.syscall64`, `process.asyscall`, `process.asyscall64`
+
+Wrapper around system calls.
+
 
 ### [`fs`](https://nodejs.org/api/fs.html)
 
-*Depends on:* `path`, `process`
+*Depends on:* `events`, `path`, `Buffer`, `stream`, `libjs`
 
 Below synchronous methods are implements using `process.syscall`:
 
@@ -221,7 +248,7 @@ Below synchronous methods are implements using `process.syscall`:
  - [ ] `fs.unlinkSync(path)`
  - [ ] `fs.rmdirSync(path)`
  
-Below asynchronous methods are implements using `process.asyscall`:
+Below asynchronous methods are implemented using `process.asyscall`:
  
  - [ ] `fs.access(path[, mode], callback)`
  - [ ] `fs.appendFile(file, data[, options], callback)`
@@ -265,18 +292,18 @@ might not be 100% compatible with Node.js:
  - [ ] `fs.readdir(path[, options], callback)`
  
 Times are currently resolved to millisecond accuracy, you can still use
-`utimes` but if you specify time in microsecod accuracy it will be rounded
+`utimes` but if you specify time with microsecond accuracy it will be rounded
 to milliseconds:
   
  - [ ] `fs.utimes(path, atime, mtime, callback)`
  - [ ] `fs.utimesSync(path, atime, mtime)`
  
-We use `inotify` syscall interface (just like Node.js) from 
+We use `inotify` syscall interface (just like `libuv` in Node.js) from 
 [`libaio`](http://www.npmjs.com/package/libaio) package:   
 
  - [ ] `fs.watch(filename[, options][, listener])`
  
-Below file watching just polls file system using `setTimeout()`. There
+Below file watching just polls file system (as does Node.js) using `setTimeout()`. There
 are some incompatibilities with Node.js, see [`fslib`](http://www.npmjs.com/package/fslib):
  
  - [ ] `fs.unwatchFile(filename[, listener])`
@@ -306,6 +333,23 @@ Other:
      - [ ] File Open Constants
      - [ ] File Type Constants
      - [ ] File Mode Constants
+
+
+### [`Console`](https://nodejs.org/api/console.html)
+
+*Depends on:* `util`, `stream`, `fs`, `assert`
+
+ - [ ] `new Console(stdout[, stderr])`
+ - [ ] `console.assert(value[, message][, ...])`
+ - [ ] `console.dir(obj[, options])`
+ - [ ] `console.error([data][, ...])`
+ - [ ] `console.info([data][, ...])`
+ - [ ] `console.log([data][, ...])`
+ - [ ] `console.time(label)`
+ - [ ] `console.timeEnd(label)`
+ - [ ] `console.trace(message[, ...])`
+ - [ ] `console.warn([data][, ...])`
+
 
 ### [`dgram`](https://nodejs.org/api/dgram.html)
 
