@@ -324,7 +324,8 @@ int main(int argc, char *argv[]) {
     if (ctx) {
         duk_eval_string(ctx,
             "var process = {title: 'full.js'};"
-            "var global = {process: process};"
+            "var global = Duktape;"
+            "global.process = process;"
             "Duktape.global = global;"
             "Duktape.process = process;");
             
@@ -351,12 +352,13 @@ int main(int argc, char *argv[]) {
         duk_push_c_function(ctx, fulljs_api_readFile, 1);
         duk_put_prop_string(ctx, -2, "readFile");        
 
+//        printf("args: %d", argc);
         if(argc >= 2) {
             duk_push_string(ctx, "argv");
             duk_push_array(ctx);
-            for(int i = 1; i < argc; i++) {
+            for(int i = 0; i < argc; i++) {
                 duk_push_string(ctx, argv[i]);
-                duk_put_prop_index(ctx, -2, i - 2);
+                duk_put_prop_index(ctx, -2, i);
             }
             duk_put_prop(ctx, -3);
             

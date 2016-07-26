@@ -14,6 +14,11 @@
 // `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
 var p = process as any;
 
+// Use `StaticBuffer` if available.
+var Buffer = StaticBuffer || Buffer;
+// TODO: change to this:
+// var Buffer = StaticBuffer;
+
 // Import syscall functions from `process` or require from `libsys` package if we
 // are running under Node.js
 const syscall = p.syscall || require('libsys').syscall;
@@ -1136,6 +1141,25 @@ export function getegid(): number {
     // debug('getegid');
     return syscall(SYS.getegid);
 }
+
+// ### sched_yield
+
+export function sched_yield() {
+    syscall(SYS.sched_yield); // `sched_yield` always succeeds
+}
+
+
+// ## sleep
+
+// export function nanosleep(req: types.timespec, rem: types.timespec = null): number {
+export function nanosleep(seconds: number, nanoseconds: number): number {
+    var buf = types.timespec.pack({
+        tv_sec: [seconds, 0],
+        tv_nsec: [nanoseconds, 0],
+    });
+    return syscall(SYS.nanosleep, buf, types.NULL);
+}
+
 
 
 // ## Events

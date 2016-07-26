@@ -758,7 +758,7 @@ export interface utimbuf {
 }
 
 export var timeval = Struct.define(16, [
-    [0, uint64, 'tv_sec'], // access time
+    [0, uint64, 'tv_sec'],  // access time
     [8, uint64, 'tv_nsec'], // modification time
 ]);
 

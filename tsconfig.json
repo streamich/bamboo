@@ -4,5 +4,8 @@
     "module": "commonjs",
     "removeComments": true,
     "sourceMap": false
-  }
+  },
+  "exclude": [
+    "dist"
+  ]
 }

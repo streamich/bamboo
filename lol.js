@@ -1,2 +1,7 @@
-console.log(123);
-require('./lol2.js');
+
+
+console.log('LOL loaded');
+console.log(__filename);
+console.log(__dirname);
+require('./lol2');
+

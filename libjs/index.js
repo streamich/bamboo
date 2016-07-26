@@ -3,6 +3,7 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 var p = process;
+var Buffer = StaticBuffer || Buffer;
 var syscall = p.syscall || require('libsys').syscall;
 var syscall64 = p.syscall64 || require('libsys').syscall64;
 var asyscall = p.asyscall || (function asyscall() {
@@ -605,6 +606,18 @@ function getegid() {
     return syscall(x86_64_linux_1.SYS.getegid);
 }
 exports.getegid = getegid;
+function sched_yield() {
+    syscall(x86_64_linux_1.SYS.sched_yield);
+}
+exports.sched_yield = sched_yield;
+function nanosleep(seconds, nanoseconds) {
+    var buf = types.timespec.pack({
+        tv_sec: [seconds, 0],
+        tv_nsec: [nanoseconds, 0]
+    });
+    return syscall(x86_64_linux_1.SYS.nanosleep, buf, types.NULL);
+}
+exports.nanosleep = nanosleep;
 function fcntl(fd, cmd, arg) {
     var params = [x86_64_linux_1.SYS.fcntl, fd, cmd];
     if (typeof arg !== 'undefined')
