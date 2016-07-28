@@ -1,3 +1,7 @@
+
+declare var __DEBUG__: boolean;
+
+
 interface StaticArrayBufferConstructor extends ArrayBufferConstructor {
 
 }

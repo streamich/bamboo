@@ -33,7 +33,6 @@ t_int fulljs_get_buffer_address(duk_context *ctx, int index) {
     return (t_int) duk_get_buffer_data(ctx, index, NULL);
 }
 
-
 t_int fulljs_arg_to_int(duk_context *ctx, int index) {
     if(duk_is_number(ctx, index)) {
         return (t_int) duk_get_int(ctx, index);
@@ -44,8 +43,8 @@ t_int fulljs_arg_to_int(duk_context *ctx, int index) {
         duk_get_prop_index(ctx, index, 1);
         t_int32 hi = (t_int32) duk_get_int(ctx, -1);
         t_int32 lo = (t_int32) duk_get_int(ctx, -2);
-        t_int addr;
-        addr = (t_int) ((((t_int64) hi) << 32) | ((t_int64) lo & 0xffffffff));
+
+        int64_t addr = (int64_t) ((((int64_t) hi) << 32) | ((int64_t) lo & 0xffffffff));
         
         duk_get_prop_index(ctx, index, 2);
         if(!duk_is_undefined(ctx, -1)) {
@@ -55,44 +54,46 @@ t_int fulljs_arg_to_int(duk_context *ctx, int index) {
         
         return addr;
     } else { // assume buffer
+//        printf("buf: %lli\n", fulljs_get_buffer_address(ctx, index));
         return fulljs_get_buffer_address(ctx, index);
     }
 }
 
 
-t_int fulljs_exec_syscall(duk_context *ctx) {
+int64_t fulljs_exec_syscall(duk_context *ctx) {
     char len = duk_get_top(ctx);
     int cmd = (int) duk_get_int(ctx, 0);
-    t_int res;
-    
+    int64_t res;
+//    printf("cmd: %i\n", cmd);
+
     switch(len) {
         case 1:
-            res = (t_int) syscall(cmd);
+            res = syscall(cmd);
             break;
         case 2:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1));
             break;
         case 3:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1),
                     fulljs_arg_to_int(ctx, 2));
             break;
         case 4:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1),
                     fulljs_arg_to_int(ctx, 2),
                     fulljs_arg_to_int(ctx, 3));
             break;
         case 5:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1),
                     fulljs_arg_to_int(ctx, 2),
                     fulljs_arg_to_int(ctx, 3),
                     fulljs_arg_to_int(ctx, 4));
             break;
         case 6:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1),
                     fulljs_arg_to_int(ctx, 2),
                     fulljs_arg_to_int(ctx, 3),
@@ -100,7 +101,7 @@ t_int fulljs_exec_syscall(duk_context *ctx) {
                     fulljs_arg_to_int(ctx, 5));
             break;
         case 7:
-            res = (t_int) syscall(cmd,
+            res = syscall(cmd,
                     fulljs_arg_to_int(ctx, 1),
                     fulljs_arg_to_int(ctx, 2),
                     fulljs_arg_to_int(ctx, 3),
@@ -111,8 +112,12 @@ t_int fulljs_exec_syscall(duk_context *ctx) {
         default:
             return res = -1;
     }
-    
-    return res == -1 ? (t_int) -errno : res;
+//    printf("syscall: %lli\n", res);
+
+    if(res == -1) {
+        return (int64_t) -errno;
+    }
+    else return res;
 }
 
 
@@ -122,10 +127,14 @@ int fulljs_api_syscall(duk_context *ctx) {
     return 1;     
 }
 
-int fulljs_return_number64(duk_context* ctx, t_int num) {
-    int32_t lo = num & 0xffffffff;
-    int32_t hi = num >> 32;
-    
+int fulljs_return_number64(duk_context* ctx, int64_t num) {
+    int32_t lo = (int32_t) (((uint64_t) num) & 0xffffffff);;
+    int32_t hi = (int32_t) (((uint64_t) num) >> 32);
+
+//    printf("num: %lli\n", num);
+//    printf("lo: %i\n", lo);
+//    printf("hi: %i\n", hi);
+
     duk_uarridx_t arr_idx;
     arr_idx = duk_push_array(ctx);
     duk_push_int(ctx, lo);
@@ -137,12 +146,20 @@ int fulljs_return_number64(duk_context* ctx, t_int num) {
 }
 
 int fulljs_api_syscall64(duk_context *ctx) {
-    t_int res = fulljs_exec_syscall(ctx);
+    int64_t res = fulljs_exec_syscall(ctx);
+//    printf("syscall: %lli\n", res);
     return fulljs_return_number64(ctx, res);
 }
 
 int fulljs_api_getAddress(duk_context *ctx) {
     t_int addr = fulljs_get_buffer_address(ctx, 0);
+
+    char len = duk_get_top(ctx);
+    if(len == 2) {
+        t_int offset = (t_int) duk_get_int(ctx, 1);
+        addr += offset;
+    }
+
     return fulljs_return_number64(ctx, addr);
 }
 
@@ -150,9 +167,10 @@ int fulljs_api_getAddress(duk_context *ctx) {
 int fulljs_api_frame(duk_context *ctx) {
     void* addr = (void*) fulljs_arg_to_int(ctx, 0);
     size_t size = (size_t) duk_get_int(ctx, 1);
-         
+//    printf("frame: %lli, %zu\n", addr, size);
     duk_push_external_buffer(ctx);
     duk_config_buffer(ctx, -1, addr, size);
+    duk_push_buffer_object(ctx, -1, 0, size, DUK_BUFOBJ_ARRAYBUFFER);
     return 1;
 }
 
@@ -323,8 +341,8 @@ int main(int argc, char *argv[]) {
 
     if (ctx) {
         duk_eval_string(ctx,
-            "var process = {title: 'full.js'};"
-            "var global = Duktape;"
+            "process = {title: 'full.js'};"
+            "global = Duktape;"
             "global.process = process;"
             "Duktape.global = global;"
             "Duktape.process = process;");
@@ -353,7 +371,7 @@ int main(int argc, char *argv[]) {
         duk_put_prop_string(ctx, -2, "readFile");        
 
 //        printf("args: %d", argc);
-        if(argc >= 2) {
+//        if(argc >= 2) {
             duk_push_string(ctx, "argv");
             duk_push_array(ctx);
             for(int i = 0; i < argc; i++) {
@@ -361,11 +379,18 @@ int main(int argc, char *argv[]) {
                 duk_put_prop_index(ctx, -2, i);
             }
             duk_put_prop(ctx, -3);
-            
-            fulljs_load_main(ctx, argv[1]);
-        } else {
-            printf("*.js file name argument expected.\n");
-        }
+
+//            duk_eval_string(ctx,
+//                "var ab = new ArrayBuffer(25);"
+//                "print(process.getAddress(ab));");
+
+//            fulljs_load_main(ctx, argv[1]);
+
+            fulljs_load_main(ctx, "../../dist/full.js");
+//            fulljs_load_main(ctx, "./dist/full.js");
+//        } else {
+//            printf("*.js file name argument expected.\n");
+//        }
         
         duk_destroy_heap(ctx);
     }

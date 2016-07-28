@@ -9,8 +9,8 @@ export const enum DELAY {
 const POINTER_NONE = -1;
 
 const DELAYS = [
-    DELAY.IMMEDIATE,
-    DELAY.IO,
+    DELAY.IMMEDIATE,    // `setImmediate` == `setTimeout(, -2)`
+    DELAY.IO,           // `setIOPoll` == `setTimeout(, -1)`
     1,
     // 2,
     // 4,

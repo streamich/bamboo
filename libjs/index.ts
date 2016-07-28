@@ -11,18 +11,19 @@
 //     libjs.write(1, buf);
 //     libjs.close(fd);
 
-// `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
-var p = process as any;
-
 // Use `StaticBuffer` if available.
-var Buffer = StaticBuffer || Buffer;
+// var Buffer = StaticBuffer || Buffer;
 // TODO: change to this:
 // var Buffer = StaticBuffer;
 
+
+// `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
+var p = process as any;
+
 // Import syscall functions from `process` or require from `libsys` package if we
 // are running under Node.js
-const syscall = p.syscall || require('libsys').syscall;
-const syscall64 = p.syscall64 || require('libsys').syscall64;
+const syscall = p.syscall;
+const syscall64 = p.syscall64;
 
 // Import asynchronous syscall functions or create fake wrappers.
 const asyscall = p.asyscall || (
@@ -535,7 +536,8 @@ export function getcwd(): string {
         } else throw res;
     }
 
-    return buf.slice(0, res).toString();
+    // -1 to remove `\0` terminating the string.
+    return buf.slice(0, res - 1).toString();
 }
 
 export function getcwdAsync(callback: TcallbackErrTyped <number, string>) {

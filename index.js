@@ -8,7 +8,6 @@ if(typeof console === 'undefined') {
   };
 }
 
-
 require('./lib/boot');
 
 // Export `Buffer` as global.

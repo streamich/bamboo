@@ -10,6 +10,9 @@ CFLAGS = -std=c99
 $(TARGET): $(TARGET).c $(RUNTIME).o
 	$(CC) $(CFLAGS) -o $(TARGET) -Isrc/ $(TARGET).c -lm $(RUNTIME).o
 
+try: try.c $(RUNTIME).o
+	$(CC) $(CFLAGS) -o try -Isrc/ try.c -lm $(RUNTIME).o
+
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 

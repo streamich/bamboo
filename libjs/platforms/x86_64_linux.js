@@ -17,7 +17,7 @@ exports.pid_t = exports.uint32;
 exports.ipv4 = typebase_1.Type.define(4, function (offset) {
     if (offset === void 0) { offset = 0; }
     var buf = this;
-    var socket = require('../../socket');
+    var socket = require('../socket');
     var octets = socket.Ipv4.type.unpack(buf, offset);
     return new socket.Ipv4(octets);
 }, function (data, offset) {

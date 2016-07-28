@@ -1,7 +1,8 @@
 
 
-console.log('LOL loaded');
-console.log(__filename);
-console.log(__dirname);
-require('./lol2');
+console.log('LOL');
+// console.log(__filename);
+// console.log(__dirname);
+// console.log(require);
+// require('./lol2');
 

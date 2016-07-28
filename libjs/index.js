@@ -3,9 +3,8 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 var p = process;
-var Buffer = StaticBuffer || Buffer;
-var syscall = p.syscall || require('libsys').syscall;
-var syscall64 = p.syscall64 || require('libsys').syscall64;
+var syscall = p.syscall;
+var syscall64 = p.syscall64;
 var asyscall = p.asyscall || (function asyscall() {
     var args = [];
     for (var _i = 0; _i < arguments.length; _i++) {
@@ -269,7 +268,7 @@ function getcwd() {
         else
             throw res;
     }
-    return buf.slice(0, res).toString();
+    return buf.slice(0, res - 1).toString();
 }
 exports.getcwd = getcwd;
 function getcwdAsync(callback) {

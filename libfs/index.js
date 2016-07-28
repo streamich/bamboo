@@ -6,6 +6,9 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var libjs = require('../libjs/index');
 var inotify_1 = require('../libaio/inotify');
+if (__DEBUG__) {
+    exports.isFullJS = true;
+}
 function extend(a, b) {
     for (var i in b)
         a[i] = b[i];
@@ -207,9 +210,9 @@ function build(deps) {
         stats.ino = res.ino;
         stats.size = res.size;
         stats.blocks = res.blocks;
-        stats.atime = new Date(res.atime * 1000);
-        stats.mtime = new Date(res.mtime * 1000);
-        stats.ctime = new Date(res.ctime * 1000);
+        stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
+        stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
+        stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
         stats.birthtime = stats.ctime;
         return stats;
     }

@@ -55,7 +55,6 @@ var global = this;
 	  };
 	}
 
-
 	__webpack_require__(1);
 
 	// Export `Buffer` as global.
@@ -105,28 +104,34 @@ var global = this;
 
 
 	// Export `Buffer` as global. Other things use `Buffer`, so we export Buffer first.
-	Buffer = global.Buffer = __webpack_require__(3).Buffer;
+	Buffer = global.Buffer = __webpack_require__(2).Buffer;
+
 
 	// Export `StaticArrayBuffer`, required by `StaticBuffer`.
-	StaticArrayBuffer = global.StaticArrayBuffer = __webpack_require__(40).StaticArrayBuffer;
+	StaticArrayBuffer = global.StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
+
 
 	// Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
-	StaticBuffer = global.StaticBuffer = __webpack_require__(41).StaticBuffer;
+	StaticBuffer = global.StaticBuffer = __webpack_require__(11).StaticBuffer;
 
 
 	// Set-up `process` global.
-	__webpack_require__(6);
+	__webpack_require__(12);
+
+	var sab = StaticArrayBuffer.alloc(10, 'rwe');
+	console.log(process.getAddress(sab));
+	sab.free();
 
 
 	// The main event loop, attached to `process` as `loop` property.
-	var eloop = __webpack_require__(2);
+	var eloop = __webpack_require__(15);
 	var EventLoop = eloop.EventLoop;
 	var Task = eloop.Task;
 	var loop = process.loop = new EventLoop;
 
 
 	// Export timers as globals.
-	var timers = __webpack_require__(15);
+	var timers = __webpack_require__(16);
 	setTimeout = timers.setTimeout;
 	clearTimeout = timers.clearTimeout;
 	setInterval = timers.setInterval;
@@ -141,394 +146,39 @@ var global = this;
 	var task = new Task;
 	task.callback = function() {
 
-	    var Module = __webpack_require__(32).Module;
-	    // console.log(Module);
-	    var main = '/share/full-js/lol';
-	    Module._load(main, null, true);
+	    // !IMPORTANT: everything that uses `process.nextTick()` must
+	    // bet executed in this callback so all the micro-tasks get correctly
+	    // executed after this first task is processed.
 
-	    console.log(process.getgid());
+	    try {
 
+	        // Eval the file specified in first argument `full app.js`
+	        if(process.argv[1]) {
+	            var path = __webpack_require__(17);
+	            var Module = __webpack_require__(20).Module;
+	            console.log(process.cwd());
+	            console.log(process.argv[1]);
+	            process.argv[1] = path.resolve(process.argv[1]);
+	            console.log(process.argv[1]);
+	            // setImmediate(function() {
+	            //     Module.runMain();
+	            // });
+	        }
 
-
-
-	    // console.log(process)
-
-	    // Export `StaticBuffer` and `StaticArrayBuffer` as globals
+	    } catch(e) {
+	        console.log(e);
+	        console.log(e.line);
+	        console.log(e.stack);
+	    }
 
 	};
 	loop.insert(task);
 	loop.start();
 
 
+
 /***/ },
 /* 2 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var index_1 = __webpack_require__(9);
-	var POINTER_NONE = -1;
-	var DELAYS = [
-	    -2,
-	    -1,
-	    1,
-	    8,
-	    16,
-	    32,
-	    64,
-	    128,
-	    256,
-	    1024,
-	    4096,
-	    16384,
-	    65536,
-	    131072,
-	    524288,
-	    2097152,
-	    8388608,
-	    33554432,
-	    268435456,
-	    2147483648,
-	    Infinity,
-	];
-	var DELAY_LAST = DELAYS.length - 1;
-	function findDelayIndex(delay) {
-	    for (var i = 0; i <= DELAY_LAST; i++)
-	        if (delay <= DELAYS[i])
-	            return i;
-	}
-	var MicroTask = (function () {
-	    function MicroTask() {
-	        this.next = null;
-	        this.prev = null;
-	        this.callback = null;
-	        this.args = null;
-	    }
-	    MicroTask.prototype.exec = function () {
-	        var args = this.args, callback = this.callback;
-	        if (!args) {
-	            callback();
-	        }
-	        else {
-	            switch (args.length) {
-	                case 1:
-	                    callback(args[0]);
-	                    break;
-	                case 2:
-	                    callback(args[0], args[1]);
-	                    break;
-	                case 3:
-	                    callback(args[0], args[1], args[2]);
-	                    break;
-	                default:
-	                    callback.apply(null, args);
-	            }
-	        }
-	    };
-	    return MicroTask;
-	}());
-	exports.MicroTask = MicroTask;
-	var Task = (function (_super) {
-	    __extends(Task, _super);
-	    function Task() {
-	        _super.apply(this, arguments);
-	        this.delay = -2;
-	        this.timeout = 0;
-	        this.pointer = POINTER_NONE;
-	        this.isRef = true;
-	        this.queue = null;
-	    }
-	    Task.prototype.ref = function () {
-	        if (!this.isRef) {
-	        }
-	    };
-	    Task.prototype.unref = function () {
-	        if (this.isRef) {
-	        }
-	    };
-	    Task.prototype.cancel = function () {
-	        this.queue.cancel(this);
-	    };
-	    return Task;
-	}(MicroTask));
-	exports.Task = Task;
-	var EventQueue = (function () {
-	    function EventQueue() {
-	        this.start = null;
-	        this.active = null;
-	        this.pointers = [];
-	    }
-	    EventQueue.prototype.setPointer = function (pointer_index, task) {
-	        var pointers = this.pointers;
-	        var timeout = task.timeout;
-	        pointers[pointer_index] = task;
-	        task.pointer = pointer_index;
-	        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
-	            var p = pointers[i];
-	            if (!p) {
-	                pointers[i] = task;
-	            }
-	            else {
-	                if (p.timeout <= timeout) {
-	                    pointers[i] = task;
-	                }
-	                else {
-	                    break;
-	                }
-	            }
-	        }
-	    };
-	    EventQueue.prototype.insertTask = function (curr, task) {
-	        var timeout = task.timeout;
-	        var prev = null;
-	        if (timeout >= curr.timeout) {
-	            do {
-	                prev = curr;
-	                curr = curr.next;
-	            } while (curr && (curr.timeout <= timeout));
-	            prev.next = task;
-	            task.prev = prev;
-	            if (curr) {
-	                curr.prev = task;
-	                task.next = curr;
-	            }
-	        }
-	        else {
-	            do {
-	                prev = curr;
-	                curr = curr.prev;
-	            } while (curr && (curr.timeout > timeout));
-	            prev.prev = task;
-	            task.next = prev;
-	            if (curr) {
-	                curr.next = task;
-	                task.prev = curr;
-	            }
-	            else {
-	                this.start = task;
-	            }
-	        }
-	    };
-	    EventQueue.prototype.msNextTask = function () {
-	        if (this.start) {
-	            return this.start.timeout - Date.now();
-	        }
-	        return Infinity;
-	    };
-	    EventQueue.prototype.insert = function (task) {
-	        task.queue = this;
-	        var delay = task.delay;
-	        var timeout = task.timeout = Date.now() + delay;
-	        var pointers = this.pointers;
-	        var pointer_index = findDelayIndex(delay);
-	        var curr = pointers[pointer_index];
-	        if (!curr) {
-	            this.setPointer(pointer_index, task);
-	            if (pointer_index) {
-	                for (var i = pointer_index - 1; i >= 0; i--) {
-	                    if (pointers[i]) {
-	                        curr = pointers[i];
-	                        break;
-	                    }
-	                }
-	            }
-	            if (!curr)
-	                curr = this.start;
-	            if (!curr) {
-	                this.start = task;
-	            }
-	            else {
-	                this.insertTask(curr, task);
-	            }
-	        }
-	        else {
-	            if (timeout >= curr.timeout) {
-	                this.setPointer(pointer_index, task);
-	            }
-	            this.insertTask(curr, task);
-	        }
-	    };
-	    EventQueue.prototype.cancel = function (task) {
-	        var prev = task.prev;
-	        var next = task.next;
-	        task.prev = task.next = null;
-	        if (prev)
-	            prev.next = next;
-	        if (next)
-	            next.prev = prev;
-	        if (!prev) {
-	            this.start = next;
-	        }
-	        if (task.pointer !== POINTER_NONE) {
-	            var index = task.pointer;
-	            if (index) {
-	                this.pointers[index] = this.pointers[index - 1];
-	            }
-	            else {
-	                this.pointers[index] = null;
-	            }
-	        }
-	    };
-	    EventQueue.prototype.sliceActiveQueue = function () {
-	        var curr = this.start;
-	        if (!curr)
-	            return;
-	        var time = Date.now();
-	        var pointers = this.pointers;
-	        for (var i = 0; i <= DELAY_LAST; i++) {
-	            var pointer = pointers[i];
-	            if (pointer) {
-	                if (pointer.timeout <= time) {
-	                    pointers[i] = null;
-	                    curr = pointer;
-	                }
-	                else {
-	                    break;
-	                }
-	            }
-	        }
-	        if (curr.timeout > time)
-	            return;
-	        var prev;
-	        do {
-	            prev = curr;
-	            curr = curr.next;
-	        } while (curr && (curr.timeout <= time));
-	        prev.next = null;
-	        if (curr)
-	            curr.prev = null;
-	        this.active = this.start;
-	        this.start = curr;
-	    };
-	    EventQueue.prototype.cycle = function () {
-	        this.sliceActiveQueue();
-	    };
-	    EventQueue.prototype.pop = function () {
-	        var task = this.active;
-	        if (!task)
-	            return null;
-	        this.active = task.next;
-	        return task;
-	    };
-	    return EventQueue;
-	}());
-	exports.EventQueue = EventQueue;
-	var EventLoop = (function () {
-	    function EventLoop() {
-	        this.microQueue = null;
-	        this.microQueueEnd = null;
-	        this.refQueue = new EventQueue;
-	        this.unrefQueue = new EventQueue;
-	    }
-	    EventLoop.prototype.shouldStop = function () {
-	        if (!this.refQueue.start)
-	            return true;
-	        return false;
-	    };
-	    EventLoop.prototype.insertMicrotask = function (microtask) {
-	        var last = this.microQueueEnd;
-	        this.microQueueEnd = microtask;
-	        if (!last) {
-	            this.microQueue = microtask;
-	        }
-	        else {
-	            last.next = microtask;
-	        }
-	    };
-	    EventLoop.prototype.insert = function (task) {
-	        if (task.isRef)
-	            this.refQueue.insert(task);
-	        else
-	            this.unrefQueue.insert(task);
-	    };
-	    EventLoop.prototype.start = function () {
-	        function exec_task(task) {
-	            if (task.callback)
-	                task.callback();
-	        }
-	        while (1) {
-	            this.refQueue.cycle();
-	            this.unrefQueue.cycle();
-	            var refTask = this.refQueue.pop();
-	            var unrefTask = this.unrefQueue.pop();
-	            var task;
-	            while (refTask || unrefTask) {
-	                if (refTask && unrefTask) {
-	                    if (refTask.timeout < unrefTask.timeout) {
-	                        refTask.exec();
-	                        refTask = null;
-	                    }
-	                    else if (refTask.timeout > unrefTask.timeout) {
-	                        unrefTask.exec();
-	                        unrefTask = null;
-	                    }
-	                    else {
-	                        if (refTask.timeout <= unrefTask.timeout) {
-	                            refTask.exec();
-	                            refTask = null;
-	                        }
-	                        else {
-	                            unrefTask.exec();
-	                            unrefTask = null;
-	                        }
-	                    }
-	                }
-	                else {
-	                    if (refTask) {
-	                        refTask.exec();
-	                        refTask = null;
-	                    }
-	                    else {
-	                        unrefTask.exec();
-	                        unrefTask = null;
-	                    }
-	                }
-	                var microtask;
-	                do {
-	                    microtask = this.microQueue;
-	                    if (microtask) {
-	                        if (microtask.callback)
-	                            microtask.exec();
-	                        this.microQueue = microtask.next;
-	                    }
-	                } while (this.microQueue);
-	                this.microQueueEnd = null;
-	                if (!refTask)
-	                    refTask = this.refQueue.pop();
-	                else
-	                    unrefTask = this.unrefQueue.pop();
-	            }
-	            if (this.shouldStop())
-	                break;
-	            var ref_ms = this.refQueue.msNextTask();
-	            var unref_ms = this.unrefQueue.msNextTask();
-	            var ms = Math.min(ref_ms, unref_ms);
-	            if (ms > 10) {
-	                if (ms > 10000)
-	                    ms = 10000;
-	                ms -= 5;
-	                var seconds = Math.floor(ms / 1000);
-	                var nanoseconds = (ms % 1000) * 1000000;
-	                index_1.nanosleep(seconds, nanoseconds);
-	            }
-	            else {
-	                if (ms > 1) {
-	                    index_1.sched_yield();
-	                }
-	            }
-	        }
-	    };
-	    return EventLoop;
-	}());
-	exports.EventLoop = EventLoop;
-
-
-/***/ },
-/* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// require does not work:
@@ -660,8 +310,8 @@ var global = this;
 
 
 
-	var ieee754 = __webpack_require__(4)
-	var isArray = __webpack_require__(5)
+	var ieee754 = __webpack_require__(3)
+	var isArray = __webpack_require__(4)
 	Buffer._full = true;
 	exports.Buffer = Buffer
 	exports.SlowBuffer = SlowBuffer
@@ -2362,8 +2012,61 @@ var global = this;
 	}
 
 
+
+
+
+	// Support to print Buffer in console, maybe wrap it in __DEBUG__
+
+
+	function toChar(num) {
+	    if(num < 30) return '.';
+	    else return String.fromCharCode(num);
+	}
+
+	function printBuffer(buf) {
+	    var int_size = 8;
+	    var ints = Math.ceil(buf.length / int_size);
+	    var lines = [];
+
+	    for(var j = 0; j < ints; j++) {
+	        var parts = [];
+	        var chars = [];
+
+	        var addr = '';
+	        addr = (j * int_size).toString();
+	        if(addr.length < 6)
+	            addr = (new Array(7 - addr.length)).join('0') + addr;
+
+	        parts.push(addr + ' ');
+
+	        for(var m = 0; m < int_size; m++) {
+	            var index = (j * int_size) + m;
+	            if(index >= buf.length) break;
+	            var char = buf[index];
+	            chars.push(toChar(char));
+	            var hex = char.toString(16);
+	            if(hex.length === 1) hex = '0' + hex;
+	            parts.push(hex);
+	        }
+
+	        var len = parts.join(' ').length;
+	        if(len < 32) parts.push((new Array(32 - len)).join(' '));
+	        else parts.push('  ');
+	        parts.push(chars.join(''));
+	        lines.push(parts.join(' '));
+	    }
+
+	    var str = lines.join('\n');
+	    console.log(str);
+	}
+
+	Buffer.prototype.print = function() {
+	    printBuffer(this);
+	};
+
+
 /***/ },
-/* 4 */
+/* 3 */
 /***/ function(module, exports) {
 
 	exports.read = function (buffer, offset, isLE, mLen, nBytes) {
@@ -2453,7 +2156,7 @@ var global = this;
 
 
 /***/ },
-/* 5 */
+/* 4 */
 /***/ function(module, exports) {
 
 	var toString = {}.toString;
@@ -2464,11 +2167,1419 @@ var global = this;
 
 
 /***/ },
+/* 5 */
+/***/ function(module, exports, __webpack_require__) {
+
+	exports.StaticArrayBuffer = StaticArrayBuffer;
+
+	// new StaticArrayBuffer(size);
+	// StaticArrayBuffer.frame(address, size);
+	// StaticArrayBuffer.alloc(size, protection);
+
+
+	function prot2num(prot) {
+	    if(typeof prot !== 'string')
+	        throw TypeError('Protection must be a string.');
+	    if(prot.match(/[^rwe]/))
+	        throw TypeError('Protection string can contain only "r", "w" and "e" characters, given "' + prot + '".');
+
+	    var val = 0 /* PROT_NONE */;
+	    if(prot.indexOf('r') > -1) val |= 1 /* PROT_READ */;
+	    if(prot.indexOf('w') > -1) val |= 2 /* PROT_WRITE */;
+	    if(prot.indexOf('e') > -1) val |= 4 /* PROT_EXEC */;
+	    return val;
+	}
+
+
+	// "frame" because it does not allocate,
+	// just frames a slice of memory into ArrayBuffer.
+	function frame(addr, size) {
+	    var ab = process.frame(addr, size);
+	    if(!(ab instanceof ArrayBuffer))
+	        throw Error('Could not allocate ArrayBuffer.');
+	    return ab;
+	}
+
+
+	function alloc(size, prot) {
+	    if (typeof size !== 'number')
+	        throw TypeError('size must be a number.');
+	    if (size < 0)
+	        throw TypeError('Invalid size argument.');
+
+	    if (!prot) prot = 'rw';
+
+	    var flags = 2 /* MAP_PRIVATE */ | 32 /* MAP_ANONYMOUS */;
+	    var protnum = prot2num(prot);
+	    var libjs = __webpack_require__(6);
+	    var addr = libjs.mmap(0, size, protnum, flags, -1, 0);
+
+	    // Address in 64-bit x86 can be negative and errors are from -1 to -124.
+	    if ((addr[1] === -1) && ((addr[0] < 0) && (addr[0] > -125)))
+	        throw Error('Could not allocate memory.');
+
+	    var ab = frame(addr, size);
+	    return ab;
+	}
+
+
+	// Two constructors, one exposed externally to user:
+	//
+	//  1. new StaticArrayBuffer(size)
+	//
+	// Another one that we just use internally here:
+	//
+	//  2. new StaticArrayBuffer(arrayBuffer);
+	//
+	function StaticArrayBuffer(size) {
+	    var ab;
+	    if(size instanceof ArrayBuffer) {
+	        ab = size;
+	    } else {
+	        ab = new ArrayBuffer(size); // Let's pray it's actually 'static'.
+	    }
+	    ab.__proto__ = StaticArrayBuffer.prototype;
+	    return ab;
+	}
+
+
+	// # Static methods
+
+	// StaticArrayBuffers allocated with `alloc` have to be (currently) freed using `buffer.free`.
+	StaticArrayBuffer.alloc = function(size, prot) {
+	    return new StaticArrayBuffer(alloc(size, prot));
+	};
+
+	StaticArrayBuffer.frame = function(addr, size) {
+	    return new StaticArrayBuffer(frame(addr, size));
+	};
+
+	StaticArrayBuffer.isStaticArrayBuffer = function(sab) {
+	    if((sab instanceof StaticArrayBuffer) && (typeof sab.getAddress === 'function')) return true;
+	    return false;
+	};
+
+
+
+	StaticArrayBuffer.prototype.__proto__ =
+	    ArrayBuffer.prototype;
+
+
+
+	// # Member instance methods
+
+	StaticArrayBuffer.prototype.call = function(offset, args) {
+	    if(typeof offset !== 'number') offset = 0;
+	    if(offset < 0) offset = 0;
+	    if(!isFinite(offset)) offset = 0;
+
+	    if(!(args instanceof Array)) args = [];
+
+	    return process.call(this, offset, args);
+	};
+
+	StaticArrayBuffer.prototype.setProtection = function(prot) {
+	    var protnum = prot2num(prot);
+	    // return libjs.mprotect(this, this.length, protnum);
+	    var libjs = __webpack_require__(6);
+	    var res = libjs.mprotect(this, this.length, protnum);
+	    if(res < -1)
+	        throw Error('Could not change protection level.');
+	};
+
+	StaticArrayBuffer.prototype.free = function() {
+	    var libjs = __webpack_require__(6);
+	    var res = libjs.munmap(this, this.length);
+	    if(res < 0)
+	        throw Error('Error on freeing memory.');
+	};
+
+	StaticArrayBuffer.prototype.getAddress = function(offset) {
+	    return process.getAddress(this, offset);
+	};
+
+
+/***/ },
 /* 6 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var EventEmitter = __webpack_require__(7).EventEmitter;
-	var eloop = __webpack_require__(2);
+	"use strict";
+	function __export(m) {
+	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+	}
+	var p = process;
+	var syscall = p.syscall;
+	var syscall64 = p.syscall64;
+	var asyscall = p.asyscall || (function asyscall() {
+	    var args = [];
+	    for (var _i = 0; _i < arguments.length; _i++) {
+	        args[_i - 0] = arguments[_i];
+	    }
+	    var callback = args[args.length - 1];
+	    var params = args.splice(0, args.length - 1);
+	    var res = syscall.apply(null, params);
+	    callback(res);
+	});
+	var asyscall64 = p.asyscall64 || (function asyscall64() {
+	    var args = [];
+	    for (var _i = 0; _i < arguments.length; _i++) {
+	        args[_i - 0] = arguments[_i];
+	    }
+	    var callback = args[args.length - 1];
+	    var params = args.splice(0, args.length - 1);
+	    var res = syscall64.apply(null, params);
+	    callback(res);
+	});
+	function malloc(size) {
+	    return new Buffer(size);
+	}
+	var x86_64_linux_1 = __webpack_require__(7);
+	var types = __webpack_require__(7);
+	__export(__webpack_require__(7));
+	exports.arch = {
+	    isLE: true,
+	    kernel: 'linux',
+	    int: 64,
+	    SYS: x86_64_linux_1.SYS,
+	    types: types
+	};
+	__export(__webpack_require__(10));
+	__export(__webpack_require__(9));
+	function noop() { }
+	function read(fd, buf) {
+	    return syscall(x86_64_linux_1.SYS.read, fd, buf, buf.length);
+	}
+	exports.read = read;
+	function readAsync(fd, buf, callback) {
+	    asyscall(x86_64_linux_1.SYS.read, fd, buf, buf.length, callback);
+	}
+	exports.readAsync = readAsync;
+	function write(fd, buf) {
+	    if (!(buf instanceof Buffer))
+	        buf = new Buffer(buf + '\0');
+	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length);
+	}
+	exports.write = write;
+	function writeAsync(fd, buf, callback) {
+	    if (!(buf instanceof Buffer))
+	        buf = new Buffer(buf + '\0');
+	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
+	}
+	exports.writeAsync = writeAsync;
+	function open(pathname, flags, mode) {
+	    var args = [x86_64_linux_1.SYS.open, pathname, flags];
+	    if (typeof mode === 'number')
+	        args.push(mode);
+	    return syscall.apply(null, args);
+	}
+	exports.open = open;
+	function openAsync(pathname, flags, mode, callback) {
+	    var args = [x86_64_linux_1.SYS.open, pathname, flags];
+	    if (typeof mode === 'number')
+	        args.push(mode);
+	    args.push(callback);
+	    asyscall.apply(null, args);
+	}
+	exports.openAsync = openAsync;
+	function close(fd) {
+	    return syscall(x86_64_linux_1.SYS.close, fd);
+	}
+	exports.close = close;
+	function closeAsync(fd, callback) {
+	    asyscall(x86_64_linux_1.SYS.close, fd, callback);
+	}
+	exports.closeAsync = closeAsync;
+	function access(pathname, mode) {
+	    return syscall(x86_64_linux_1.SYS.access, pathname, mode);
+	}
+	exports.access = access;
+	function accessAsync(pathname, mode, callback) {
+	    asyscall(x86_64_linux_1.SYS.access, pathname, mode, callback);
+	}
+	exports.accessAsync = accessAsync;
+	function chmod(pathname, mode) {
+	    return syscall(x86_64_linux_1.SYS.chmod, pathname, mode);
+	}
+	exports.chmod = chmod;
+	function chmodAsync(pathname, mode, callback) {
+	    asyscall(x86_64_linux_1.SYS.chmod, pathname, mode, callback);
+	}
+	exports.chmodAsync = chmodAsync;
+	function fchmod(fd, mode) {
+	    return syscall(x86_64_linux_1.SYS.chmod, fd, mode);
+	}
+	exports.fchmod = fchmod;
+	function fchmodAsync(fd, mode, callback) {
+	    asyscall(x86_64_linux_1.SYS.chmod, fd, mode, callback);
+	}
+	exports.fchmodAsync = fchmodAsync;
+	function chown(pathname, owner, group) {
+	    return syscall(x86_64_linux_1.SYS.chown, pathname, owner, group);
+	}
+	exports.chown = chown;
+	function chownAsync(pathname, owner, group, callback) {
+	    asyscall(x86_64_linux_1.SYS.chown, pathname, owner, group, callback);
+	}
+	exports.chownAsync = chownAsync;
+	function fchown(fd, owner, group) {
+	    return syscall(x86_64_linux_1.SYS.fchown, fd, owner, group);
+	}
+	exports.fchown = fchown;
+	function fchownAsync(fd, owner, group, callback) {
+	    asyscall(x86_64_linux_1.SYS.fchown, fd, owner, group, callback);
+	}
+	exports.fchownAsync = fchownAsync;
+	function lchown(pathname, owner, group) {
+	    return syscall(x86_64_linux_1.SYS.lchown, pathname, owner, group);
+	}
+	exports.lchown = lchown;
+	function lchownAsync(pathname, owner, group, callback) {
+	    asyscall(x86_64_linux_1.SYS.lchown, pathname, owner, group, callback);
+	}
+	exports.lchownAsync = lchownAsync;
+	function fsync(fd) {
+	    return syscall(x86_64_linux_1.SYS.fsync, fd);
+	}
+	exports.fsync = fsync;
+	function fsyncAsync(fd, callback) {
+	    asyscall(x86_64_linux_1.SYS.fsync, fd, callback);
+	}
+	exports.fsyncAsync = fsyncAsync;
+	function fdatasync(fd) {
+	    return syscall(x86_64_linux_1.SYS.fdatasync, fd);
+	}
+	exports.fdatasync = fdatasync;
+	function fdatasyncAsync(fd, callback) {
+	    asyscall(x86_64_linux_1.SYS.fdatasync, fd, callback);
+	}
+	exports.fdatasyncAsync = fdatasyncAsync;
+	function stat(filepath) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
+	    if (result == 0)
+	        return types.stat.unpack(buf);
+	    throw result;
+	}
+	exports.stat = stat;
+	function __unpackStats(buf, result, callback) {
+	    if (result === 0) {
+	        try {
+	            callback(null, types.stat.unpack(buf));
+	        }
+	        catch (e) {
+	            callback(e);
+	        }
+	    }
+	    else
+	        callback(result);
+	}
+	function statAsync(filepath, callback) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
+	}
+	exports.statAsync = statAsync;
+	function lstat(linkpath) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    var result = syscall(x86_64_linux_1.SYS.lstat, linkpath, buf);
+	    if (result == 0)
+	        return types.stat.unpack(buf);
+	    throw result;
+	}
+	exports.lstat = lstat;
+	function lstatAsync(linkpath, callback) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
+	}
+	exports.lstatAsync = lstatAsync;
+	function fstat(fd) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    var result = syscall(x86_64_linux_1.SYS.fstat, fd, buf);
+	    if (result == 0)
+	        return types.stat.unpack(buf);
+	    throw result;
+	}
+	exports.fstat = fstat;
+	function fstatAsync(fd, callback) {
+	    var buf = new Buffer(types.stat.size + 100);
+	    asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
+	}
+	exports.fstatAsync = fstatAsync;
+	function truncate(path, length) {
+	    return syscall(x86_64_linux_1.SYS.truncate, path, length);
+	}
+	exports.truncate = truncate;
+	function truncateAsync(path, length, callback) {
+	    asyscall(x86_64_linux_1.SYS.truncate, path, length, callback);
+	}
+	exports.truncateAsync = truncateAsync;
+	function ftruncate(fd, length) {
+	    return syscall(x86_64_linux_1.SYS.ftruncate, fd, length);
+	}
+	exports.ftruncate = ftruncate;
+	function ftruncateAsync(fd, length, callback) {
+	    asyscall(x86_64_linux_1.SYS.ftruncate, fd, length, callback);
+	}
+	exports.ftruncateAsync = ftruncateAsync;
+	function lseek(fd, offset, whence) {
+	    return syscall(x86_64_linux_1.SYS.lseek, fd, offset, whence);
+	}
+	exports.lseek = lseek;
+	function lseekAsync(fd, offset, whence, callback) {
+	    asyscall(x86_64_linux_1.SYS.lseek, fd, offset, whence, callback);
+	}
+	exports.lseekAsync = lseekAsync;
+	function rename(oldpath, newpath) {
+	    return syscall(x86_64_linux_1.SYS.rename, oldpath, newpath);
+	}
+	exports.rename = rename;
+	function renameAsync(oldpath, newpath, callback) {
+	    asyscall(x86_64_linux_1.SYS.rename, oldpath, newpath, callback);
+	}
+	exports.renameAsync = renameAsync;
+	function mkdir(pathname, mode) {
+	    return syscall(x86_64_linux_1.SYS.mkdir, pathname, mode);
+	}
+	exports.mkdir = mkdir;
+	function mkdirAsync(pathname, mode, callback) {
+	    asyscall(x86_64_linux_1.SYS.mkdir, pathname, mode, callback);
+	}
+	exports.mkdirAsync = mkdirAsync;
+	function mkdirat(dirfd, pathname, mode) {
+	    return syscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode);
+	}
+	exports.mkdirat = mkdirat;
+	function mkdiratAsync(dirfd, pathname, mode, callback) {
+	    asyscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode, callback);
+	}
+	exports.mkdiratAsync = mkdiratAsync;
+	function rmdir(pathname) {
+	    return syscall(x86_64_linux_1.SYS.rmdir, pathname);
+	}
+	exports.rmdir = rmdir;
+	function rmdirAsync(pathname, callback) {
+	    asyscall(x86_64_linux_1.SYS.rmdir, pathname, callback);
+	}
+	exports.rmdirAsync = rmdirAsync;
+	function getcwd() {
+	    var buf = new Buffer(264);
+	    var res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
+	    if (res < 0) {
+	        if (res === -34) {
+	            buf = new Buffer(4096);
+	            res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
+	            if (res < 0)
+	                throw res;
+	        }
+	        else
+	            throw res;
+	    }
+	    return buf.slice(0, res - 1).toString();
+	}
+	exports.getcwd = getcwd;
+	function getcwdAsync(callback) {
+	    var buf = new Buffer(264);
+	    asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
+	        if (res < 0) {
+	            if (res === -34) {
+	                buf = new Buffer(4096);
+	                asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
+	                    if (res < 0)
+	                        callback(res);
+	                    else
+	                        callback(null, buf.slice(0, res).toString());
+	                });
+	            }
+	            else
+	                callback(res);
+	        }
+	        callback(null, buf.slice(0, res).toString());
+	    });
+	}
+	exports.getcwdAsync = getcwdAsync;
+	function getdents64(fd, dirp) {
+	    return syscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length);
+	}
+	exports.getdents64 = getdents64;
+	function getdents64Async(fd, dirp, callback) {
+	    asyscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length, callback);
+	}
+	exports.getdents64Async = getdents64Async;
+	function readdir(path, encoding) {
+	    if (encoding === void 0) { encoding = 'utf8'; }
+	    var fd = open(path, 0 | 65536);
+	    if (fd < 0)
+	        throw fd;
+	    var buf = new Buffer(4096);
+	    var struct = types.linux_dirent64;
+	    var list = [];
+	    var res = getdents64(fd, buf);
+	    do {
+	        var offset = 0;
+	        while (offset + struct.size < res) {
+	            var unpacked = struct.unpack(buf, offset);
+	            var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
+	            name = name.substr(0, name.indexOf("\0"));
+	            var entry = {
+	                ino: unpacked.ino64_t,
+	                offset: unpacked.off64_t[0],
+	                type: unpacked.d_type,
+	                name: name
+	            };
+	            list.push(entry);
+	            offset += unpacked.d_reclen;
+	        }
+	        res = getdents64(fd, buf);
+	    } while (res > 0);
+	    if (res < 0)
+	        throw res;
+	    close(fd);
+	    return list;
+	}
+	exports.readdir = readdir;
+	function readdirList(path, encoding) {
+	    if (encoding === void 0) { encoding = 'utf8'; }
+	    var fd = open(path, 0 | 65536);
+	    if (fd < 0)
+	        throw fd;
+	    var buf = new Buffer(4096);
+	    var struct = types.linux_dirent64;
+	    var list = [];
+	    var res = getdents64(fd, buf);
+	    do {
+	        var offset = 0;
+	        while (offset + struct.size < res) {
+	            var unpacked = struct.unpack(buf, offset);
+	            var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
+	            name = name.substr(0, name.indexOf("\0"));
+	            if ((name != '.') && (name != '..'))
+	                list.push(name);
+	            offset += unpacked.d_reclen;
+	        }
+	        res = getdents64(fd, buf);
+	    } while (res > 0);
+	    if (res < 0)
+	        throw res;
+	    close(fd);
+	    return list;
+	}
+	exports.readdirList = readdirList;
+	function readdirListAsync(path, encoding, callback) {
+	    if (encoding === void 0) { encoding = 'utf8'; }
+	    openAsync(path, 0 | 65536, null, function (fd) {
+	        if (fd < 0)
+	            return callback(fd);
+	        var buf = new Buffer(4096);
+	        var struct = types.linux_dirent64;
+	        var list = [];
+	        function done() {
+	            closeAsync(fd, noop);
+	            callback(null, list);
+	        }
+	        function loop() {
+	            getdents64Async(fd, buf, function (res) {
+	                if (res < 0) {
+	                    callback(res);
+	                    return;
+	                }
+	                var offset = 0;
+	                while (offset + struct.size < res) {
+	                    var unpacked = struct.unpack(buf, offset);
+	                    var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
+	                    name = name.substr(0, name.indexOf("\0"));
+	                    if ((name != '.') && (name != '..'))
+	                        list.push(name);
+	                    offset += unpacked.d_reclen;
+	                }
+	                if (res > 0)
+	                    loop();
+	                else
+	                    done();
+	            });
+	        }
+	        loop();
+	    });
+	}
+	exports.readdirListAsync = readdirListAsync;
+	function symlink(target, linkpath) {
+	    return syscall(x86_64_linux_1.SYS.symlink, target, linkpath);
+	}
+	exports.symlink = symlink;
+	function symlinkAsync(target, linkpath, callback) {
+	    asyscall(x86_64_linux_1.SYS.symlink, target, linkpath, callback);
+	}
+	exports.symlinkAsync = symlinkAsync;
+	function unlink(pathname) {
+	    return syscall(x86_64_linux_1.SYS.unlink, pathname);
+	}
+	exports.unlink = unlink;
+	function unlinkAsync(pathname, callback) {
+	    asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
+	}
+	exports.unlinkAsync = unlinkAsync;
+	function readlink(pathname, buf) {
+	    return syscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length);
+	}
+	exports.readlink = readlink;
+	function readlinkAsync(pathname, buf, callback) {
+	    asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
+	}
+	exports.readlinkAsync = readlinkAsync;
+	function link(oldpath, newpath) {
+	    return syscall(x86_64_linux_1.SYS.link, oldpath, newpath);
+	}
+	exports.link = link;
+	function linkAsync(oldpath, newpath, callback) {
+	    asyscall(x86_64_linux_1.SYS.link, oldpath, newpath, callback);
+	}
+	exports.linkAsync = linkAsync;
+	function utime(filename, times) {
+	    var buf = types.utimbuf.pack(times);
+	    return syscall(x86_64_linux_1.SYS.utime, filename, buf);
+	}
+	exports.utime = utime;
+	function utimeAsync(filename, times, callback) {
+	    var buf = types.utimbuf.pack(times);
+	    asyscall(x86_64_linux_1.SYS.utime, filename, buf, callback);
+	}
+	exports.utimeAsync = utimeAsync;
+	function utimes(filename, times) {
+	    var buf = types.timevalarr.pack(times);
+	    return syscall(x86_64_linux_1.SYS.utimes, buf);
+	}
+	exports.utimes = utimes;
+	function utimesAsync(filename, times, callback) {
+	    var buf = types.timevalarr.pack(times);
+	    asyscall(x86_64_linux_1.SYS.utimes, buf, callback);
+	}
+	exports.utimesAsync = utimesAsync;
+	function socket(domain, type, protocol) {
+	    return syscall(x86_64_linux_1.SYS.socket, domain, type, protocol);
+	}
+	exports.socket = socket;
+	function socketAsync(domain, type, protocol, callback) {
+	    asyscall(x86_64_linux_1.SYS.socket, domain, type, protocol, callback);
+	}
+	exports.socketAsync = socketAsync;
+	function connect(fd, sockaddr) {
+	    var buf = types.sockaddr_in.pack(sockaddr);
+	    return syscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length);
+	}
+	exports.connect = connect;
+	function connectAsync(fd, sockaddr, callback) {
+	    var buf = types.sockaddr_in.pack(sockaddr);
+	    asyscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length, callback);
+	}
+	exports.connectAsync = connectAsync;
+	function bind(fd, sockaddr, addr_type) {
+	    var buf = addr_type.pack(sockaddr);
+	    return syscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length);
+	}
+	exports.bind = bind;
+	function bindAsync(fd, sockaddr, addr_type, callback) {
+	    var buf = addr_type.pack(sockaddr);
+	    asyscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length, callback);
+	}
+	exports.bindAsync = bindAsync;
+	function listen(fd, backlog) {
+	    return syscall(x86_64_linux_1.SYS.listen, fd, backlog);
+	}
+	exports.listen = listen;
+	function listenAsync(fd, backlog, callback) {
+	    asyscall(x86_64_linux_1.SYS.listen, fd, backlog, callback);
+	}
+	exports.listenAsync = listenAsync;
+	function accept(fd, buf) {
+	    var buflen = types.int32.pack(buf.length);
+	    return syscall(x86_64_linux_1.SYS.accept, fd, buf, buflen);
+	}
+	exports.accept = accept;
+	function acceptAsync(fd, buf, callback) {
+	    var buflen = types.int32.pack(buf.length);
+	    asyscall(x86_64_linux_1.SYS.accept, fd, buf, buflen, callback);
+	}
+	exports.acceptAsync = acceptAsync;
+	function accept4(fd, buf, flags) {
+	    var buflen = types.int32.pack(buf.length);
+	    return syscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags);
+	}
+	exports.accept4 = accept4;
+	function accept4Async(fd, buf, flags, callback) {
+	    var buflen = types.int32.pack(buf.length);
+	    asyscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags, callback);
+	}
+	exports.accept4Async = accept4Async;
+	function shutdown(fd, how) {
+	    return syscall(x86_64_linux_1.SYS.shutdown, fd, how);
+	}
+	exports.shutdown = shutdown;
+	function shutdownAsync(fd, how, callback) {
+	    asyscall(x86_64_linux_1.SYS.shutdown, fd, how, callback);
+	}
+	exports.shutdownAsync = shutdownAsync;
+	function send(fd, buf, flags) {
+	    if (flags === void 0) { flags = 0; }
+	    return sendto(fd, buf, flags);
+	}
+	exports.send = send;
+	function sendAsync(fd, buf, flags, callback) {
+	    if (flags === void 0) { flags = 0; }
+	    sendtoAsync(fd, buf, flags, null, null, callback);
+	}
+	exports.sendAsync = sendAsync;
+	function sendto(fd, buf, flags, addr, addr_type) {
+	    if (flags === void 0) { flags = 0; }
+	    var params = [x86_64_linux_1.SYS.sendto, fd, buf, buf.length, flags, 0, 0];
+	    if (addr) {
+	        var addrbuf = addr_type.pack(addr);
+	        params[5] = addrbuf;
+	        params[6] = addrbuf.length;
+	    }
+	    return syscall.apply(null, params);
+	}
+	exports.sendto = sendto;
+	function sendtoAsync(fd, buf, flags, addr, addr_type, callback) {
+	    if (flags === void 0) { flags = 0; }
+	    var params = [x86_64_linux_1.SYS.sendto, fd, buf, buf.length, flags, 0, 0, callback];
+	    if (addr) {
+	        var addrbuf = addr_type.pack(addr);
+	        params[5] = addrbuf;
+	        params[6] = addrbuf.length;
+	    }
+	    syscall.apply(null, params);
+	}
+	exports.sendtoAsync = sendtoAsync;
+	function recv(sockfd, buf, flags) {
+	    if (flags === void 0) { flags = 0; }
+	    return recvfrom(sockfd, buf, flags);
+	}
+	exports.recv = recv;
+	function recvAsync(sockfd, buf, flags, callback) {
+	    if (flags === void 0) { flags = 0; }
+	    recvfromAsync(sockfd, buf, flags, null, null, callback);
+	}
+	exports.recvAsync = recvAsync;
+	function recvfrom(sockfd, buf, flags, addr, addr_type) {
+	    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0];
+	    if (addr) {
+	        var addrbuf = addr_type.pack(addr);
+	        args[5] = addrbuf;
+	        args[6] = addrbuf.length;
+	    }
+	    return syscall.apply(null, args);
+	}
+	exports.recvfrom = recvfrom;
+	function recvfromAsync(sockfd, buf, flags, addr, addr_type, callback) {
+	    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0, callback];
+	    if (addr) {
+	        var addrbuf = addr_type.pack(addr);
+	        args[5] = addrbuf;
+	        args[6] = addrbuf.length;
+	    }
+	    asyscall.apply(null, args);
+	}
+	exports.recvfromAsync = recvfromAsync;
+	function setsockopt(sockfd, level, optname, optval) {
+	    return syscall(x86_64_linux_1.SYS.setsockopt, sockfd, level, optname, optval, optval.length);
+	}
+	exports.setsockopt = setsockopt;
+	function getpid() {
+	    return syscall(x86_64_linux_1.SYS.getpid);
+	}
+	exports.getpid = getpid;
+	function getppid() {
+	    return syscall(x86_64_linux_1.SYS.getppid);
+	}
+	exports.getppid = getppid;
+	function getppidAsync(callback) {
+	    asyscall(x86_64_linux_1.SYS.getppid, callback);
+	}
+	exports.getppidAsync = getppidAsync;
+	function getuid() {
+	    return syscall(x86_64_linux_1.SYS.getuid);
+	}
+	exports.getuid = getuid;
+	function geteuid() {
+	    return syscall(x86_64_linux_1.SYS.geteuid);
+	}
+	exports.geteuid = geteuid;
+	function getgid() {
+	    return syscall(x86_64_linux_1.SYS.getgid);
+	}
+	exports.getgid = getgid;
+	function getegid() {
+	    return syscall(x86_64_linux_1.SYS.getegid);
+	}
+	exports.getegid = getegid;
+	function sched_yield() {
+	    syscall(x86_64_linux_1.SYS.sched_yield);
+	}
+	exports.sched_yield = sched_yield;
+	function nanosleep(seconds, nanoseconds) {
+	    var buf = types.timespec.pack({
+	        tv_sec: [seconds, 0],
+	        tv_nsec: [nanoseconds, 0]
+	    });
+	    return syscall(x86_64_linux_1.SYS.nanosleep, buf, types.NULL);
+	}
+	exports.nanosleep = nanosleep;
+	function fcntl(fd, cmd, arg) {
+	    var params = [x86_64_linux_1.SYS.fcntl, fd, cmd];
+	    if (typeof arg !== 'undefined')
+	        params.push(arg);
+	    return syscall.apply(null, params);
+	}
+	exports.fcntl = fcntl;
+	function epoll_create(size) {
+	    return syscall(x86_64_linux_1.SYS.epoll_create, size);
+	}
+	exports.epoll_create = epoll_create;
+	function epoll_create1(flags) {
+	    return syscall(x86_64_linux_1.SYS.epoll_create1, flags);
+	}
+	exports.epoll_create1 = epoll_create1;
+	function epoll_wait(epfd, buf, maxevents, timeout) {
+	    return syscall(x86_64_linux_1.SYS.epoll_wait, epfd, buf, maxevents, timeout);
+	}
+	exports.epoll_wait = epoll_wait;
+	function epoll_ctl(epfd, op, fd, epoll_event) {
+	    var buf = types.epoll_event.pack(epoll_event);
+	    return syscall(x86_64_linux_1.SYS.epoll_ctl, epfd, op, fd, buf);
+	}
+	exports.epoll_ctl = epoll_ctl;
+	function inotify_init() {
+	    return syscall(x86_64_linux_1.SYS.inotify_init);
+	}
+	exports.inotify_init = inotify_init;
+	function inotify_init1(flags) {
+	    return syscall(x86_64_linux_1.SYS.inotify_init1, flags);
+	}
+	exports.inotify_init1 = inotify_init1;
+	function inotify_add_watch(fd, pathname, mask) {
+	    return syscall(x86_64_linux_1.SYS.inotify_add_watch, fd, pathname, mask);
+	}
+	exports.inotify_add_watch = inotify_add_watch;
+	function inotify_rm_watch(fd, wd) {
+	    return syscall(x86_64_linux_1.SYS.inotify_rm_watch, fd, wd);
+	}
+	exports.inotify_rm_watch = inotify_rm_watch;
+	function mmap(addr, length, prot, flags, fd, offset) {
+	    return syscall64(x86_64_linux_1.SYS.mmap, addr, length, prot, flags, fd, offset);
+	}
+	exports.mmap = mmap;
+	function munmap(addr, length) {
+	    return syscall(x86_64_linux_1.SYS.munmap, addr, length);
+	}
+	exports.munmap = munmap;
+	function mprotect(addr, len, prot) {
+	    return syscall(x86_64_linux_1.SYS.mprotect, addr, len, prot);
+	}
+	exports.mprotect = mprotect;
+	function shmget(key, size, shmflg) {
+	    return syscall(x86_64_linux_1.SYS.shmget, key, size, shmflg);
+	}
+	exports.shmget = shmget;
+	function shmat(shmid, shmaddr, shmflg) {
+	    if (shmaddr === void 0) { shmaddr = types.NULL; }
+	    if (shmflg === void 0) { shmflg = 0; }
+	    return syscall64(x86_64_linux_1.SYS.shmat, shmid, shmaddr, shmflg);
+	}
+	exports.shmat = shmat;
+	function shmdt(shmaddr) {
+	    return syscall(x86_64_linux_1.SYS.shmdt, shmaddr);
+	}
+	exports.shmdt = shmdt;
+	function shmctl(shmid, cmd, buf) {
+	    if (buf === void 0) { buf = types.NULL; }
+	    if (buf instanceof Buffer) {
+	    }
+	    else if (typeof buf === 'object') {
+	        buf = types.shmid_ds.pack(buf);
+	    }
+	    else {
+	    }
+	    return syscall(x86_64_linux_1.SYS.shmctl, shmid, cmd, buf);
+	}
+	exports.shmctl = shmctl;
+
+
+/***/ },
+/* 7 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var typebase_1 = __webpack_require__(8);
+	exports.isLE = true;
+	exports.NULL = 0;
+	var buf = Buffer.prototype;
+	exports.int8 = typebase_1.Type.define(1, buf.readInt8, buf.writeInt8);
+	exports.uint8 = typebase_1.Type.define(1, buf.readUInt8, buf.readUInt8);
+	exports.int16 = typebase_1.Type.define(2, buf.readInt16LE, buf.writeInt16LE);
+	exports.uint16 = typebase_1.Type.define(2, buf.readUInt16LE, buf.writeUInt16LE);
+	exports.int32 = typebase_1.Type.define(4, buf.readInt32LE, buf.writeInt32LE);
+	exports.uint32 = typebase_1.Type.define(4, buf.readUInt32LE, buf.writeUInt32LE);
+	exports.int64 = typebase_1.Arr.define(exports.int32, 2);
+	exports.uint64 = typebase_1.Arr.define(exports.uint32, 2);
+	exports.size_t = exports.uint64;
+	exports.time_t = exports.uint64;
+	exports.pid_t = exports.uint32;
+	exports.ipv4 = typebase_1.Type.define(4, function (offset) {
+	    if (offset === void 0) { offset = 0; }
+	    var buf = this;
+	    var socket = __webpack_require__(9);
+	    var octets = socket.Ipv4.type.unpack(buf, offset);
+	    return new socket.Ipv4(octets);
+	}, function (data, offset) {
+	    if (offset === void 0) { offset = 0; }
+	    var buf = this;
+	    data.toBuffer().copy(buf, offset);
+	});
+	exports.pointer_t = exports.uint64;
+	exports.stat = typebase_1.Struct.define(31 * 4, [
+	    [0, exports.uint32, 'dev'],
+	    [2 * 4, exports.uint32, 'ino'],
+	    [4 * 4, exports.uint32, 'nlink'],
+	    [6 * 4, exports.int32, 'mode'],
+	    [7 * 4, exports.int32, 'uid'],
+	    [8 * 4, exports.int32, 'gid'],
+	    [10 * 4, exports.uint32, 'rdev'],
+	    [12 * 4, exports.uint32, 'size'],
+	    [14 * 4, exports.uint32, 'blksize'],
+	    [16 * 4, exports.uint32, 'blocks'],
+	    [18 * 4, exports.uint32, 'atime'],
+	    [20 * 4, exports.uint32, 'atime_nsec'],
+	    [22 * 4, exports.uint32, 'mtime'],
+	    [24 * 4, exports.uint32, 'mtime_nsec'],
+	    [26 * 4, exports.uint32, 'ctime'],
+	    [28 * 4, exports.uint32, 'ctime_nsec'],
+	]);
+	exports.in_addr = typebase_1.Struct.define(4, [
+	    [0, exports.ipv4, 's_addr'],
+	]);
+	exports.sockaddr_in = typebase_1.Struct.define(16, [
+	    [0, exports.int16, 'sin_family'],
+	    [2, exports.uint16, 'sin_port'],
+	    [4, exports.in_addr, 'sin_addr'],
+	    [8, typebase_1.Arr.define(exports.int8, 8), 'sin_zero'],
+	]);
+	exports.sockaddr = typebase_1.Struct.define(1, [
+	    [0, 'sa_family', exports.uint16],
+	    [2, 'sa_data', typebase_1.Arr.define(exports.int8, 14)],
+	]);
+	exports.epoll_event = typebase_1.Struct.define(4 + 8, [
+	    [0, exports.uint32, 'events'],
+	    [4, exports.uint64, 'data'],
+	]);
+	exports.ipc_perm = typebase_1.Struct.define(48, [
+	    [0, exports.int32, '__key'],
+	    [4, exports.uint32, 'uid'],
+	    [8, exports.uint32, 'gid'],
+	    [12, exports.uint32, 'cuid'],
+	    [16, exports.uint32, 'cgid'],
+	    [20, exports.uint16, 'mode'],
+	    [24, exports.uint16, '__seq'],
+	]);
+	exports.shmid_ds = typebase_1.Struct.define(112, [
+	    [0, exports.ipc_perm, 'shm_perm'],
+	    [48, exports.size_t, 'shm_segsz'],
+	    [56, exports.time_t, 'shm_atime'],
+	    [64, exports.time_t, 'shm_dtime'],
+	    [72, exports.time_t, 'shm_ctime'],
+	    [80, exports.pid_t, 'shm_cpid'],
+	    [84, exports.pid_t, 'shm_lpid'],
+	    [88, exports.uint64, 'shm_nattch'],
+	]);
+	exports.utimbuf = typebase_1.Struct.define(16, [
+	    [0, exports.uint64, 'actime'],
+	    [8, exports.uint64, 'modtime'],
+	]);
+	exports.timeval = typebase_1.Struct.define(16, [
+	    [0, exports.uint64, 'tv_sec'],
+	    [8, exports.uint64, 'tv_nsec'],
+	]);
+	exports.timevalarr = typebase_1.Arr.define(exports.timeval, 2);
+	exports.timespec = exports.timeval;
+	exports.timespecarr = exports.timevalarr;
+	exports.linux_dirent64 = typebase_1.Struct.define(19, [
+	    [0, exports.uint64, 'ino64_t'],
+	    [8, exports.uint64, 'off64_t'],
+	    [16, exports.uint16, 'd_reclen'],
+	    [18, exports.uint8, 'd_type'],
+	]);
+	exports.inotify_event = typebase_1.Struct.define(16, [
+	    [0, exports.int32, 'wd'],
+	    [4, exports.uint32, 'mask'],
+	    [8, exports.uint32, 'cookie'],
+	    [12, exports.uint32, 'len'],
+	]);
+	exports.SYS = {
+	    read: 0,
+	    write: 1,
+	    open: 2,
+	    close: 3,
+	    stat: 4,
+	    fstat: 5,
+	    lstat: 6,
+	    lseek: 8,
+	    mmap: 9,
+	    mprotect: 10,
+	    munmap: 11,
+	    brk: 12,
+	    rt_sigaction: 13,
+	    rt_sigprocmask: 14,
+	    rt_sigreturn: 15,
+	    ioctl: 16,
+	    pread64: 17,
+	    pwrite64: 18,
+	    readv: 19,
+	    writev: 20,
+	    access: 21,
+	    pipe: 22,
+	    sched_yield: 24,
+	    mremap: 25,
+	    msync: 26,
+	    mincore: 27,
+	    madvise: 28,
+	    shmget: 29,
+	    shmat: 30,
+	    shmctl: 31,
+	    dup: 32,
+	    dup2: 33,
+	    pause: 34,
+	    nanosleep: 35,
+	    getitimer: 36,
+	    alarm: 37,
+	    setitimer: 38,
+	    getpid: 39,
+	    sendfile: 40,
+	    socket: 41,
+	    connect: 42,
+	    accept: 43,
+	    sendto: 44,
+	    recvfrom: 45,
+	    sendmsg: 46,
+	    recvmsg: 47,
+	    shutdown: 48,
+	    bind: 49,
+	    listen: 50,
+	    getsockname: 51,
+	    getpeername: 52,
+	    socketpair: 53,
+	    setsockopt: 54,
+	    getsockopt: 55,
+	    shmdt: 67,
+	    fcntl: 72,
+	    fsync: 74,
+	    fdatasync: 75,
+	    truncate: 76,
+	    ftruncate: 77,
+	    getdents: 78,
+	    getcwd: 79,
+	    chdir: 80,
+	    fchdir: 81,
+	    rename: 82,
+	    mkdir: 83,
+	    rmdir: 84,
+	    creat: 85,
+	    link: 86,
+	    unlink: 87,
+	    symlink: 88,
+	    readlink: 89,
+	    chmod: 90,
+	    fchmod: 91,
+	    chown: 92,
+	    fchown: 93,
+	    lchown: 94,
+	    umask: 95,
+	    gettimeofday: 96,
+	    getrlimit: 97,
+	    getrusage: 98,
+	    getuid: 102,
+	    getgid: 104,
+	    geteuid: 107,
+	    getegid: 108,
+	    setpgid: 109,
+	    getppid: 110,
+	    utime: 132,
+	    epoll_create: 213,
+	    getdents64: 217,
+	    epoll_wait: 232,
+	    epoll_ctl: 233,
+	    utimes: 235,
+	    inotify_init: 253,
+	    inotify_add_watch: 254,
+	    inotify_rm_watch: 255,
+	    mkdirat: 258,
+	    futimesat: 261,
+	    utimensat: 280,
+	    accept4: 288,
+	    epoll_create1: 291,
+	    inotify_init1: 294
+	};
+
+
+/***/ },
+/* 8 */
+/***/ function(module, exports) {
+
+	"use strict";
+	var Type = (function () {
+	    function Type() {
+	        this.size = 1;
+	    }
+	    Type.define = function (size, unpack, pack) {
+	        var new_type = new Type;
+	        new_type.size = size;
+	        new_type.unpackF = unpack;
+	        new_type.packF = pack;
+	        return new_type;
+	    };
+	    Type.prototype.unpack = function (buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        return this.unpackF.call(buf, offset);
+	    };
+	    Type.prototype.pack = function (data, buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        if (!buf)
+	            buf = new Buffer(this.size);
+	        if (data instanceof Buffer)
+	            data.copy(buf, offset);
+	        else if (typeof data == 'object')
+	            data.toBuffer().copy(buf, offset);
+	        else
+	            this.packF.call(buf, data, offset);
+	        return buf;
+	    };
+	    return Type;
+	}());
+	exports.Type = Type;
+	var Arr = (function () {
+	    function Arr() {
+	    }
+	    Arr.define = function (type, len) {
+	        var new_arr = new Arr;
+	        new_arr.len = len;
+	        new_arr.type = type;
+	        new_arr.size = type.size * len;
+	        return new_arr;
+	    };
+	    Arr.prototype.unpack = function (buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        var arr = [], off;
+	        for (var i = 0; i < this.len; i++) {
+	            off = offset + (i * this.type.size);
+	            arr.push(this.type.unpack(buf, off));
+	        }
+	        return arr;
+	    };
+	    Arr.prototype.pack = function (data, buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        if (!buf)
+	            buf = new Buffer(this.size);
+	        if (data) {
+	            var off;
+	            for (var i = 0; (i < this.len) && (i < data.length); i++) {
+	                off = offset + (i * this.type.size);
+	                this.type.pack(data[i], buf, off);
+	            }
+	        }
+	        return buf;
+	    };
+	    return Arr;
+	}());
+	exports.Arr = Arr;
+	var Struct = (function () {
+	    function Struct() {
+	        this.defs = [];
+	        this.size = 0;
+	    }
+	    Struct.define = function (size, defs) {
+	        var new_struct = new Struct;
+	        new_struct.size = size;
+	        new_struct.defs = defs;
+	        return new_struct;
+	    };
+	    Struct.prototype.unpack = function (buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        var result = {};
+	        for (var _i = 0, _a = this.defs; _i < _a.length; _i++) {
+	            var field = _a[_i];
+	            var off = field[0], type = field[1], name = field[2];
+	            result[name] = type.unpack(buf, offset + off);
+	        }
+	        return result;
+	    };
+	    Struct.prototype.pack = function (data, buf, offset) {
+	        if (offset === void 0) { offset = 0; }
+	        if (!buf)
+	            buf = new Buffer(this.size);
+	        for (var _i = 0, _a = this.defs; _i < _a.length; _i++) {
+	            var field = _a[_i];
+	            var off = field[0], type = field[1], name = field[2];
+	            type.pack(data[name], buf, offset + off);
+	        }
+	        return buf;
+	    };
+	    return Struct;
+	}());
+	exports.Struct = Struct;
+
+
+/***/ },
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var typebase_1 = __webpack_require__(8);
+	var x86_64_linux_1 = __webpack_require__(7);
+	function flip(buf, offset, len) {
+	    if (offset === void 0) { offset = 0; }
+	    if (len === void 0) { len = buf.length; }
+	    var mid = len >> 1, tmp, lside, rside;
+	    for (var i = 0; i < mid; i++) {
+	        lside = i + offset;
+	        rside = offset + len - i - 1;
+	        tmp = buf.readInt8(lside);
+	        buf.writeInt8(buf.readInt8(rside), lside);
+	        buf.writeInt8(tmp, rside);
+	    }
+	    return buf;
+	}
+	exports.flip = flip;
+	function hton16(num) {
+	    if (x86_64_linux_1.isLE)
+	        return ((num & 0xFF00) >> 8) + ((num & 0xFF) << 8);
+	    else
+	        return num;
+	}
+	exports.hton16 = hton16;
+	function htons(buf, offset, len) {
+	    if (offset === void 0) { offset = 0; }
+	    if (len === void 0) { len = buf.length; }
+	    if (x86_64_linux_1.isLE)
+	        return flip(buf, offset, len);
+	    else
+	        return buf;
+	}
+	exports.htons = htons;
+	var Ip = (function () {
+	    function Ip(ip) {
+	        this.sep = '.';
+	        if (typeof ip === 'string') {
+	            this.buf = new Buffer(ip.split(this.sep));
+	        }
+	        else if (ip instanceof Array) {
+	            this.buf = new Buffer(ip);
+	        }
+	    }
+	    Ip.prototype.toString = function () {
+	        return Ipv4.type.unpack(this.buf).join(this.sep);
+	    };
+	    Ip.prototype.toBuffer = function () {
+	        return this.buf;
+	    };
+	    Ip.prototype.presentationToOctet = function (presentation) {
+	        return +presentation;
+	    };
+	    Ip.prototype.octetToPresentation = function (octet) {
+	        return octet;
+	    };
+	    return Ip;
+	}());
+	exports.Ip = Ip;
+	var Ipv4 = (function (_super) {
+	    __extends(Ipv4, _super);
+	    function Ipv4(ip) {
+	        if (ip === void 0) { ip = '127.0.0.1'; }
+	        _super.call(this, ip);
+	    }
+	    Ipv4.type = typebase_1.Arr.define(x86_64_linux_1.uint8, 4);
+	    return Ipv4;
+	}(Ip));
+	exports.Ipv4 = Ipv4;
+	var Ipv6 = (function (_super) {
+	    __extends(Ipv6, _super);
+	    function Ipv6(ip) {
+	        if (ip === void 0) { ip = '0:0:0:0:0:0:0:1'; }
+	        _super.call(this, ip);
+	        this.sep = ':';
+	    }
+	    Ipv6.prototype.presentationToOctet = function (presentation) {
+	        return parseInt(presentation, 16);
+	    };
+	    Ipv6.prototype.octetToPresentation = function (octet) {
+	        return octet.toString(16);
+	    };
+	    Ipv6.type = typebase_1.Arr.define(x86_64_linux_1.uint16, 16);
+	    return Ipv6;
+	}(Ip));
+	exports.Ipv6 = Ipv6;
+
+
+/***/ },
+/* 10 */
+/***/ function(module, exports) {
+
+	"use strict";
+	var UInt64 = (function () {
+	    function UInt64() {
+	    }
+	    UInt64.hi = function (a, lo) {
+	        if (lo === void 0) { lo = UInt64.lo(a); }
+	        var hi = a - lo;
+	        hi /= 4294967296;
+	        if ((hi < 0) || (hi >= 1048576))
+	            throw Error("Not an int52: " + a);
+	        return hi;
+	    };
+	    UInt64.lo = function (a) {
+	        var lo = a | 0;
+	        if (lo < 0)
+	            lo += 4294967296;
+	        return lo;
+	    };
+	    UInt64.joinToNumber = function (hi, lo) {
+	        if (lo < 0)
+	            lo += 4294967296;
+	        return hi * 4294967296 + lo;
+	    };
+	    return UInt64;
+	}());
+	exports.UInt64 = UInt64;
+
+
+/***/ },
+/* 11 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
+
+
+	exports.StaticBuffer = StaticBuffer;
+
+
+	// function bufferNew(size) {
+	//     return new Buffer(size); // Node < 6.0
+	// return Buffer.allocUnsafe(size); // Node 6.0
+	// }
+
+	function bufferFrom(arr, a, b) {
+	    return new Buffer(arr, a, b); // Node < 6.0
+	    // return Buffer.from(arr, a, b); // Node 6.0
+	}
+
+	// function StaticBuffer(staticArrayBuffer, byteOffset, length);
+	// function StaticBuffer(size, prot);
+	function StaticBuffer(a, b, c) {
+	    var buf;
+	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
+	        var staticArrayBuffer = a, byteOffset = b, length = c;
+	        if(!byteOffset) byteOffset = 0;
+	        if(!length) length = staticArrayBuffer.byteLength;
+	        buf = bufferFrom(staticArrayBuffer);
+	        buf = buf.slice(byteOffset, byteOffset + length);
+	    } else if(typeof a === 'number') {
+	        var size = a, prot = b;
+	        var sab = new StaticArrayBuffer(size, prot);
+	        buf = bufferFrom(sab);
+	    } else
+	        throw TypeError('Invalid StaticBuffer constructor arguments.');
+
+	    buf.__proto__ = StaticBuffer.prototype;
+	    return buf;
+	}
+
+	Buffer.Static = StaticBuffer;
+
+	StaticBuffer.isStaticBuffer = function(sbuf) {
+	    if((sbuf instanceof StaticBuffer) && (typeof sbuf.getAddress === 'function')) return true;
+	    else return false;
+	};
+
+	StaticBuffer.allocUnsafe = function(size, prot) {
+	    return new StaticBuffer(size, prot);
+	};
+
+	StaticBuffer.alloc = function(size, fill, encoding, prot) {
+	    var sab = new StaticBuffer(size, prot);
+	    sab.fill(fill, 0, sab.length, encoding);
+	    return sab;
+	};
+
+	StaticBuffer.from = function(obj, a, b, c) {
+	    if(obj instanceof Array) {
+	        var array = obj;
+	        var size = array.length;
+	        var prot = a;
+	        var sbuf = new StaticBuffer(size, prot);
+
+	        // var buf = bufferFrom(array);
+	        // buf.copy(sbuf);
+	        for(var i = 0; i < array.length; i++)
+	            sbuf[i] = array[i];
+
+	        return sbuf;
+	    } else if(StaticArrayBuffer.isStaticArrayBuffer(obj)) {
+	        var staticArrayBuffer = obj, byteOffset = a, length = b;
+	        return new StaticBuffer(staticArrayBuffer, byteOffset, length);
+	    } else if(obj instanceof ArrayBuffer) {
+	        var arrayBuffer = obj, byteOffset = a, length = b, prot = c;
+	        var buf = bufferFrom(arrayBuffer, byteOffset, length);
+	        var size = buf.length;
+	        var sbuf = new StaticBuffer(size, prot);
+	        sbuf.fill(buf);
+	        return sbuf;
+	    } else if(obj instanceof Uint8Array) {
+	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
+	        var buf = bufferFrom(obj);
+	        var size = buf.length;
+	        var prot = a;
+	        var sbuf = new StaticBuffer(size, prot);
+	        sbuf.fill(buf);
+	        return sbuf;
+	    } else
+	        throw TypeError("Don't know how to create StaticBuffer from this type.");
+	};
+
+	StaticBuffer.prototype.__proto__ =
+	    Buffer.prototype;
+
+	StaticBuffer.prototype.call = function(args, offset) {
+	    if(!args) args = [];
+	    if(!offset) offset = 0;
+	    return this.buffer.call(args, this.byteOffset + offset);
+	};
+
+	StaticBuffer.prototype.getAddress = function(offset) {
+	    if(!offset) offset = 0;
+	    return this.buffer.getAddress(this.buffer.byteOffset + offset);
+	};
+
+	// In general we extend the `Buffer` object and all methods return
+	// either something that is not buffer or `Buffer` objects that is `this`
+	// except for `.slice()` method that creates a new `Buffer`. We overwrite it
+	// because we want to return an object of `StaticBuffer` instead.
+	StaticBuffer.prototype.slice = function(start, end) {
+	    if(!start) start = 0;
+	    if(!end) end = this.length;
+	    if(typeof start !== 'number') throw TypeError('start must be number');
+	    if(typeof end !== 'number') throw TypeError('end must be number');
+	    var length = end - start;
+	    if(length <= 0) throw TypeError('end must be greater than start');
+	    return new StaticBuffer(this.buffer, start, length);
+	};
+
+
+/***/ },
+/* 12 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var EventEmitter = __webpack_require__(13).EventEmitter;
+	var eloop = __webpack_require__(15);
 
 
 	if(!process)
@@ -2481,11 +3592,18 @@ var global = this;
 
 	process.title = 'full.js';
 
+	process.release = {
+	    name: 'full.js',
+	    lts: '',
+	    sourceUrl: '',
+	    headersUrl: ''
+	};
+
 
 	// Node.js does not allow to overwrite this property, so
 	// in Node.js it will hold the Node.js version.
 	process.version = 'v1.0.0';
-
+	process.platform = 'linux';
 	process.moduleLoadList = []; // For compatibility with node.
 	process.versions = {
 	    full: '1.0.0'
@@ -2495,11 +3613,34 @@ var global = this;
 	// process.release = process.release;
 	process.argv = process.argv || [];
 	process.execArgv = [];
-	process.env = process.env || {};
-	process.features = {};
-	process.execPath = process.execPath || {};
+
+	process.env = process.env || {
+	        NODE_VERSION: '',
+	        HOSTNAME: '',
+	        TERM: '',
+	        NPM_CONFIG_LOGLEVEL: '',
+	        PATH: '',
+	        PWD: '',
+	        SHLVL: '',
+	        HOME: '',
+	        _: '',
+	        OLDPWD: '',
+	    };
+	process.env.NODE_DEBUG = '*';
+
+	process.features = {
+	    debug: false,
+	    uv: false,
+	    ipv6: false,
+	    tls_npn: false,
+	    tls_sni: false,
+	    tls_ocsp: false,
+	    tls: false
+	};
+	process.execPath = process.execPath || '';
 	process.config = {};
 	// reallyExit: [Function: reallyExit],
+
 
 
 	process.nextTick = function(callback) {
@@ -2518,7 +3659,7 @@ var global = this;
 	};
 
 
-	var libjs = __webpack_require__(9);
+	var libjs = __webpack_require__(6);
 
 	process.pid = libjs.getpid();
 
@@ -2530,6 +3671,8 @@ var global = this;
 	    try {
 	        return libjs.getcwd();
 	    } catch(e) {
+	        console.log(e);
+	        console.log(e.stack);
 	        return '.';
 	    }
 	};
@@ -2658,7 +3801,7 @@ var global = this;
 
 
 /***/ },
-/* 7 */
+/* 13 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -2706,7 +3849,7 @@ var global = this;
 	    this.domain = null;
 	    if (EventEmitter.usingDomains) {
 	        // if there is an active domain, then attach to it.
-	        domain = domain || __webpack_require__(8);
+	        domain = domain || __webpack_require__(14);
 	        if (domain.active && !(this instanceof domain.Domain)) {
 	            this.domain = domain.active;
 	        }
@@ -3141,1171 +4284,10 @@ var global = this;
 
 
 /***/ },
-/* 8 */
-/***/ function(module, exports) {
-
-	module.exports = require("domain");
-
-/***/ },
-/* 9 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	function __export(m) {
-	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
-	}
-	var p = process;
-	var Buffer = StaticBuffer || Buffer;
-	var syscall = p.syscall || __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"libsys\""); e.code = 'MODULE_NOT_FOUND'; throw e; }())).syscall;
-	var syscall64 = p.syscall64 || __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"libsys\""); e.code = 'MODULE_NOT_FOUND'; throw e; }())).syscall64;
-	var asyscall = p.asyscall || (function asyscall() {
-	    var args = [];
-	    for (var _i = 0; _i < arguments.length; _i++) {
-	        args[_i - 0] = arguments[_i];
-	    }
-	    var callback = args[args.length - 1];
-	    var params = args.splice(0, args.length - 1);
-	    var res = syscall.apply(null, params);
-	    callback(res);
-	});
-	var asyscall64 = p.asyscall64 || (function asyscall64() {
-	    var args = [];
-	    for (var _i = 0; _i < arguments.length; _i++) {
-	        args[_i - 0] = arguments[_i];
-	    }
-	    var callback = args[args.length - 1];
-	    var params = args.splice(0, args.length - 1);
-	    var res = syscall64.apply(null, params);
-	    callback(res);
-	});
-	function malloc(size) {
-	    return new Buffer(size);
-	}
-	var x86_64_linux_1 = __webpack_require__(10);
-	var types = __webpack_require__(10);
-	__export(__webpack_require__(10));
-	exports.arch = {
-	    isLE: true,
-	    kernel: 'linux',
-	    int: 64,
-	    SYS: x86_64_linux_1.SYS,
-	    types: types
-	};
-	__export(__webpack_require__(12));
-	__export(__webpack_require__(13));
-	function noop() { }
-	function read(fd, buf) {
-	    return syscall(x86_64_linux_1.SYS.read, fd, buf, buf.length);
-	}
-	exports.read = read;
-	function readAsync(fd, buf, callback) {
-	    asyscall(x86_64_linux_1.SYS.read, fd, buf, buf.length, callback);
-	}
-	exports.readAsync = readAsync;
-	function write(fd, buf) {
-	    if (!(buf instanceof Buffer))
-	        buf = new Buffer(buf + '\0');
-	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length);
-	}
-	exports.write = write;
-	function writeAsync(fd, buf, callback) {
-	    if (!(buf instanceof Buffer))
-	        buf = new Buffer(buf + '\0');
-	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
-	}
-	exports.writeAsync = writeAsync;
-	function open(pathname, flags, mode) {
-	    var args = [x86_64_linux_1.SYS.open, pathname, flags];
-	    if (typeof mode === 'number')
-	        args.push(mode);
-	    return syscall.apply(null, args);
-	}
-	exports.open = open;
-	function openAsync(pathname, flags, mode, callback) {
-	    var args = [x86_64_linux_1.SYS.open, pathname, flags];
-	    if (typeof mode === 'number')
-	        args.push(mode);
-	    args.push(callback);
-	    asyscall.apply(null, args);
-	}
-	exports.openAsync = openAsync;
-	function close(fd) {
-	    return syscall(x86_64_linux_1.SYS.close, fd);
-	}
-	exports.close = close;
-	function closeAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.close, fd, callback);
-	}
-	exports.closeAsync = closeAsync;
-	function access(pathname, mode) {
-	    return syscall(x86_64_linux_1.SYS.access, pathname, mode);
-	}
-	exports.access = access;
-	function accessAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.access, pathname, mode, callback);
-	}
-	exports.accessAsync = accessAsync;
-	function chmod(pathname, mode) {
-	    return syscall(x86_64_linux_1.SYS.chmod, pathname, mode);
-	}
-	exports.chmod = chmod;
-	function chmodAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.chmod, pathname, mode, callback);
-	}
-	exports.chmodAsync = chmodAsync;
-	function fchmod(fd, mode) {
-	    return syscall(x86_64_linux_1.SYS.chmod, fd, mode);
-	}
-	exports.fchmod = fchmod;
-	function fchmodAsync(fd, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.chmod, fd, mode, callback);
-	}
-	exports.fchmodAsync = fchmodAsync;
-	function chown(pathname, owner, group) {
-	    return syscall(x86_64_linux_1.SYS.chown, pathname, owner, group);
-	}
-	exports.chown = chown;
-	function chownAsync(pathname, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.chown, pathname, owner, group, callback);
-	}
-	exports.chownAsync = chownAsync;
-	function fchown(fd, owner, group) {
-	    return syscall(x86_64_linux_1.SYS.fchown, fd, owner, group);
-	}
-	exports.fchown = fchown;
-	function fchownAsync(fd, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.fchown, fd, owner, group, callback);
-	}
-	exports.fchownAsync = fchownAsync;
-	function lchown(pathname, owner, group) {
-	    return syscall(x86_64_linux_1.SYS.lchown, pathname, owner, group);
-	}
-	exports.lchown = lchown;
-	function lchownAsync(pathname, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.lchown, pathname, owner, group, callback);
-	}
-	exports.lchownAsync = lchownAsync;
-	function fsync(fd) {
-	    return syscall(x86_64_linux_1.SYS.fsync, fd);
-	}
-	exports.fsync = fsync;
-	function fsyncAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.fsync, fd, callback);
-	}
-	exports.fsyncAsync = fsyncAsync;
-	function fdatasync(fd) {
-	    return syscall(x86_64_linux_1.SYS.fdatasync, fd);
-	}
-	exports.fdatasync = fdatasync;
-	function fdatasyncAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.fdatasync, fd, callback);
-	}
-	exports.fdatasyncAsync = fdatasyncAsync;
-	function stat(filepath) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
-	    if (result == 0)
-	        return types.stat.unpack(buf);
-	    throw result;
-	}
-	exports.stat = stat;
-	function __unpackStats(buf, result, callback) {
-	    if (result === 0) {
-	        try {
-	            callback(null, types.stat.unpack(buf));
-	        }
-	        catch (e) {
-	            callback(e);
-	        }
-	    }
-	    else
-	        callback(result);
-	}
-	function statAsync(filepath, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
-	}
-	exports.statAsync = statAsync;
-	function lstat(linkpath) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    var result = syscall(x86_64_linux_1.SYS.lstat, linkpath, buf);
-	    if (result == 0)
-	        return types.stat.unpack(buf);
-	    throw result;
-	}
-	exports.lstat = lstat;
-	function lstatAsync(linkpath, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
-	}
-	exports.lstatAsync = lstatAsync;
-	function fstat(fd) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    var result = syscall(x86_64_linux_1.SYS.fstat, fd, buf);
-	    if (result == 0)
-	        return types.stat.unpack(buf);
-	    throw result;
-	}
-	exports.fstat = fstat;
-	function fstatAsync(fd, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
-	}
-	exports.fstatAsync = fstatAsync;
-	function truncate(path, length) {
-	    return syscall(x86_64_linux_1.SYS.truncate, path, length);
-	}
-	exports.truncate = truncate;
-	function truncateAsync(path, length, callback) {
-	    asyscall(x86_64_linux_1.SYS.truncate, path, length, callback);
-	}
-	exports.truncateAsync = truncateAsync;
-	function ftruncate(fd, length) {
-	    return syscall(x86_64_linux_1.SYS.ftruncate, fd, length);
-	}
-	exports.ftruncate = ftruncate;
-	function ftruncateAsync(fd, length, callback) {
-	    asyscall(x86_64_linux_1.SYS.ftruncate, fd, length, callback);
-	}
-	exports.ftruncateAsync = ftruncateAsync;
-	function lseek(fd, offset, whence) {
-	    return syscall(x86_64_linux_1.SYS.lseek, fd, offset, whence);
-	}
-	exports.lseek = lseek;
-	function lseekAsync(fd, offset, whence, callback) {
-	    asyscall(x86_64_linux_1.SYS.lseek, fd, offset, whence, callback);
-	}
-	exports.lseekAsync = lseekAsync;
-	function rename(oldpath, newpath) {
-	    return syscall(x86_64_linux_1.SYS.rename, oldpath, newpath);
-	}
-	exports.rename = rename;
-	function renameAsync(oldpath, newpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.rename, oldpath, newpath, callback);
-	}
-	exports.renameAsync = renameAsync;
-	function mkdir(pathname, mode) {
-	    return syscall(x86_64_linux_1.SYS.mkdir, pathname, mode);
-	}
-	exports.mkdir = mkdir;
-	function mkdirAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.mkdir, pathname, mode, callback);
-	}
-	exports.mkdirAsync = mkdirAsync;
-	function mkdirat(dirfd, pathname, mode) {
-	    return syscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode);
-	}
-	exports.mkdirat = mkdirat;
-	function mkdiratAsync(dirfd, pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode, callback);
-	}
-	exports.mkdiratAsync = mkdiratAsync;
-	function rmdir(pathname) {
-	    return syscall(x86_64_linux_1.SYS.rmdir, pathname);
-	}
-	exports.rmdir = rmdir;
-	function rmdirAsync(pathname, callback) {
-	    asyscall(x86_64_linux_1.SYS.rmdir, pathname, callback);
-	}
-	exports.rmdirAsync = rmdirAsync;
-	function getcwd() {
-	    var buf = new Buffer(264);
-	    var res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
-	    if (res < 0) {
-	        if (res === -34) {
-	            buf = new Buffer(4096);
-	            res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
-	            if (res < 0)
-	                throw res;
-	        }
-	        else
-	            throw res;
-	    }
-	    return buf.slice(0, res).toString();
-	}
-	exports.getcwd = getcwd;
-	function getcwdAsync(callback) {
-	    var buf = new Buffer(264);
-	    asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
-	        if (res < 0) {
-	            if (res === -34) {
-	                buf = new Buffer(4096);
-	                asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
-	                    if (res < 0)
-	                        callback(res);
-	                    else
-	                        callback(null, buf.slice(0, res).toString());
-	                });
-	            }
-	            else
-	                callback(res);
-	        }
-	        callback(null, buf.slice(0, res).toString());
-	    });
-	}
-	exports.getcwdAsync = getcwdAsync;
-	function getdents64(fd, dirp) {
-	    return syscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length);
-	}
-	exports.getdents64 = getdents64;
-	function getdents64Async(fd, dirp, callback) {
-	    asyscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length, callback);
-	}
-	exports.getdents64Async = getdents64Async;
-	function readdir(path, encoding) {
-	    if (encoding === void 0) { encoding = 'utf8'; }
-	    var fd = open(path, 0 | 65536);
-	    if (fd < 0)
-	        throw fd;
-	    var buf = new Buffer(4096);
-	    var struct = types.linux_dirent64;
-	    var list = [];
-	    var res = getdents64(fd, buf);
-	    do {
-	        var offset = 0;
-	        while (offset + struct.size < res) {
-	            var unpacked = struct.unpack(buf, offset);
-	            var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
-	            name = name.substr(0, name.indexOf("\0"));
-	            var entry = {
-	                ino: unpacked.ino64_t,
-	                offset: unpacked.off64_t[0],
-	                type: unpacked.d_type,
-	                name: name
-	            };
-	            list.push(entry);
-	            offset += unpacked.d_reclen;
-	        }
-	        res = getdents64(fd, buf);
-	    } while (res > 0);
-	    if (res < 0)
-	        throw res;
-	    close(fd);
-	    return list;
-	}
-	exports.readdir = readdir;
-	function readdirList(path, encoding) {
-	    if (encoding === void 0) { encoding = 'utf8'; }
-	    var fd = open(path, 0 | 65536);
-	    if (fd < 0)
-	        throw fd;
-	    var buf = new Buffer(4096);
-	    var struct = types.linux_dirent64;
-	    var list = [];
-	    var res = getdents64(fd, buf);
-	    do {
-	        var offset = 0;
-	        while (offset + struct.size < res) {
-	            var unpacked = struct.unpack(buf, offset);
-	            var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
-	            name = name.substr(0, name.indexOf("\0"));
-	            if ((name != '.') && (name != '..'))
-	                list.push(name);
-	            offset += unpacked.d_reclen;
-	        }
-	        res = getdents64(fd, buf);
-	    } while (res > 0);
-	    if (res < 0)
-	        throw res;
-	    close(fd);
-	    return list;
-	}
-	exports.readdirList = readdirList;
-	function readdirListAsync(path, encoding, callback) {
-	    if (encoding === void 0) { encoding = 'utf8'; }
-	    openAsync(path, 0 | 65536, null, function (fd) {
-	        if (fd < 0)
-	            return callback(fd);
-	        var buf = new Buffer(4096);
-	        var struct = types.linux_dirent64;
-	        var list = [];
-	        function done() {
-	            closeAsync(fd, noop);
-	            callback(null, list);
-	        }
-	        function loop() {
-	            getdents64Async(fd, buf, function (res) {
-	                if (res < 0) {
-	                    callback(res);
-	                    return;
-	                }
-	                var offset = 0;
-	                while (offset + struct.size < res) {
-	                    var unpacked = struct.unpack(buf, offset);
-	                    var name = buf.slice(offset + struct.size, offset + unpacked.d_reclen).toString(encoding);
-	                    name = name.substr(0, name.indexOf("\0"));
-	                    if ((name != '.') && (name != '..'))
-	                        list.push(name);
-	                    offset += unpacked.d_reclen;
-	                }
-	                if (res > 0)
-	                    loop();
-	                else
-	                    done();
-	            });
-	        }
-	        loop();
-	    });
-	}
-	exports.readdirListAsync = readdirListAsync;
-	function symlink(target, linkpath) {
-	    return syscall(x86_64_linux_1.SYS.symlink, target, linkpath);
-	}
-	exports.symlink = symlink;
-	function symlinkAsync(target, linkpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.symlink, target, linkpath, callback);
-	}
-	exports.symlinkAsync = symlinkAsync;
-	function unlink(pathname) {
-	    return syscall(x86_64_linux_1.SYS.unlink, pathname);
-	}
-	exports.unlink = unlink;
-	function unlinkAsync(pathname, callback) {
-	    asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
-	}
-	exports.unlinkAsync = unlinkAsync;
-	function readlink(pathname, buf) {
-	    return syscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length);
-	}
-	exports.readlink = readlink;
-	function readlinkAsync(pathname, buf, callback) {
-	    asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
-	}
-	exports.readlinkAsync = readlinkAsync;
-	function link(oldpath, newpath) {
-	    return syscall(x86_64_linux_1.SYS.link, oldpath, newpath);
-	}
-	exports.link = link;
-	function linkAsync(oldpath, newpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.link, oldpath, newpath, callback);
-	}
-	exports.linkAsync = linkAsync;
-	function utime(filename, times) {
-	    var buf = types.utimbuf.pack(times);
-	    return syscall(x86_64_linux_1.SYS.utime, filename, buf);
-	}
-	exports.utime = utime;
-	function utimeAsync(filename, times, callback) {
-	    var buf = types.utimbuf.pack(times);
-	    asyscall(x86_64_linux_1.SYS.utime, filename, buf, callback);
-	}
-	exports.utimeAsync = utimeAsync;
-	function utimes(filename, times) {
-	    var buf = types.timevalarr.pack(times);
-	    return syscall(x86_64_linux_1.SYS.utimes, buf);
-	}
-	exports.utimes = utimes;
-	function utimesAsync(filename, times, callback) {
-	    var buf = types.timevalarr.pack(times);
-	    asyscall(x86_64_linux_1.SYS.utimes, buf, callback);
-	}
-	exports.utimesAsync = utimesAsync;
-	function socket(domain, type, protocol) {
-	    return syscall(x86_64_linux_1.SYS.socket, domain, type, protocol);
-	}
-	exports.socket = socket;
-	function socketAsync(domain, type, protocol, callback) {
-	    asyscall(x86_64_linux_1.SYS.socket, domain, type, protocol, callback);
-	}
-	exports.socketAsync = socketAsync;
-	function connect(fd, sockaddr) {
-	    var buf = types.sockaddr_in.pack(sockaddr);
-	    return syscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length);
-	}
-	exports.connect = connect;
-	function connectAsync(fd, sockaddr, callback) {
-	    var buf = types.sockaddr_in.pack(sockaddr);
-	    asyscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length, callback);
-	}
-	exports.connectAsync = connectAsync;
-	function bind(fd, sockaddr, addr_type) {
-	    var buf = addr_type.pack(sockaddr);
-	    return syscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length);
-	}
-	exports.bind = bind;
-	function bindAsync(fd, sockaddr, addr_type, callback) {
-	    var buf = addr_type.pack(sockaddr);
-	    asyscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length, callback);
-	}
-	exports.bindAsync = bindAsync;
-	function listen(fd, backlog) {
-	    return syscall(x86_64_linux_1.SYS.listen, fd, backlog);
-	}
-	exports.listen = listen;
-	function listenAsync(fd, backlog, callback) {
-	    asyscall(x86_64_linux_1.SYS.listen, fd, backlog, callback);
-	}
-	exports.listenAsync = listenAsync;
-	function accept(fd, buf) {
-	    var buflen = types.int32.pack(buf.length);
-	    return syscall(x86_64_linux_1.SYS.accept, fd, buf, buflen);
-	}
-	exports.accept = accept;
-	function acceptAsync(fd, buf, callback) {
-	    var buflen = types.int32.pack(buf.length);
-	    asyscall(x86_64_linux_1.SYS.accept, fd, buf, buflen, callback);
-	}
-	exports.acceptAsync = acceptAsync;
-	function accept4(fd, buf, flags) {
-	    var buflen = types.int32.pack(buf.length);
-	    return syscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags);
-	}
-	exports.accept4 = accept4;
-	function accept4Async(fd, buf, flags, callback) {
-	    var buflen = types.int32.pack(buf.length);
-	    asyscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags, callback);
-	}
-	exports.accept4Async = accept4Async;
-	function shutdown(fd, how) {
-	    return syscall(x86_64_linux_1.SYS.shutdown, fd, how);
-	}
-	exports.shutdown = shutdown;
-	function shutdownAsync(fd, how, callback) {
-	    asyscall(x86_64_linux_1.SYS.shutdown, fd, how, callback);
-	}
-	exports.shutdownAsync = shutdownAsync;
-	function send(fd, buf, flags) {
-	    if (flags === void 0) { flags = 0; }
-	    return sendto(fd, buf, flags);
-	}
-	exports.send = send;
-	function sendAsync(fd, buf, flags, callback) {
-	    if (flags === void 0) { flags = 0; }
-	    sendtoAsync(fd, buf, flags, null, null, callback);
-	}
-	exports.sendAsync = sendAsync;
-	function sendto(fd, buf, flags, addr, addr_type) {
-	    if (flags === void 0) { flags = 0; }
-	    var params = [x86_64_linux_1.SYS.sendto, fd, buf, buf.length, flags, 0, 0];
-	    if (addr) {
-	        var addrbuf = addr_type.pack(addr);
-	        params[5] = addrbuf;
-	        params[6] = addrbuf.length;
-	    }
-	    return syscall.apply(null, params);
-	}
-	exports.sendto = sendto;
-	function sendtoAsync(fd, buf, flags, addr, addr_type, callback) {
-	    if (flags === void 0) { flags = 0; }
-	    var params = [x86_64_linux_1.SYS.sendto, fd, buf, buf.length, flags, 0, 0, callback];
-	    if (addr) {
-	        var addrbuf = addr_type.pack(addr);
-	        params[5] = addrbuf;
-	        params[6] = addrbuf.length;
-	    }
-	    syscall.apply(null, params);
-	}
-	exports.sendtoAsync = sendtoAsync;
-	function recv(sockfd, buf, flags) {
-	    if (flags === void 0) { flags = 0; }
-	    return recvfrom(sockfd, buf, flags);
-	}
-	exports.recv = recv;
-	function recvAsync(sockfd, buf, flags, callback) {
-	    if (flags === void 0) { flags = 0; }
-	    recvfromAsync(sockfd, buf, flags, null, null, callback);
-	}
-	exports.recvAsync = recvAsync;
-	function recvfrom(sockfd, buf, flags, addr, addr_type) {
-	    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0];
-	    if (addr) {
-	        var addrbuf = addr_type.pack(addr);
-	        args[5] = addrbuf;
-	        args[6] = addrbuf.length;
-	    }
-	    return syscall.apply(null, args);
-	}
-	exports.recvfrom = recvfrom;
-	function recvfromAsync(sockfd, buf, flags, addr, addr_type, callback) {
-	    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0, callback];
-	    if (addr) {
-	        var addrbuf = addr_type.pack(addr);
-	        args[5] = addrbuf;
-	        args[6] = addrbuf.length;
-	    }
-	    asyscall.apply(null, args);
-	}
-	exports.recvfromAsync = recvfromAsync;
-	function setsockopt(sockfd, level, optname, optval) {
-	    return syscall(x86_64_linux_1.SYS.setsockopt, sockfd, level, optname, optval, optval.length);
-	}
-	exports.setsockopt = setsockopt;
-	function getpid() {
-	    return syscall(x86_64_linux_1.SYS.getpid);
-	}
-	exports.getpid = getpid;
-	function getppid() {
-	    return syscall(x86_64_linux_1.SYS.getppid);
-	}
-	exports.getppid = getppid;
-	function getppidAsync(callback) {
-	    asyscall(x86_64_linux_1.SYS.getppid, callback);
-	}
-	exports.getppidAsync = getppidAsync;
-	function getuid() {
-	    return syscall(x86_64_linux_1.SYS.getuid);
-	}
-	exports.getuid = getuid;
-	function geteuid() {
-	    return syscall(x86_64_linux_1.SYS.geteuid);
-	}
-	exports.geteuid = geteuid;
-	function getgid() {
-	    return syscall(x86_64_linux_1.SYS.getgid);
-	}
-	exports.getgid = getgid;
-	function getegid() {
-	    return syscall(x86_64_linux_1.SYS.getegid);
-	}
-	exports.getegid = getegid;
-	function sched_yield() {
-	    syscall(x86_64_linux_1.SYS.sched_yield);
-	}
-	exports.sched_yield = sched_yield;
-	function nanosleep(seconds, nanoseconds) {
-	    var buf = types.timespec.pack({
-	        tv_sec: [seconds, 0],
-	        tv_nsec: [nanoseconds, 0]
-	    });
-	    return syscall(x86_64_linux_1.SYS.nanosleep, buf, types.NULL);
-	}
-	exports.nanosleep = nanosleep;
-	function fcntl(fd, cmd, arg) {
-	    var params = [x86_64_linux_1.SYS.fcntl, fd, cmd];
-	    if (typeof arg !== 'undefined')
-	        params.push(arg);
-	    return syscall.apply(null, params);
-	}
-	exports.fcntl = fcntl;
-	function epoll_create(size) {
-	    return syscall(x86_64_linux_1.SYS.epoll_create, size);
-	}
-	exports.epoll_create = epoll_create;
-	function epoll_create1(flags) {
-	    return syscall(x86_64_linux_1.SYS.epoll_create1, flags);
-	}
-	exports.epoll_create1 = epoll_create1;
-	function epoll_wait(epfd, buf, maxevents, timeout) {
-	    return syscall(x86_64_linux_1.SYS.epoll_wait, epfd, buf, maxevents, timeout);
-	}
-	exports.epoll_wait = epoll_wait;
-	function epoll_ctl(epfd, op, fd, epoll_event) {
-	    var buf = types.epoll_event.pack(epoll_event);
-	    return syscall(x86_64_linux_1.SYS.epoll_ctl, epfd, op, fd, buf);
-	}
-	exports.epoll_ctl = epoll_ctl;
-	function inotify_init() {
-	    return syscall(x86_64_linux_1.SYS.inotify_init);
-	}
-	exports.inotify_init = inotify_init;
-	function inotify_init1(flags) {
-	    return syscall(x86_64_linux_1.SYS.inotify_init1, flags);
-	}
-	exports.inotify_init1 = inotify_init1;
-	function inotify_add_watch(fd, pathname, mask) {
-	    return syscall(x86_64_linux_1.SYS.inotify_add_watch, fd, pathname, mask);
-	}
-	exports.inotify_add_watch = inotify_add_watch;
-	function inotify_rm_watch(fd, wd) {
-	    return syscall(x86_64_linux_1.SYS.inotify_rm_watch, fd, wd);
-	}
-	exports.inotify_rm_watch = inotify_rm_watch;
-	function mmap(addr, length, prot, flags, fd, offset) {
-	    return syscall64(x86_64_linux_1.SYS.mmap, addr, length, prot, flags, fd, offset);
-	}
-	exports.mmap = mmap;
-	function munmap(addr, length) {
-	    return syscall(x86_64_linux_1.SYS.munmap, addr, length);
-	}
-	exports.munmap = munmap;
-	function mprotect(addr, len, prot) {
-	    return syscall(x86_64_linux_1.SYS.mprotect, addr, len, prot);
-	}
-	exports.mprotect = mprotect;
-	function shmget(key, size, shmflg) {
-	    return syscall(x86_64_linux_1.SYS.shmget, key, size, shmflg);
-	}
-	exports.shmget = shmget;
-	function shmat(shmid, shmaddr, shmflg) {
-	    if (shmaddr === void 0) { shmaddr = types.NULL; }
-	    if (shmflg === void 0) { shmflg = 0; }
-	    return syscall64(x86_64_linux_1.SYS.shmat, shmid, shmaddr, shmflg);
-	}
-	exports.shmat = shmat;
-	function shmdt(shmaddr) {
-	    return syscall(x86_64_linux_1.SYS.shmdt, shmaddr);
-	}
-	exports.shmdt = shmdt;
-	function shmctl(shmid, cmd, buf) {
-	    if (buf === void 0) { buf = types.NULL; }
-	    if (buf instanceof Buffer) {
-	    }
-	    else if (typeof buf === 'object') {
-	        buf = types.shmid_ds.pack(buf);
-	    }
-	    else {
-	    }
-	    return syscall(x86_64_linux_1.SYS.shmctl, shmid, cmd, buf);
-	}
-	exports.shmctl = shmctl;
-
-
-/***/ },
-/* 10 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var typebase_1 = __webpack_require__(11);
-	exports.isLE = true;
-	exports.NULL = 0;
-	var buf = Buffer.prototype;
-	exports.int8 = typebase_1.Type.define(1, buf.readInt8, buf.writeInt8);
-	exports.uint8 = typebase_1.Type.define(1, buf.readUInt8, buf.readUInt8);
-	exports.int16 = typebase_1.Type.define(2, buf.readInt16LE, buf.writeInt16LE);
-	exports.uint16 = typebase_1.Type.define(2, buf.readUInt16LE, buf.writeUInt16LE);
-	exports.int32 = typebase_1.Type.define(4, buf.readInt32LE, buf.writeInt32LE);
-	exports.uint32 = typebase_1.Type.define(4, buf.readUInt32LE, buf.writeUInt32LE);
-	exports.int64 = typebase_1.Arr.define(exports.int32, 2);
-	exports.uint64 = typebase_1.Arr.define(exports.uint32, 2);
-	exports.size_t = exports.uint64;
-	exports.time_t = exports.uint64;
-	exports.pid_t = exports.uint32;
-	exports.ipv4 = typebase_1.Type.define(4, function (offset) {
-	    if (offset === void 0) { offset = 0; }
-	    var buf = this;
-	    var socket = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"../../socket\""); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
-	    var octets = socket.Ipv4.type.unpack(buf, offset);
-	    return new socket.Ipv4(octets);
-	}, function (data, offset) {
-	    if (offset === void 0) { offset = 0; }
-	    var buf = this;
-	    data.toBuffer().copy(buf, offset);
-	});
-	exports.pointer_t = exports.uint64;
-	exports.stat = typebase_1.Struct.define(31 * 4, [
-	    [0, exports.uint32, 'dev'],
-	    [2 * 4, exports.uint32, 'ino'],
-	    [4 * 4, exports.uint32, 'nlink'],
-	    [6 * 4, exports.int32, 'mode'],
-	    [7 * 4, exports.int32, 'uid'],
-	    [8 * 4, exports.int32, 'gid'],
-	    [10 * 4, exports.uint32, 'rdev'],
-	    [12 * 4, exports.uint32, 'size'],
-	    [14 * 4, exports.uint32, 'blksize'],
-	    [16 * 4, exports.uint32, 'blocks'],
-	    [18 * 4, exports.uint32, 'atime'],
-	    [20 * 4, exports.uint32, 'atime_nsec'],
-	    [22 * 4, exports.uint32, 'mtime'],
-	    [24 * 4, exports.uint32, 'mtime_nsec'],
-	    [26 * 4, exports.uint32, 'ctime'],
-	    [28 * 4, exports.uint32, 'ctime_nsec'],
-	]);
-	exports.in_addr = typebase_1.Struct.define(4, [
-	    [0, exports.ipv4, 's_addr'],
-	]);
-	exports.sockaddr_in = typebase_1.Struct.define(16, [
-	    [0, exports.int16, 'sin_family'],
-	    [2, exports.uint16, 'sin_port'],
-	    [4, exports.in_addr, 'sin_addr'],
-	    [8, typebase_1.Arr.define(exports.int8, 8), 'sin_zero'],
-	]);
-	exports.sockaddr = typebase_1.Struct.define(1, [
-	    [0, 'sa_family', exports.uint16],
-	    [2, 'sa_data', typebase_1.Arr.define(exports.int8, 14)],
-	]);
-	exports.epoll_event = typebase_1.Struct.define(4 + 8, [
-	    [0, exports.uint32, 'events'],
-	    [4, exports.uint64, 'data'],
-	]);
-	exports.ipc_perm = typebase_1.Struct.define(48, [
-	    [0, exports.int32, '__key'],
-	    [4, exports.uint32, 'uid'],
-	    [8, exports.uint32, 'gid'],
-	    [12, exports.uint32, 'cuid'],
-	    [16, exports.uint32, 'cgid'],
-	    [20, exports.uint16, 'mode'],
-	    [24, exports.uint16, '__seq'],
-	]);
-	exports.shmid_ds = typebase_1.Struct.define(112, [
-	    [0, exports.ipc_perm, 'shm_perm'],
-	    [48, exports.size_t, 'shm_segsz'],
-	    [56, exports.time_t, 'shm_atime'],
-	    [64, exports.time_t, 'shm_dtime'],
-	    [72, exports.time_t, 'shm_ctime'],
-	    [80, exports.pid_t, 'shm_cpid'],
-	    [84, exports.pid_t, 'shm_lpid'],
-	    [88, exports.uint64, 'shm_nattch'],
-	]);
-	exports.utimbuf = typebase_1.Struct.define(16, [
-	    [0, exports.uint64, 'actime'],
-	    [8, exports.uint64, 'modtime'],
-	]);
-	exports.timeval = typebase_1.Struct.define(16, [
-	    [0, exports.uint64, 'tv_sec'],
-	    [8, exports.uint64, 'tv_nsec'],
-	]);
-	exports.timevalarr = typebase_1.Arr.define(exports.timeval, 2);
-	exports.timespec = exports.timeval;
-	exports.timespecarr = exports.timevalarr;
-	exports.linux_dirent64 = typebase_1.Struct.define(19, [
-	    [0, exports.uint64, 'ino64_t'],
-	    [8, exports.uint64, 'off64_t'],
-	    [16, exports.uint16, 'd_reclen'],
-	    [18, exports.uint8, 'd_type'],
-	]);
-	exports.inotify_event = typebase_1.Struct.define(16, [
-	    [0, exports.int32, 'wd'],
-	    [4, exports.uint32, 'mask'],
-	    [8, exports.uint32, 'cookie'],
-	    [12, exports.uint32, 'len'],
-	]);
-	exports.SYS = {
-	    read: 0,
-	    write: 1,
-	    open: 2,
-	    close: 3,
-	    stat: 4,
-	    fstat: 5,
-	    lstat: 6,
-	    lseek: 8,
-	    mmap: 9,
-	    mprotect: 10,
-	    munmap: 11,
-	    brk: 12,
-	    rt_sigaction: 13,
-	    rt_sigprocmask: 14,
-	    rt_sigreturn: 15,
-	    ioctl: 16,
-	    pread64: 17,
-	    pwrite64: 18,
-	    readv: 19,
-	    writev: 20,
-	    access: 21,
-	    pipe: 22,
-	    sched_yield: 24,
-	    mremap: 25,
-	    msync: 26,
-	    mincore: 27,
-	    madvise: 28,
-	    shmget: 29,
-	    shmat: 30,
-	    shmctl: 31,
-	    dup: 32,
-	    dup2: 33,
-	    pause: 34,
-	    nanosleep: 35,
-	    getitimer: 36,
-	    alarm: 37,
-	    setitimer: 38,
-	    getpid: 39,
-	    sendfile: 40,
-	    socket: 41,
-	    connect: 42,
-	    accept: 43,
-	    sendto: 44,
-	    recvfrom: 45,
-	    sendmsg: 46,
-	    recvmsg: 47,
-	    shutdown: 48,
-	    bind: 49,
-	    listen: 50,
-	    getsockname: 51,
-	    getpeername: 52,
-	    socketpair: 53,
-	    setsockopt: 54,
-	    getsockopt: 55,
-	    shmdt: 67,
-	    fcntl: 72,
-	    fsync: 74,
-	    fdatasync: 75,
-	    truncate: 76,
-	    ftruncate: 77,
-	    getdents: 78,
-	    getcwd: 79,
-	    chdir: 80,
-	    fchdir: 81,
-	    rename: 82,
-	    mkdir: 83,
-	    rmdir: 84,
-	    creat: 85,
-	    link: 86,
-	    unlink: 87,
-	    symlink: 88,
-	    readlink: 89,
-	    chmod: 90,
-	    fchmod: 91,
-	    chown: 92,
-	    fchown: 93,
-	    lchown: 94,
-	    umask: 95,
-	    gettimeofday: 96,
-	    getrlimit: 97,
-	    getrusage: 98,
-	    getuid: 102,
-	    getgid: 104,
-	    geteuid: 107,
-	    getegid: 108,
-	    setpgid: 109,
-	    getppid: 110,
-	    utime: 132,
-	    epoll_create: 213,
-	    getdents64: 217,
-	    epoll_wait: 232,
-	    epoll_ctl: 233,
-	    utimes: 235,
-	    inotify_init: 253,
-	    inotify_add_watch: 254,
-	    inotify_rm_watch: 255,
-	    mkdirat: 258,
-	    futimesat: 261,
-	    utimensat: 280,
-	    accept4: 288,
-	    epoll_create1: 291,
-	    inotify_init1: 294
-	};
-
-
-/***/ },
-/* 11 */
-/***/ function(module, exports) {
-
-	"use strict";
-	var Type = (function () {
-	    function Type() {
-	        this.size = 1;
-	    }
-	    Type.define = function (size, unpack, pack) {
-	        var new_type = new Type;
-	        new_type.size = size;
-	        new_type.unpackF = unpack;
-	        new_type.packF = pack;
-	        return new_type;
-	    };
-	    Type.prototype.unpack = function (buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        return this.unpackF.call(buf, offset);
-	    };
-	    Type.prototype.pack = function (data, buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        if (!buf)
-	            buf = new Buffer(this.size);
-	        if (data instanceof Buffer)
-	            data.copy(buf, offset);
-	        else if (typeof data == 'object')
-	            data.toBuffer().copy(buf, offset);
-	        else
-	            this.packF.call(buf, data, offset);
-	        return buf;
-	    };
-	    return Type;
-	}());
-	exports.Type = Type;
-	var Arr = (function () {
-	    function Arr() {
-	    }
-	    Arr.define = function (type, len) {
-	        var new_arr = new Arr;
-	        new_arr.len = len;
-	        new_arr.type = type;
-	        new_arr.size = type.size * len;
-	        return new_arr;
-	    };
-	    Arr.prototype.unpack = function (buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        var arr = [], off;
-	        for (var i = 0; i < this.len; i++) {
-	            off = offset + (i * this.type.size);
-	            arr.push(this.type.unpack(buf, off));
-	        }
-	        return arr;
-	    };
-	    Arr.prototype.pack = function (data, buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        if (!buf)
-	            buf = new Buffer(this.size);
-	        if (data) {
-	            var off;
-	            for (var i = 0; (i < this.len) && (i < data.length); i++) {
-	                off = offset + (i * this.type.size);
-	                this.type.pack(data[i], buf, off);
-	            }
-	        }
-	        return buf;
-	    };
-	    return Arr;
-	}());
-	exports.Arr = Arr;
-	var Struct = (function () {
-	    function Struct() {
-	        this.defs = [];
-	        this.size = 0;
-	    }
-	    Struct.define = function (size, defs) {
-	        var new_struct = new Struct;
-	        new_struct.size = size;
-	        new_struct.defs = defs;
-	        return new_struct;
-	    };
-	    Struct.prototype.unpack = function (buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        var result = {};
-	        for (var _i = 0, _a = this.defs; _i < _a.length; _i++) {
-	            var field = _a[_i];
-	            var off = field[0], type = field[1], name = field[2];
-	            result[name] = type.unpack(buf, offset + off);
-	        }
-	        return result;
-	    };
-	    Struct.prototype.pack = function (data, buf, offset) {
-	        if (offset === void 0) { offset = 0; }
-	        if (!buf)
-	            buf = new Buffer(this.size);
-	        for (var _i = 0, _a = this.defs; _i < _a.length; _i++) {
-	            var field = _a[_i];
-	            var off = field[0], type = field[1], name = field[2];
-	            type.pack(data[name], buf, offset + off);
-	        }
-	        return buf;
-	    };
-	    return Struct;
-	}());
-	exports.Struct = Struct;
-
-
-/***/ },
-/* 12 */
-/***/ function(module, exports) {
-
-	"use strict";
-	var UInt64 = (function () {
-	    function UInt64() {
-	    }
-	    UInt64.hi = function (a, lo) {
-	        if (lo === void 0) { lo = UInt64.lo(a); }
-	        var hi = a - lo;
-	        hi /= 4294967296;
-	        if ((hi < 0) || (hi >= 1048576))
-	            throw Error("Not an int52: " + a);
-	        return hi;
-	    };
-	    UInt64.lo = function (a) {
-	        var lo = a | 0;
-	        if (lo < 0)
-	            lo += 4294967296;
-	        return lo;
-	    };
-	    UInt64.joinToNumber = function (hi, lo) {
-	        if (lo < 0)
-	            lo += 4294967296;
-	        return hi * 4294967296 + lo;
-	    };
-	    return UInt64;
-	}());
-	exports.UInt64 = UInt64;
-
-
-/***/ },
-/* 13 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var typebase_1 = __webpack_require__(11);
-	var x86_64_linux_1 = __webpack_require__(10);
-	function flip(buf, offset, len) {
-	    if (offset === void 0) { offset = 0; }
-	    if (len === void 0) { len = buf.length; }
-	    var mid = len >> 1, tmp, lside, rside;
-	    for (var i = 0; i < mid; i++) {
-	        lside = i + offset;
-	        rside = offset + len - i - 1;
-	        tmp = buf.readInt8(lside);
-	        buf.writeInt8(buf.readInt8(rside), lside);
-	        buf.writeInt8(tmp, rside);
-	    }
-	    return buf;
-	}
-	exports.flip = flip;
-	function hton16(num) {
-	    if (x86_64_linux_1.isLE)
-	        return ((num & 0xFF00) >> 8) + ((num & 0xFF) << 8);
-	    else
-	        return num;
-	}
-	exports.hton16 = hton16;
-	function htons(buf, offset, len) {
-	    if (offset === void 0) { offset = 0; }
-	    if (len === void 0) { len = buf.length; }
-	    if (x86_64_linux_1.isLE)
-	        return flip(buf, offset, len);
-	    else
-	        return buf;
-	}
-	exports.htons = htons;
-	var Ip = (function () {
-	    function Ip(ip) {
-	        this.sep = '.';
-	        if (typeof ip === 'string') {
-	            this.buf = new Buffer(ip.split(this.sep));
-	        }
-	        else if (ip instanceof Array) {
-	            this.buf = new Buffer(ip);
-	        }
-	    }
-	    Ip.prototype.toString = function () {
-	        return Ipv4.type.unpack(this.buf).join(this.sep);
-	    };
-	    Ip.prototype.toBuffer = function () {
-	        return this.buf;
-	    };
-	    Ip.prototype.presentationToOctet = function (presentation) {
-	        return +presentation;
-	    };
-	    Ip.prototype.octetToPresentation = function (octet) {
-	        return octet;
-	    };
-	    return Ip;
-	}());
-	exports.Ip = Ip;
-	var Ipv4 = (function (_super) {
-	    __extends(Ipv4, _super);
-	    function Ipv4(ip) {
-	        if (ip === void 0) { ip = '127.0.0.1'; }
-	        _super.call(this, ip);
-	    }
-	    Ipv4.type = typebase_1.Arr.define(x86_64_linux_1.uint8, 4);
-	    return Ipv4;
-	}(Ip));
-	exports.Ipv4 = Ipv4;
-	var Ipv6 = (function (_super) {
-	    __extends(Ipv6, _super);
-	    function Ipv6(ip) {
-	        if (ip === void 0) { ip = '0:0:0:0:0:0:0:1'; }
-	        _super.call(this, ip);
-	        this.sep = ':';
-	    }
-	    Ipv6.prototype.presentationToOctet = function (presentation) {
-	        return parseInt(presentation, 16);
-	    };
-	    Ipv6.prototype.octetToPresentation = function (octet) {
-	        return octet.toString(16);
-	    };
-	    Ipv6.type = typebase_1.Arr.define(x86_64_linux_1.uint16, 16);
-	    return Ipv6;
-	}(Ip));
-	exports.Ipv6 = Ipv6;
-
-
-/***/ },
 /* 14 */
 /***/ function(module, exports) {
 
-	"use strict";
-
+	module.exports = require("domain");
 
 /***/ },
 /* 15 */
@@ -4317,7 +4299,374 @@ var global = this;
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var eloop_1 = __webpack_require__(2);
+	var index_1 = __webpack_require__(6);
+	var POINTER_NONE = -1;
+	var DELAYS = [
+	    -2,
+	    -1,
+	    1,
+	    8,
+	    16,
+	    32,
+	    64,
+	    128,
+	    256,
+	    1024,
+	    4096,
+	    16384,
+	    65536,
+	    131072,
+	    524288,
+	    2097152,
+	    8388608,
+	    33554432,
+	    268435456,
+	    2147483648,
+	    Infinity,
+	];
+	var DELAY_LAST = DELAYS.length - 1;
+	function findDelayIndex(delay) {
+	    for (var i = 0; i <= DELAY_LAST; i++)
+	        if (delay <= DELAYS[i])
+	            return i;
+	}
+	var MicroTask = (function () {
+	    function MicroTask() {
+	        this.next = null;
+	        this.prev = null;
+	        this.callback = null;
+	        this.args = null;
+	    }
+	    MicroTask.prototype.exec = function () {
+	        var args = this.args, callback = this.callback;
+	        if (!args) {
+	            callback();
+	        }
+	        else {
+	            switch (args.length) {
+	                case 1:
+	                    callback(args[0]);
+	                    break;
+	                case 2:
+	                    callback(args[0], args[1]);
+	                    break;
+	                case 3:
+	                    callback(args[0], args[1], args[2]);
+	                    break;
+	                default:
+	                    callback.apply(null, args);
+	            }
+	        }
+	    };
+	    return MicroTask;
+	}());
+	exports.MicroTask = MicroTask;
+	var Task = (function (_super) {
+	    __extends(Task, _super);
+	    function Task() {
+	        _super.apply(this, arguments);
+	        this.delay = -2;
+	        this.timeout = 0;
+	        this.pointer = POINTER_NONE;
+	        this.isRef = true;
+	        this.queue = null;
+	    }
+	    Task.prototype.ref = function () {
+	        if (!this.isRef) {
+	        }
+	    };
+	    Task.prototype.unref = function () {
+	        if (this.isRef) {
+	        }
+	    };
+	    Task.prototype.cancel = function () {
+	        this.queue.cancel(this);
+	    };
+	    return Task;
+	}(MicroTask));
+	exports.Task = Task;
+	var EventQueue = (function () {
+	    function EventQueue() {
+	        this.start = null;
+	        this.active = null;
+	        this.pointers = [];
+	    }
+	    EventQueue.prototype.setPointer = function (pointer_index, task) {
+	        var pointers = this.pointers;
+	        var timeout = task.timeout;
+	        pointers[pointer_index] = task;
+	        task.pointer = pointer_index;
+	        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
+	            var p = pointers[i];
+	            if (!p) {
+	                pointers[i] = task;
+	            }
+	            else {
+	                if (p.timeout <= timeout) {
+	                    pointers[i] = task;
+	                }
+	                else {
+	                    break;
+	                }
+	            }
+	        }
+	    };
+	    EventQueue.prototype.insertTask = function (curr, task) {
+	        var timeout = task.timeout;
+	        var prev = null;
+	        if (timeout >= curr.timeout) {
+	            do {
+	                prev = curr;
+	                curr = curr.next;
+	            } while (curr && (curr.timeout <= timeout));
+	            prev.next = task;
+	            task.prev = prev;
+	            if (curr) {
+	                curr.prev = task;
+	                task.next = curr;
+	            }
+	        }
+	        else {
+	            do {
+	                prev = curr;
+	                curr = curr.prev;
+	            } while (curr && (curr.timeout > timeout));
+	            prev.prev = task;
+	            task.next = prev;
+	            if (curr) {
+	                curr.next = task;
+	                task.prev = curr;
+	            }
+	            else {
+	                this.start = task;
+	            }
+	        }
+	    };
+	    EventQueue.prototype.msNextTask = function () {
+	        if (this.start) {
+	            return this.start.timeout - Date.now();
+	        }
+	        return Infinity;
+	    };
+	    EventQueue.prototype.insert = function (task) {
+	        task.queue = this;
+	        var delay = task.delay;
+	        var timeout = task.timeout = Date.now() + delay;
+	        var pointers = this.pointers;
+	        var pointer_index = findDelayIndex(delay);
+	        var curr = pointers[pointer_index];
+	        if (!curr) {
+	            this.setPointer(pointer_index, task);
+	            if (pointer_index) {
+	                for (var i = pointer_index - 1; i >= 0; i--) {
+	                    if (pointers[i]) {
+	                        curr = pointers[i];
+	                        break;
+	                    }
+	                }
+	            }
+	            if (!curr)
+	                curr = this.start;
+	            if (!curr) {
+	                this.start = task;
+	            }
+	            else {
+	                this.insertTask(curr, task);
+	            }
+	        }
+	        else {
+	            if (timeout >= curr.timeout) {
+	                this.setPointer(pointer_index, task);
+	            }
+	            this.insertTask(curr, task);
+	        }
+	    };
+	    EventQueue.prototype.cancel = function (task) {
+	        var prev = task.prev;
+	        var next = task.next;
+	        task.prev = task.next = null;
+	        if (prev)
+	            prev.next = next;
+	        if (next)
+	            next.prev = prev;
+	        if (!prev) {
+	            this.start = next;
+	        }
+	        if (task.pointer !== POINTER_NONE) {
+	            var index = task.pointer;
+	            if (index) {
+	                this.pointers[index] = this.pointers[index - 1];
+	            }
+	            else {
+	                this.pointers[index] = null;
+	            }
+	        }
+	    };
+	    EventQueue.prototype.sliceActiveQueue = function () {
+	        var curr = this.start;
+	        if (!curr)
+	            return;
+	        var time = Date.now();
+	        var pointers = this.pointers;
+	        for (var i = 0; i <= DELAY_LAST; i++) {
+	            var pointer = pointers[i];
+	            if (pointer) {
+	                if (pointer.timeout <= time) {
+	                    pointers[i] = null;
+	                    curr = pointer;
+	                }
+	                else {
+	                    break;
+	                }
+	            }
+	        }
+	        if (curr.timeout > time)
+	            return;
+	        var prev;
+	        do {
+	            prev = curr;
+	            curr = curr.next;
+	        } while (curr && (curr.timeout <= time));
+	        prev.next = null;
+	        if (curr)
+	            curr.prev = null;
+	        this.active = this.start;
+	        this.start = curr;
+	    };
+	    EventQueue.prototype.cycle = function () {
+	        this.sliceActiveQueue();
+	    };
+	    EventQueue.prototype.pop = function () {
+	        var task = this.active;
+	        if (!task)
+	            return null;
+	        this.active = task.next;
+	        return task;
+	    };
+	    return EventQueue;
+	}());
+	exports.EventQueue = EventQueue;
+	var EventLoop = (function () {
+	    function EventLoop() {
+	        this.microQueue = null;
+	        this.microQueueEnd = null;
+	        this.refQueue = new EventQueue;
+	        this.unrefQueue = new EventQueue;
+	    }
+	    EventLoop.prototype.shouldStop = function () {
+	        if (!this.refQueue.start)
+	            return true;
+	        return false;
+	    };
+	    EventLoop.prototype.insertMicrotask = function (microtask) {
+	        var last = this.microQueueEnd;
+	        this.microQueueEnd = microtask;
+	        if (!last) {
+	            this.microQueue = microtask;
+	        }
+	        else {
+	            last.next = microtask;
+	        }
+	    };
+	    EventLoop.prototype.insert = function (task) {
+	        if (task.isRef)
+	            this.refQueue.insert(task);
+	        else
+	            this.unrefQueue.insert(task);
+	    };
+	    EventLoop.prototype.start = function () {
+	        function exec_task(task) {
+	            if (task.callback)
+	                task.callback();
+	        }
+	        while (1) {
+	            this.refQueue.cycle();
+	            this.unrefQueue.cycle();
+	            var refTask = this.refQueue.pop();
+	            var unrefTask = this.unrefQueue.pop();
+	            var task;
+	            while (refTask || unrefTask) {
+	                if (refTask && unrefTask) {
+	                    if (refTask.timeout < unrefTask.timeout) {
+	                        refTask.exec();
+	                        refTask = null;
+	                    }
+	                    else if (refTask.timeout > unrefTask.timeout) {
+	                        unrefTask.exec();
+	                        unrefTask = null;
+	                    }
+	                    else {
+	                        if (refTask.timeout <= unrefTask.timeout) {
+	                            refTask.exec();
+	                            refTask = null;
+	                        }
+	                        else {
+	                            unrefTask.exec();
+	                            unrefTask = null;
+	                        }
+	                    }
+	                }
+	                else {
+	                    if (refTask) {
+	                        refTask.exec();
+	                        refTask = null;
+	                    }
+	                    else {
+	                        unrefTask.exec();
+	                        unrefTask = null;
+	                    }
+	                }
+	                var microtask;
+	                do {
+	                    microtask = this.microQueue;
+	                    if (microtask) {
+	                        if (microtask.callback)
+	                            microtask.exec();
+	                        this.microQueue = microtask.next;
+	                    }
+	                } while (this.microQueue);
+	                this.microQueueEnd = null;
+	                if (!refTask)
+	                    refTask = this.refQueue.pop();
+	                else
+	                    unrefTask = this.unrefQueue.pop();
+	            }
+	            if (this.shouldStop())
+	                break;
+	            var ref_ms = this.refQueue.msNextTask();
+	            var unref_ms = this.unrefQueue.msNextTask();
+	            var ms = Math.min(ref_ms, unref_ms);
+	            if (ms > 10) {
+	                if (ms > 10000)
+	                    ms = 10000;
+	                ms -= 5;
+	                var seconds = Math.floor(ms / 1000);
+	                var nanoseconds = (ms % 1000) * 1000000;
+	                index_1.nanosleep(seconds, nanoseconds);
+	            }
+	            else {
+	                if (ms > 1) {
+	                    index_1.sched_yield();
+	                }
+	            }
+	        }
+	    };
+	    return EventLoop;
+	}());
+	exports.EventLoop = EventLoop;
+
+
+/***/ },
+/* 16 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var eloop_1 = __webpack_require__(15);
 	var TIMEOUT_MAX = 2147483647;
 	var Timeout = (function () {
 	    function Timeout() {
@@ -4441,809 +4790,12 @@ var global = this;
 
 
 /***/ },
-/* 16 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var build = __webpack_require__(17).build;
-
-
-	var fs = module.exports = build({
-	    path: __webpack_require__(19),
-	    EventEmitter: __webpack_require__(7).EventEmitter,
-	    Buffer: __webpack_require__(3).Buffer,
-	    Readable: __webpack_require__(22).Readable,
-	    Writable: __webpack_require__(22).Writable
-	});
-
-
-
-
-/***/ },
 /* 17 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var libjs = __webpack_require__(9);
-	var inotify_1 = __webpack_require__(18);
-	function extend(a, b) {
-	    for (var i in b)
-	        a[i] = b[i];
-	    return a;
-	}
-	function noop() { }
-	function formatError(errno, func, path, path2) {
-	    if (func === void 0) { func = ''; }
-	    if (path === void 0) { path = ''; }
-	    if (path2 === void 0) { path2 = ''; }
-	    switch (-errno) {
-	        case 2: return "ENOENT: no such file or directory, " + func + " '" + path + "'";
-	        case 9: return "EBADF: bad file descriptor, " + func;
-	        case 22: return "EINVAL: invalid argument, " + func;
-	        case 1: return "EPERM: operation not permitted, " + func + " '" + path + "' -> '" + path2 + "'";
-	        case 71: return "EPROTO: protocol error, " + func + " '" + path + "' -> '" + path2 + "'";
-	        case 17: return "EEXIST: file already exists, " + func + " '" + path + "' -> '" + path2 + "'";
-	        default: return "Error occurred in " + func + ": errno = " + errno;
-	    }
-	}
-	function throwError(errno, func, path, path2) {
-	    if (func === void 0) { func = ''; }
-	    if (path === void 0) { path = ''; }
-	    if (path2 === void 0) { path2 = ''; }
-	    throw Error(formatError(errno, func, path, path2));
-	}
-	function validPathOrThrow(path) {
-	    if (path instanceof Buffer)
-	        path = path.toString();
-	    if (typeof path !== 'string')
-	        throw TypeError('path must be a string');
-	    return path;
-	}
-	function validateFd(fd) {
-	    if (typeof fd !== 'number')
-	        throw TypeError('fd must be a file descriptor');
-	}
-	(function (flags) {
-	    flags[flags["r"] = 0] = "r";
-	    flags[flags['r+'] = 2] = 'r+';
-	    flags[flags["rs"] = 1069056] = "rs";
-	    flags[flags['rs+'] = 1069058] = 'rs+';
-	    flags[flags["w"] = 577] = "w";
-	    flags[flags["wx"] = 705] = "wx";
-	    flags[flags['w+'] = 578] = 'w+';
-	    flags[flags['wx+'] = 706] = 'wx+';
-	    flags[flags["a"] = 1089] = "a";
-	    flags[flags["ax"] = 1217] = "ax";
-	    flags[flags['a+'] = 1090] = 'a+';
-	    flags[flags['ax+'] = 1218] = 'ax+';
-	})(exports.flags || (exports.flags = {}));
-	var flags = exports.flags;
-	var MODE_DEFAULT = 438;
-	var F_OK = 0;
-	var R_OK = 4;
-	var W_OK = 2;
-	var X_OK = 1;
-	var appendFileDefaults = {
-	    encoding: 'utf8',
-	    mode: MODE_DEFAULT,
-	    flag: 'a'
-	};
-	var Stats = (function () {
-	    function Stats() {
-	    }
-	    Stats.prototype.isFile = function () {
-	        return (this.mode & 32768) == 32768;
-	    };
-	    Stats.prototype.isDirectory = function () {
-	        return (this.mode & 16384) == 16384;
-	    };
-	    Stats.prototype.isBlockDevice = function () {
-	        return (this.mode & 24576) == 24576;
-	    };
-	    Stats.prototype.isCharacterDevice = function () {
-	        return (this.mode & 8192) == 8192;
-	    };
-	    Stats.prototype.isSymbolicLink = function () {
-	        return (this.mode & 40960) == 40960;
-	    };
-	    Stats.prototype.isFIFO = function () {
-	        return (this.mode & 4096) == 4096;
-	    };
-	    Stats.prototype.isSocket = function () {
-	        return (this.mode & 49152) == 49152;
-	    };
-	    return Stats;
-	}());
-	exports.Stats = Stats;
-	function build(deps) {
-	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
-	    var EE = _EE;
-	    function accessSync(path, mode) {
-	        if (mode === void 0) { mode = F_OK; }
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.access(vpath, mode);
-	        if (res < 0)
-	            throwError(res, 'access', vpath);
-	    }
-	    function appendFile(file, data, options, callback) {
-	    }
-	    function appendFileSync(file, data, options) {
-	        if (options === void 0) { options = {}; }
-	        options = extend(options, appendFileDefaults);
-	    }
-	    function chmod(path, mode, callback) {
-	    }
-	    function chmodSync(path, mode) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
-	        var result = libjs.chmod(vpath, mode);
-	        if (result < 0)
-	            throwError(result, 'chmod', vpath);
-	    }
-	    function fchmod(fd, mode, callback) { }
-	    function fchmodSync(fd, mode) {
-	        validateFd(fd);
-	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
-	        var result = libjs.fchmod(fd, mode);
-	        if (result < 0)
-	            throwError(result, 'chmod');
-	    }
-	    function chown(path, uid, gid, callback) { }
-	    function chownSync(path, uid, gid) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
-	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
-	        var result = libjs.chown(vpath, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'chown', vpath);
-	    }
-	    function fchown(fd, uid, gid, callback) { }
-	    function fchownSync(fd, uid, gid) {
-	        validateFd(fd);
-	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
-	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
-	        var result = libjs.fchown(fd, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'fchown');
-	    }
-	    function lchown(path, uid, gid, callback) { }
-	    function lchownSync(path, uid, gid) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
-	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
-	        var result = libjs.lchown(vpath, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'lchown', vpath);
-	    }
-	    function closeSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
-	        var result = libjs.close(fd);
-	        if (result < 0)
-	            throwError(result, 'close');
-	    }
-	    function createWriteStream(path, options) { }
-	    function existsSync(path) {
-	        console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
-	        try {
-	            accessSync(path);
-	            return true;
-	        }
-	        catch (e) {
-	            return false;
-	        }
-	    }
-	    function fsyncSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
-	        var result = libjs.fsync(fd);
-	        if (result < 0)
-	            throwError(result, 'fsync');
-	    }
-	    function fdatasyncSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
-	        var result = libjs.fdatasync(fd);
-	        if (result < 0)
-	            throwError(result, 'fdatasync');
-	    }
-	    function createStatsObject(res) {
-	        var stats = new Stats;
-	        stats.dev = res.dev;
-	        stats.mode = res.mode;
-	        stats.nlink = res.nlink;
-	        stats.uid = res.uid;
-	        stats.gid = res.gid;
-	        stats.rdev = res.rdev;
-	        stats.blksize = res.blksize;
-	        stats.ino = res.ino;
-	        stats.size = res.size;
-	        stats.blocks = res.blocks;
-	        stats.atime = new Date(res.atime * 1000);
-	        stats.mtime = new Date(res.mtime * 1000);
-	        stats.ctime = new Date(res.ctime * 1000);
-	        stats.birthtime = stats.ctime;
-	        return stats;
-	    }
-	    function statSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        try {
-	            var res = libjs.stat(vpath);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'stat', vpath);
-	        }
-	    }
-	    function stat(path, callback) {
-	        var vpath = validPathOrThrow(path);
-	        libjs.statAsync(vpath, function (err, res) {
-	            if (err)
-	                return callback(Error(formatError(err, 'stat', vpath)));
-	            callback(null, createStatsObject(res));
-	        });
-	    }
-	    function fstatSync(fd) {
-	        validateFd(fd);
-	        try {
-	            var res = libjs.fstat(fd);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'fstat');
-	        }
-	    }
-	    function lstatSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        try {
-	            var res = libjs.lstat(vpath);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'lstat', vpath);
-	        }
-	    }
-	    function truncateSync(path, len) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof len !== 'number')
-	            throw TypeError('len must be an integer');
-	        var res = libjs.truncate(vpath, len);
-	        if (res < 0)
-	            throwError(res, 'truncate', vpath);
-	    }
-	    function ftruncateSync(fd, len) {
-	        validateFd(fd);
-	        if (typeof len !== 'number')
-	            throw TypeError('len must be an integer');
-	        var res = libjs.ftruncate(fd, len);
-	        if (res < 0)
-	            throwError(res, 'ftruncate');
-	    }
-	    function utimesSync(path, atime, mtime) {
-	        path = validPathOrThrow(path);
-	        if (typeof atime === 'string')
-	            atime = parseInt(atime);
-	        if (typeof mtime === 'string')
-	            mtime = parseInt(mtime);
-	        if (typeof atime !== 'number')
-	            throw TypeError('atime must be an integer');
-	        if (typeof mtime !== 'number')
-	            throw TypeError('mtime must be an integer');
-	        var vatime = atime;
-	        var vmtime = mtime;
-	        if (!isFinite(vatime))
-	            vatime = Date.now();
-	        if (!isFinite(vmtime))
-	            vmtime = Date.now();
-	        vatime = Math.round(vatime / 1000);
-	        vmtime = Math.round(vmtime / 1000);
-	        var times = {
-	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
-	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
-	        };
-	        var res = libjs.utime(path, times);
-	        console.log(res);
-	        if (res < 0)
-	            throwError(res, 'utimes', path);
-	    }
-	    function linkSync(srcpath, dstpath) {
-	        var vsrcpath = validPathOrThrow(srcpath);
-	        var vdstpath = validPathOrThrow(dstpath);
-	        var res = libjs.link(vsrcpath, vdstpath);
-	        if (res < 0)
-	            throwError(res, 'link', vsrcpath, vdstpath);
-	    }
-	    function mkdirSync(path, mode) {
-	        if (mode === void 0) { mode = MODE_DEFAULT; }
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
-	        var res = libjs.mkdir(vpath, mode);
-	        if (res < 0)
-	            throwError(res, 'mkdir', vpath);
-	    }
-	    function randomString6() {
-	        return (+new Date).toString(36).slice(-6);
-	    }
-	    function mkdtempSync(prefix, options) {
-	        if (options === void 0) { options = {}; }
-	        if (!prefix || typeof prefix !== 'string')
-	            throw new TypeError('filename prefix is required');
-	        var retries = 10;
-	        var fullname;
-	        var found_tmp_name = false;
-	        for (var i = 0; i < retries; i++) {
-	            fullname = prefix + randomString6();
-	            try {
-	                accessSync(fullname);
-	            }
-	            catch (e) {
-	                found_tmp_name = true;
-	                break;
-	            }
-	        }
-	        if (found_tmp_name) {
-	            mkdirSync(fullname);
-	            return fullname;
-	        }
-	        else {
-	            throw Error("Could not find a new name, mkdtemp");
-	        }
-	    }
-	    function flagsToFlagsValue(f) {
-	        if (typeof f === 'number')
-	            return flags;
-	        if (typeof f !== 'string')
-	            throw TypeError("flags must be string or number");
-	        var flagsval = flags[f];
-	        if (typeof flagsval !== 'number')
-	            throw TypeError("Invalid flags string value '" + f + "'");
-	        return flagsval;
-	    }
-	    function openSync(path, flags, mode) {
-	        if (mode === void 0) { mode = MODE_DEFAULT; }
-	        var vpath = validPathOrThrow(path);
-	        var flagsval = flagsToFlagsValue(flags);
-	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
-	        var res = libjs.open(vpath, flagsval, mode);
-	        if (res < 0)
-	            throwError(res, 'open', vpath);
-	        return res;
-	    }
-	    function readSync(fd, buffer, offset, length, position) {
-	        validateFd(fd);
-	        if (!(buffer instanceof Buffer))
-	            throw TypeError('buffer must be an instance of Buffer');
-	        if (typeof offset !== 'number')
-	            throw TypeError('offset must be an integer');
-	        if (typeof length !== 'number')
-	            throw TypeError('length must be an integer');
-	        if (position !== null) {
-	            if (typeof position !== 'number')
-	                throw TypeError('position must be an integer');
-	            var seekres = libjs.lseek(fd, position, 0);
-	            if (seekres < 0)
-	                throwError(seekres, 'read');
-	        }
-	        var buf = buffer.slice(offset, offset + length);
-	        var res = libjs.read(fd, buf);
-	        if (res < 0)
-	            throwError(res, 'read');
-	        return res;
-	    }
-	    var optionsDefaults = {
-	        encoding: 'utf8'
-	    };
-	    function readdirSync(path, options) {
-	        if (options === void 0) { options = {}; }
-	        var vpath = validPathOrThrow(path);
-	        options = extend(options, optionsDefaults);
-	        return libjs.readdirList(vpath, options.encoding);
-	    }
-	    var readFileOptionsDefaults = {
-	        flag: 'r'
-	    };
-	    function readFileSync(file, options) {
-	        if (options === void 0) { options = {}; }
-	        var opts;
-	        if (typeof options === 'string')
-	            opts = extend({ encoding: options }, readFileOptionsDefaults);
-	        else if (typeof options !== 'object')
-	            throw TypeError('Invalid options');
-	        else
-	            opts = extend(options, readFileOptionsDefaults);
-	        if (opts.encoding && (typeof opts.encoding != 'string'))
-	            throw TypeError('Invalid encoding');
-	        var fd;
-	        if (typeof file === 'number')
-	            fd = file;
-	        else {
-	            var vfile = validPathOrThrow(file);
-	            var flag = flags[opts.flag];
-	            fd = libjs.open(vfile, flag, MODE_DEFAULT);
-	            if (fd < 0)
-	                throwError(fd, 'readFile', vfile);
-	        }
-	        var CHUNK = 4096;
-	        var list = [];
-	        do {
-	            var buf = new Buffer(CHUNK);
-	            var res = libjs.read(fd, buf);
-	            if (res < CHUNK)
-	                buf = buf.slice(0, res);
-	            list.push(buf);
-	            if (res < 0)
-	                throwError(res, 'readFile');
-	        } while (res > 0);
-	        libjs.close(fd);
-	        var buffer = Buffer.concat(list);
-	        if (opts.encoding)
-	            return buffer.toString(opts.encoding);
-	        else
-	            return buffer;
-	    }
-	    function readlinkSync(path, options) {
-	        if (options === void 0) { options = null; }
-	        path = validPathOrThrow(path);
-	        var buf = new Buffer(64);
-	        var res = libjs.readlink(path, buf);
-	        if (res < 0)
-	            throwError(res, 'readlink', path);
-	        var encoding = 'buffer';
-	        if (options) {
-	            if (typeof options === 'string')
-	                encoding = options;
-	            else if (typeof options === 'object') {
-	                if (typeof options.encoding != 'string')
-	                    throw TypeError('Encoding must be string.');
-	                else
-	                    encoding = options.encoding;
-	            }
-	            else
-	                throw TypeError('Invalid options.');
-	        }
-	        buf = buf.slice(0, res);
-	        return encoding == 'buffer' ? buf : buf.toString(encoding);
-	    }
-	    function renameSync(oldPath, newPath) {
-	        var voldPath = validPathOrThrow(oldPath);
-	        var vnewPath = validPathOrThrow(newPath);
-	        var res = libjs.rename(voldPath, vnewPath);
-	        if (res < 0)
-	            throwError(res, 'rename', voldPath, vnewPath);
-	    }
-	    function rmdirSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.rmdir(vpath);
-	        if (res < 0)
-	            throwError(res, 'rmdir', vpath);
-	    }
-	    function symlinkSync(target, path) {
-	        var vtarget = validPathOrThrow(target);
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.symlink(vtarget, vpath);
-	        if (res < 0)
-	            throwError(res, 'symlink', vtarget, vpath);
-	    }
-	    function unlinkSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.unlink(vpath);
-	        if (res < 0)
-	            throwError(res, 'unlink', vpath);
-	    }
-	    var FSWatcher = (function (_super) {
-	        __extends(FSWatcher, _super);
-	        function FSWatcher() {
-	            _super.apply(this, arguments);
-	            this.inotify = new inotify_1.Inotify;
-	        }
-	        FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
-	            var _this = this;
-	            this.inotify.encoding = encoding;
-	            this.inotify.onerror = noop;
-	            this.inotify.onevent = function (event) {
-	                var is_rename = (event.mask & 192) || (event.mask & 256);
-	                if (is_rename) {
-	                    _this.emit('change', 'rename', event.name);
-	                }
-	                else {
-	                    _this.emit('change', 'change', event.name);
-	                }
-	            };
-	            this.inotify.start();
-	            this.inotify.addPath(filename);
-	        };
-	        FSWatcher.prototype.close = function () {
-	            this.inotify.stop();
-	            this.inotify = null;
-	        };
-	        return FSWatcher;
-	    }(EE));
-	    var watchOptionsDefaults = {
-	        encoding: 'utf8',
-	        persistent: true,
-	        recursive: false
-	    };
-	    var StatWatcher = (function (_super) {
-	        __extends(StatWatcher, _super);
-	        function StatWatcher() {
-	            _super.apply(this, arguments);
-	            this.last = null;
-	        }
-	        StatWatcher.prototype.loop = function () {
-	            var _this = this;
-	            stat(this.filename, function (err, stats) {
-	                if (err)
-	                    return _this.emit('error', err);
-	                if (_this.last instanceof Stats) {
-	                    if (_this.last.atime.getTime() != stats.atime.getTime()) {
-	                        _this.emit('change', stats, _this.last);
-	                    }
-	                }
-	                _this.last = stats;
-	            });
-	        };
-	        StatWatcher.prototype.start = function (filename, persistent, interval) {
-	            var _this = this;
-	            this.filename = filename;
-	            stat(filename, function (err, stats) {
-	                if (err)
-	                    return _this.emit('error', err);
-	                _this.last = stats;
-	                _this.interval = setInterval(_this.loop.bind(_this), interval);
-	            });
-	        };
-	        StatWatcher.prototype.stop = function () {
-	            clearInterval(this.interval);
-	            this.last = null;
-	        };
-	        StatWatcher.map = {};
-	        return StatWatcher;
-	    }(EE));
-	    var watchFileOptionDefaults = {
-	        persistent: true,
-	        interval: 5007
-	    };
-	    function watchFile(filename, a, b) {
-	        if (a === void 0) { a = {}; }
-	        var vfilename = validPathOrThrow(filename);
-	        vfilename = pathModule.resolve(vfilename);
-	        var opts;
-	        var listener;
-	        if (typeof a !== 'object') {
-	            opts = watchFileOptionDefaults;
-	            listener = a;
-	        }
-	        else {
-	            opts = extend(a, watchFileOptionDefaults);
-	            listener = b;
-	        }
-	        if (typeof listener !== 'function')
-	            throw new Error('"watchFile()" requires a listener function');
-	        var watcher = StatWatcher.map[vfilename];
-	        if (!watcher) {
-	            watcher = new StatWatcher;
-	            watcher.start(vfilename, opts.persistent, opts.interval);
-	            StatWatcher.map[vfilename] = watcher;
-	        }
-	        watcher.on('change', listener);
-	        return watcher;
-	    }
-	    function unwatchFile(filename, listener) {
-	        var vfilename = validPathOrThrow(filename);
-	        vfilename = pathModule.resolve(vfilename);
-	        var watcher = StatWatcher.map[vfilename];
-	        if (!watcher)
-	            return;
-	        if (typeof listener === 'function')
-	            watcher.removeListener('change', listener);
-	        else
-	            watcher.removeAllListeners('change');
-	        if (watcher.listenerCount('change') === 0) {
-	            watcher.stop();
-	            delete StatWatcher.map[vfilename];
-	        }
-	    }
-	    function writeSync(fd, data, a, b, c) {
-	        validateFd(fd);
-	        var buf;
-	        var position;
-	        if (typeof b === 'number') {
-	            if (!(data instanceof Buffer))
-	                throw TypeError('buffer must be instance of Buffer.');
-	            var offset = a;
-	            if (typeof offset !== 'number')
-	                throw TypeError('offset must be an integer');
-	            var length = b;
-	            buf = data.slice(offset, offset + length);
-	            position = c;
-	        }
-	        else {
-	            var encoding = 'utf8';
-	            if (b) {
-	                if (typeof b !== 'string')
-	                    throw TypeError('encoding must be a string');
-	                encoding = b;
-	            }
-	            if (data instanceof Buffer)
-	                buf = data;
-	            else if (typeof data === 'string') {
-	                buf = new Buffer(data, encoding);
-	            }
-	            else
-	                throw TypeError('data must be a Buffer or a string.');
-	            position = a;
-	        }
-	        if (typeof position === 'number') {
-	            var sres = libjs.lseek(fd, position, 0);
-	            if (sres < 0)
-	                throwError(sres, 'write:lseek');
-	        }
-	        var res = libjs.write(fd, buf);
-	        if (res < 0)
-	            throwError(res, 'write');
-	    }
-	    return {
-	        flags: flags,
-	        F_OK: F_OK,
-	        R_OK: R_OK,
-	        W_OK: W_OK,
-	        X_OK: X_OK,
-	        accessSync: accessSync,
-	        appendFileSync: appendFileSync,
-	        chmodSync: chmodSync,
-	        chownSync: chownSync,
-	        closeSync: closeSync,
-	        existsSync: existsSync,
-	        fchmodSync: fchmodSync,
-	        fchownSync: fchownSync,
-	        fdatasyncSync: fdatasyncSync,
-	        fstatSync: fstatSync,
-	        fsyncSync: fsyncSync,
-	        ftruncateSync: ftruncateSync,
-	        lchownSync: lchownSync,
-	        linkSync: linkSync,
-	        lstatSync: lstatSync,
-	        mkdtempSync: mkdtempSync,
-	        mkdirSync: mkdirSync,
-	        openSync: openSync,
-	        readFileSync: readFileSync,
-	        readlinkSync: readlinkSync,
-	        symlinkSync: symlinkSync,
-	        statSync: statSync,
-	        truncateSync: truncateSync,
-	        renameSync: renameSync,
-	        readSync: readSync,
-	        writeSync: writeSync,
-	        unlinkSync: unlinkSync,
-	        rmdirSync: rmdirSync
-	    };
-	}
-	exports.build = build;
-
-
-/***/ },
-/* 18 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var libjs = __webpack_require__(9);
-	function noop() { }
-	var Inotify = (function () {
-	    function Inotify(poll_interval, buffer_size) {
-	        if (poll_interval === void 0) { poll_interval = 200; }
-	        if (buffer_size === void 0) { buffer_size = 4096; }
-	        this.onevent = noop;
-	        this.onerror = noop;
-	        this.wdCount = 0;
-	        this.wd = {};
-	        this.wdr = {};
-	        this.pollBound = this.poll.bind(this);
-	        this.encoding = 'utf8';
-	        this.pollInterval = poll_interval;
-	        this.bufSize = buffer_size;
-	    }
-	    Inotify.prototype.poll = function () {
-	        var res = libjs.read(this.fd, this.buf);
-	        if (res < 0) {
-	            if (-res == 11) {
-	            }
-	            else {
-	                this.onerror(Error("Could not poll for events: errno = " + res), res);
-	            }
-	            this.nextTick();
-	            return;
-	        }
-	        if (res > 0) {
-	            var offset = 0;
-	            var struct = libjs.inotify_event;
-	            while (offset < res) {
-	                var event = struct.unpack(this.buf, offset);
-	                var name_off = offset + struct.size;
-	                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
-	                name = name.substr(0, name.indexOf("\0"));
-	                event.name = name;
-	                event.path = this.wdr[event.wd];
-	                this.onevent(event);
-	                offset += struct.size + event.len;
-	            }
-	        }
-	        this.nextTick();
-	    };
-	    Inotify.prototype.nextTick = function () {
-	        if (this.hasStarted() && this.wdCount)
-	            this.timeout = setTimeout(this.pollBound, this.pollInterval);
-	    };
-	    Inotify.prototype.stopPolling = function () {
-	        clearTimeout(this.timeout);
-	        this.timeout = null;
-	    };
-	    Inotify.prototype.hasStarted = function () {
-	        return !!this.fd;
-	    };
-	    Inotify.prototype.start = function () {
-	        this.fd = libjs.inotify_init1(2048);
-	        if (this.fd < 0)
-	            throw Error("Could not init: errno = " + this.fd);
-	        this.buf = new Buffer(this.bufSize);
-	        return this.fd;
-	    };
-	    Inotify.prototype.stop = function () {
-	        this.stopPolling();
-	        for (var pathname in this.wd)
-	            this.removePath(pathname);
-	        var fd = this.fd;
-	        this.fd = 0;
-	        return libjs.close(fd);
-	    };
-	    Inotify.prototype.addPath = function (pathname, events) {
-	        if (events === void 0) { events = 4095; }
-	        if (!this.fd)
-	            throw Error("inotify file descriptor not initialized, call .init() first.");
-	        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
-	        if (wd < 0)
-	            throw Error("Could not add watch: errno = " + wd);
-	        this.wdCount++;
-	        this.wd[pathname] = wd;
-	        this.wdr[wd] = pathname;
-	        if (this.wdCount == 1)
-	            this.nextTick();
-	        return wd;
-	    };
-	    Inotify.prototype.removePath = function (pathname) {
-	        var wd = this.wd[pathname];
-	        if (!wd)
-	            return -1;
-	        delete this.wd[pathname];
-	        delete this.wdr[wd];
-	        this.wdCount--;
-	        return libjs.inotify_rm_watch(this.fd, wd);
-	    };
-	    return Inotify;
-	}());
-	exports.Inotify = Inotify;
-
-
-/***/ },
-/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	const inspect = __webpack_require__(20).inspect;
+	const inspect = __webpack_require__(18).inspect;
 
 	function assertPath(path) {
 	    if (typeof path !== 'string') {
@@ -6844,10 +6396,10 @@ var global = this;
 
 
 /***/ },
-/* 20 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Buffer = __webpack_require__(3).Buffer;
+	var Buffer = __webpack_require__(2).Buffer;
 
 
 	var isError = function(err) { return err instanceof Error; };
@@ -6969,7 +6521,7 @@ var global = this;
 	        }
 	    }
 	    return debugs[set];
-	};
+	};  
 
 
 	/**
@@ -7089,7 +6641,7 @@ var global = this;
 
 	function ensureDebugIsInitialized() {
 	    if (Debug === undefined) {
-	        const runInDebugContext = __webpack_require__(21).runInDebugContext;
+	        const runInDebugContext = __webpack_require__(19).runInDebugContext;
 	        Debug = runInDebugContext('Debug');
 	    }
 	}
@@ -7256,7 +6808,7 @@ var global = this;
 	        empty = value.length === 0;
 	        formatter = formatArray;
 	    // } else if (binding.isSet(value)) {
-	        braces = ['{', '}'];
+	    //     braces = ['{', '}'];
 	        // With `showHidden`, `length` will display as a hidden property for
 	        // arrays. For consistency's sake, do the same for `size`, even though this
 	        // property isn't selected by Object.getOwnPropertyNames().
@@ -7857,126 +7409,978 @@ var global = this;
 
 
 /***/ },
-/* 21 */
+/* 19 */
 /***/ function(module, exports) {
 
 	module.exports = require("vm");
 
 /***/ },
-/* 22 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	module.exports = Stream;
-
-	const EE = __webpack_require__(7);
-	const util = __webpack_require__(20);
-
-	util.inherits(Stream, EE);
-	Stream.Readable = __webpack_require__(23);
-	Stream.Writable = __webpack_require__(26);
-	Stream.Duplex = __webpack_require__(28);
-	Stream.Transform = __webpack_require__(29);
-	Stream.PassThrough = __webpack_require__(30);
-
-	// Backwards-compat with node 0.4.x
-	Stream.Stream = Stream;
+	// Note: in general `module.js` needs 2 system calls to get `require` working:
+	//  1. `fs.readFileSync()`
+	//  2. `fs.statSync()`
+	//
+	// To add support for paths in symlinks it also needs `fs.realpathSync()`, however,
+	// `realpath` IS NOT a system call, it is a function implemented in `libc`.
+	//
+	// So, we need to implement `fs.realpathSync()` then we can support symlinks in `require`,
+	// though it might not be 100% compatible with Node.js.
 
 
-	// old-style streams.  Note that the pipe method (the only relevant
-	// part of this class) is overridden in the Readable class.
+	var NativeModule = __webpack_require__(21).NativeModule;
+	var util = __webpack_require__(18);
+	var internalModule = __webpack_require__(37);
+	var internalUtil = __webpack_require__(27);
+	var vm = __webpack_require__(40);
+	var assert = __webpack_require__(32).ok;
+	var fs = __webpack_require__(34);
+	var path = __webpack_require__(17);
+	var libjs = __webpack_require__(6);
 
-	function Stream() {
-	    EE.call(this);
+	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
+	// const internalModuleStat = process.binding('fs').internalModuleStat;
+	// const preserveSymlinks = !!process.binding('config').preserveSymlinks;
+
+
+	// From: https://github.com/nodejs/node/blob/master/src/node_file.cc#L528
+	// Used to speed up module loading.  Returns the contents of the file as
+	// a string or undefined when the file cannot be opened.  The speedup
+	// comes from not creating Error objects on failure.
+	var internalModuleReadFile = function(path) {
+	    try {
+	        return fs.readFileSync(path, 'utf8');
+	    } catch(e) {
+	        return undefined;
+	    }
+	};
+
+	// const internalModuleStat = ;
+	var preserveSymlinks = false;
+
+
+	// If obj.hasOwnProperty has been overridden, then calling
+	// obj.hasOwnProperty(prop) will break.
+	// See: https://github.com/joyent/node/issues/1707
+	function hasOwnProperty(obj, prop) {
+	    return Object.prototype.hasOwnProperty.call(obj, prop);
 	}
 
-	Stream.prototype.pipe = function(dest, options) {
-	    var source = this;
 
-	    function ondata(chunk) {
-	        if (dest.writable) {
-	            if (false === dest.write(chunk) && source.pause) {
-	                source.pause();
+	// TODO: Change this retarded `stat()` name to `isDir()`.
+	function stat(filename) {
+	    filename = path._makeLong(filename);
+	    var cache = stat.cache;
+	    if (cache !== null) {
+	        var result = cache[filename];
+	        if (result !== undefined) return result;
+	    }
+
+	    try {
+	        var res = libjs.stat(filename);
+	    } catch(errno) {
+	        return errno;
+	    }
+
+	    result = (res.mode & /* libjs.S.IFDIR */ 16384) ? 1 : 0;
+
+	    if (cache !== null)
+	        cache[filename] = result;
+
+	    return result;
+	}
+	stat.cache = null;
+
+
+	function Module(id, parent) {
+	    this.id = id;
+	    this.exports = {};
+	    this.parent = parent;
+	    if (parent && parent.children) {
+	        parent.children.push(this);
+	    }
+
+	    this.filename = null;
+	    this.loaded = false;
+	    this.children = [];
+	}
+	module.exports = Module;
+
+	Module._cache = {};
+	Module._pathCache = {};
+	Module._extensions = {};
+	var modulePaths = [];
+	Module.globalPaths = [];
+
+	Module.wrapper = NativeModule.wrapper;
+	Module.wrap = NativeModule.wrap;
+	Module._debug = util.debuglog('module');
+
+	// We use this alias for the preprocessor that filters it out
+	var debug = Module._debug;
+
+
+	// given a module name, and a list of paths to test, returns the first
+	// matching file in the following precedence.
+	//
+	// require("a.<ext>")
+	//   -> a.<ext>
+	//
+	// require("a")
+	//   -> a
+	//   -> a.<ext>
+	//   -> a/index.<ext>
+
+	// check if the directory is a package.json dir
+	var packageMainCache = {};
+
+	function readPackage(requestPath) {
+
+	    if (hasOwnProperty(packageMainCache, requestPath)) {
+	        return packageMainCache[requestPath];
+	    }
+
+	    // var jsonPath = path.resolve(requestPath, 'package.json');
+
+	    // const json = internalModuleReadFile(path._makeLong(jsonPath));
+	    // console.log(jsonPath);
+	    try {
+	        var jsonPath = path.resolve(requestPath, 'package.json');
+	        var json = internalModuleReadFile(path._makeLong(jsonPath));
+	    } catch (e) {
+	        return false;
+	    }
+
+
+	    if (json === undefined) {
+	        return false;
+	    }
+
+	    try {
+	        var pkg = packageMainCache[requestPath] = JSON.parse(json).main;
+	    } catch (e) {
+	        e.path = jsonPath;
+	        e.message = 'Error parsing ' + jsonPath + ': ' + e.message;
+	        throw e;
+	    }
+	    return pkg;
+	}
+
+	function tryPackage(requestPath, exts, isMain) {
+	    var pkg = readPackage(requestPath);
+
+	    if (!pkg) return false;
+
+	    var filename = path.resolve(requestPath, pkg);
+	    return tryFile(filename, isMain) ||
+	        tryExtensions(filename, exts, isMain) ||
+	        tryExtensions(path.resolve(filename, 'index'), exts, isMain);
+	}
+
+	// check if the file exists and is not a directory
+	// if using --preserve-symlinks and isMain is false,
+	// keep symlinks intact, otherwise resolve to the
+	// absolute realpath.
+	function tryFile(requestPath, isMain) {
+	    // console.log(requestPath, isMain);
+	    return requestPath;
+	    var rc = stat(requestPath);
+	    // console.log('rc', rc);
+	    if(rc) return requestPath;
+	    else return false;
+	    // console.log(rc);
+	    // if (preserveSymlinks && !isMain) {
+	    //     return rc === 0 && path.resolve(requestPath);
+	    // }
+	    // return rc === 0 && fs.realpathSync(requestPath);
+	}
+
+	// given a path check a the file exists with any of the set extensions
+	function tryExtensions(p, exts, isMain) {
+	    for (var i = 0; i < exts.length; i++) {
+
+	        var filename = tryFile(p + exts[i], isMain);
+
+	        if (filename) {
+	            return filename;
+	        }
+	    }
+	    return false;
+	}
+
+	var warned = false;
+	Module._findPath = function(request, paths, isMain) {
+	    if (path.isAbsolute(request)) {
+	        paths = [''];
+	    } else if (!paths || paths.length === 0) {
+	        return false;
+	    }
+
+	    const cacheKey = JSON.stringify({request: request, paths: paths});
+	    if (Module._pathCache[cacheKey]) {
+	        return Module._pathCache[cacheKey];
+	    }
+
+	    var exts;
+	    const trailingSlash = request.length > 0 &&
+	        request.charCodeAt(request.length - 1) === 47/*/*/;
+
+	    // For each path
+	    for (var i = 0; i < paths.length; i++) {
+
+	        // Don't search further if path doesn't exist
+	        var curPath = paths[i];
+	        if (curPath && stat(curPath) < 1) continue;
+
+	        var basePath = path.resolve(curPath, request);
+
+	        var filename;
+
+
+	        if (!trailingSlash) {
+	            var rc = stat(basePath);
+	            if (rc === 0) {  // File.
+	                // if (preserveSymlinks && !isMain) {
+	                    filename = path.resolve(basePath);
+	                // } else {
+	                //     filename = fs.realpathSync(basePath);
+	                // }
+	            } else if (rc === 1) {  // Directory.
+	                if (exts === undefined)
+	                    exts = Object.keys(Module._extensions);
+	                filename = tryPackage(basePath, exts, isMain);
+	            }
+
+	            if (!filename) {
+	                // try it with each of the extensions
+	                if (exts === undefined)
+	                    exts = Object.keys(Module._extensions);
+	                filename = tryExtensions(basePath, exts, isMain);
+	            }
+	        }
+
+	        if (!filename) {
+	            if (exts === undefined)
+	                exts = Object.keys(Module._extensions);
+	            filename = tryPackage(basePath, exts, isMain);
+	        }
+
+	        if (!filename) {
+	            // try it with each of the extensions at "index"
+	            if (exts === undefined)
+	                exts = Object.keys(Module._extensions);
+	            filename = tryExtensions(path.resolve(basePath, 'index'), exts, isMain);
+	        }
+
+	        if (filename) {
+	            // Warn once if '.' resolved outside the module dir
+	            if (request === '.' && i > 0) {
+	                warned = internalUtil.printDeprecationMessage(
+	                    'warning: require(\'.\') resolved outside the package ' +
+	                    'directory. This functionality is deprecated and will be removed ' +
+	                    'soon.', warned);
+	            }
+
+	            Module._pathCache[cacheKey] = filename;
+	            return filename;
+	        }
+	    }
+
+	    return false;
+	};
+
+	// 'node_modules' character codes reversed
+	var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
+	var nmLen = nmChars.length;
+	if (process.platform === 'win32') {
+	    // 'from' is the __dirname of the module.
+	    Module._nodeModulePaths = function(from) {
+	        // guarantee that 'from' is absolute.
+	        from = path.resolve(from);
+
+	        // note: this approach *only* works when the path is guaranteed
+	        // to be absolute.  Doing a fully-edge-case-correct path.split
+	        // that works on both Windows and Posix is non-trivial.
+	        var paths = [];
+	        var p = 0;
+	        var last = from.length;
+	        for (var i = from.length - 1; i >= 0; --i) {
+	            var code = from.charCodeAt(i);
+	            if (code === 92/*\*/ || code === 47/*/*/) {
+	                if (p !== nmLen)
+	                    paths.push(from.slice(0, last) + '\\node_modules');
+	                last = i;
+	                p = 0;
+	            } else if (p !== -1 && p < nmLen) {
+	                if (nmChars[p] === code) {
+	                    ++p;
+	                } else {
+	                    p = -1;
+	                }
+	            }
+	        }
+
+	        return paths;
+	    };
+	} else { // posix
+	         // 'from' is the __dirname of the module.
+	    Module._nodeModulePaths = function(from) {
+	        // guarantee that 'from' is absolute.
+	        from = path.resolve(from);
+	        // Return early not only to avoid unnecessary work, but to *avoid* returning
+	        // an array of two items for a root: [ '//node_modules', '/node_modules' ]
+	        if (from === '/')
+	            return ['/node_modules'];
+
+	        // note: this approach *only* works when the path is guaranteed
+	        // to be absolute.  Doing a fully-edge-case-correct path.split
+	        // that works on both Windows and Posix is non-trivial.
+	        var paths = [];
+	        var p = 0;
+	        var last = from.length;
+	        for (var i = from.length - 1; i >= 0; --i) {
+	            var code = from.charCodeAt(i);
+	            if (code === 47/*/*/) {
+	                if (p !== nmLen)
+	                    paths.push(from.slice(0, last) + '/node_modules');
+	                last = i;
+	                p = 0;
+	            } else if (p !== -1 && p < nmLen) {
+	                if (nmChars[p] === code) {
+	                    ++p;
+	                } else {
+	                    p = -1;
+	                }
+	            }
+	        }
+
+	        return paths;
+	    };
+	}
+
+
+	// 'index.' character codes
+	var indexChars = [ 105, 110, 100, 101, 120, 46 ];
+	var indexLen = indexChars.length;
+	Module._resolveLookupPaths = function(request, parent) {
+	    if (NativeModule.nonInternalExists(request)) {
+	        return [request, []];
+	    }
+
+	    var reqLen = request.length;
+	    // Check for relative path
+	    if (reqLen < 2 ||
+	        request.charCodeAt(0) !== 46/*.*/ ||
+	        (request.charCodeAt(1) !== 46/*.*/ &&
+	        request.charCodeAt(1) !== 47/*/*/)) {
+	        var paths = modulePaths;
+	        if (parent) {
+	            if (!parent.paths)
+	                paths = parent.paths = [];
+	            else
+	                paths = parent.paths.concat(paths);
+	        }
+
+	        // Maintain backwards compat with certain broken uses of require('.')
+	        // by putting the module's directory in front of the lookup paths.
+	        if (request === '.') {
+	            if (parent && parent.filename) {
+	                paths.unshift(path.dirname(parent.filename));
+	            } else {
+	                paths.unshift(path.resolve(request));
+	            }
+	        }
+	        return [request, paths];
+	    }
+
+	    // with --eval, parent.id is not set and parent.filename is null
+	    if (!parent || !parent.id || !parent.filename) {
+	        // make require('./path/to/foo') work - normally the path is taken
+	        // from realpath(__filename) but with eval there is no filename
+	        var mainPaths = ['.'].concat(Module._nodeModulePaths('.'), modulePaths);
+	        return [request, mainPaths];
+	    }
+
+	    // Is the parent an index module?
+	    // We can assume the parent has a valid extension,
+	    // as it already has been accepted as a module.
+	    const base = path.basename(parent.filename);
+	    var parentIdPath;
+	    if (base.length > indexLen) {
+	        var i = 0;
+	        for (; i < indexLen; ++i) {
+	            if (indexChars[i] !== base.charCodeAt(i))
+	                break;
+	        }
+	        if (i === indexLen) {
+	            // We matched 'index.', let's validate the rest
+	            for (; i < base.length; ++i) {
+	                const code = base.charCodeAt(i);
+	                if (code !== 95/*_*/ &&
+	                    (code < 48/*0*/ || code > 57/*9*/) &&
+	                    (code < 65/*A*/ || code > 90/*Z*/) &&
+	                    (code < 97/*a*/ || code > 122/*z*/))
+	                    break;
+	            }
+	            if (i === base.length) {
+	                // Is an index module
+	                parentIdPath = parent.id;
+	            } else {
+	                // Not an index module
+	                parentIdPath = path.dirname(parent.id);
+	            }
+	        } else {
+	            // Not an index module
+	            parentIdPath = path.dirname(parent.id);
+	        }
+	    } else {
+	        // Not an index module
+	        parentIdPath = path.dirname(parent.id);
+	    }
+	    var id = path.resolve(parentIdPath, request);
+
+	    // make sure require('./path') and require('path') get distinct ids, even
+	    // when called from the toplevel js file
+	    if (parentIdPath === '.' && id.indexOf('/') === -1) {
+	        id = './' + id;
+	    }
+
+	    debug('RELATIVE: requested: %s set ID to: %s from %s', request, id,
+	        parent.id);
+
+
+	    return [id, [path.dirname(parent.filename)]];
+	};
+
+
+	// Check the cache for the requested file.
+	// 1. If a module already exists in the cache: return its exports object.
+	// 2. If the module is native: call `NativeModule.require()` with the
+	//    filename and return the result.
+	// 3. Otherwise, create a new module for the file and save it to the cache.
+	//    Then have it load  the file contents before returning its exports
+	//    object.
+	Module._load = function(request, parent, isMain) {
+
+	    if(true) {
+	        if (parent) {
+	            debug('Module._load REQUEST %s parent: %s', request, parent.id);
+	        }
+	    }
+
+	    var filename = Module._resolveFilename(request, parent, isMain);
+
+	    var cachedModule = Module._cache[filename];
+	    if (cachedModule) {
+	        return cachedModule.exports;
+	    }
+
+	    if (NativeModule.nonInternalExists(filename)) {
+	        if(true) {
+	            debug('load native module %s', request);
+	        }
+	        return NativeModule.require(filename);
+	    }
+
+	    var module = new Module(filename, parent);
+
+	    if (isMain) {
+	        process.mainModule = module;
+	        module.id = '.';
+	    }
+
+	    Module._cache[filename] = module;
+
+	    tryModuleLoad(module, filename);
+
+	    return module.exports;
+	};
+
+	function tryModuleLoad(module, filename) {
+	    var threw = true;
+	    try {
+	        module.load(filename);
+	        threw = false;
+	    } finally {
+	        if (threw) {
+	            delete Module._cache[filename];
+	        }
+	    }
+	}
+
+	Module._resolveFilename = function(request, parent, isMain) {
+
+	    if (NativeModule.nonInternalExists(request)) {
+	        return request;
+	    }
+
+	    var resolvedModule = Module._resolveLookupPaths(request, parent);
+
+	    var id = resolvedModule[0];
+	    var paths = resolvedModule[1];
+
+	    // look up the filename first, since that's the cache key.
+	    if(true) {
+	        debug('looking for %j in %j', id, paths);
+	    }
+
+	    var filename = Module._findPath(request, paths, isMain);
+
+	    // console.log(filename);
+	    if (!filename) {
+	        var err = new Error("Cannot find module '" + request + "'");
+	        err.code = 'MODULE_NOT_FOUND';
+	        throw err;
+	    }
+
+	    return filename;
+	};
+
+
+	// Given a file name, pass it to the proper extension handler.
+	Module.prototype.load = function(filename) {
+	    // console.log('f', filename);
+	    if(true) {
+	        debug('load %j for module %j', filename, this.id);
+	    }
+
+	    assert(!this.loaded);
+	    this.filename = filename;
+	    this.paths = Module._nodeModulePaths(path.dirname(filename));
+
+	    var extension = path.extname(filename) || '.js';
+	    if (!Module._extensions[extension]) extension = '.js';
+	    Module._extensions[extension](this, filename);
+	    this.loaded = true;
+	};
+
+
+	// Loads a module at the given file path. Returns that module's
+	// `exports` property.
+	Module.prototype.require = function(path) {
+	    if(true) {
+	        assert(path, 'missing path');
+	        assert(typeof path === 'string', 'path must be a string');
+	    }
+	    return Module._load(path, this, /* isMain */ false);
+	};
+
+
+	// Resolved path to process.argv[1] will be lazily placed here
+	// (needed for setting breakpoint when called with --debug-brk)
+	var resolvedArgv;
+
+
+	// Run the file contents in the correct scope or sandbox. Expose
+	// the correct helper variables (require, module, exports) to
+	// the file.
+	// Returns exception, if any.
+	Module.prototype._compile = function(content, filename) {
+	    // Remove shebang
+	    var contLen = content.length;
+	    if (contLen >= 2) {
+	        if (content.charCodeAt(0) === 35/*#*/ &&
+	            content.charCodeAt(1) === 33/*!*/) {
+	            if (contLen === 2) {
+	                // Exact match
+	                content = '';
+	            } else {
+	                // Find end of shebang line and slice it off
+	                var i = 2;
+	                for (; i < contLen; ++i) {
+	                    var code = content.charCodeAt(i);
+	                    if (code === 10/*\n*/ || code === 13/*\r*/)
+	                        break;
+	                }
+	                if (i === contLen)
+	                    content = '';
+	                else {
+	                    // Note that this actually includes the newline character(s) in the
+	                    // new output. This duplicates the behavior of the regular expression
+	                    // that was previously used to replace the shebang line
+	                    content = content.slice(i);
+	                }
 	            }
 	        }
 	    }
 
-	    source.on('data', ondata);
+	    // create wrapper function
+	    var wrapper = Module.wrap(content);
 
-	    function ondrain() {
-	        if (source.readable && source.resume) {
-	            source.resume();
+
+	    var compiledWrapper = eval(wrapper);
+	    // var compiledWrapper = vm.runInThisContext(wrapper, {
+	    //     filename: filename,
+	    //     lineOffset: 0,
+	    //     displayErrors: true
+	    // });
+
+	    /*if (process._debugWaitConnect) {
+	        if (!resolvedArgv) {
+	            // we enter the repl if we're not given a filename argument.
+	            if (process.argv[1]) {
+	                resolvedArgv = Module._resolveFilename(process.argv[1], null);
+	            } else {
+	                resolvedArgv = 'repl';
+	            }
 	        }
-	    }
 
-	    dest.on('drain', ondrain);
-
-	    // If the 'end' option is not supplied, dest.end() will be called when
-	    // source gets the 'end' or 'close' events.  Only dest.end() once.
-	    if (!dest._isStdio && (!options || options.end !== false)) {
-	        source.on('end', onend);
-	        source.on('close', onclose);
-	    }
-
-	    var didOnEnd = false;
-	    function onend() {
-	        if (didOnEnd) return;
-	        didOnEnd = true;
-
-	        dest.end();
-	    }
-
-
-	    function onclose() {
-	        if (didOnEnd) return;
-	        didOnEnd = true;
-
-	        if (typeof dest.destroy === 'function') dest.destroy();
-	    }
-
-	    // don't leave dangling pipes when there are errors.
-	    function onerror(er) {
-	        cleanup();
-	        if (EE.listenerCount(this, 'error') === 0) {
-	            throw er; // Unhandled stream error in pipe.
+	        // Set breakpoint on module start
+	        if (filename === resolvedArgv) {
+	            delete process._debugWaitConnect;
+	            const Debug = vm.runInDebugContext('Debug');
+	            Debug.setBreakPoint(compiledWrapper, 0, 0);
 	        }
-	    }
-
-	    source.on('error', onerror);
-	    dest.on('error', onerror);
-
-	    // remove all the event listeners that were added.
-	    function cleanup() {
-	        source.removeListener('data', ondata);
-	        dest.removeListener('drain', ondrain);
-
-	        source.removeListener('end', onend);
-	        source.removeListener('close', onclose);
-
-	        source.removeListener('error', onerror);
-	        dest.removeListener('error', onerror);
-
-	        source.removeListener('end', cleanup);
-	        source.removeListener('close', cleanup);
-
-	        dest.removeListener('close', cleanup);
-	    }
-
-	    source.on('end', cleanup);
-	    source.on('close', cleanup);
-
-	    dest.on('close', cleanup);
-
-	    dest.emit('pipe', source);
-
-	    // Allow for unix-like usage: A.pipe(B).pipe(C)
-	    return dest;
+	    }*/
+	    var dirname = path.dirname(filename);
+	    var require = internalModule.makeRequireFunction.call(this);
+	    var args = [this.exports, require, this, filename, dirname];
+	    var depth = internalModule.requireDepth;
+	    if (depth === 0) stat.cache = {};
+	    var result = compiledWrapper.apply(this.exports, args);
+	    if (depth === 0) stat.cache = null;
+	    return result;
 	};
+
+
+	// Native extension for .js
+	Module._extensions['.js'] = function(module, filename) {
+	    var content = fs.readFileSync(filename, 'utf8');
+	    module._compile(internalModule.stripBOM(content), filename);
+	};
+
+
+	// Native extension for .json
+	Module._extensions['.json'] = function(module, filename) {
+	    var content = fs.readFileSync(filename, 'utf8');
+	    try {
+	        module.exports = JSON.parse(internalModule.stripBOM(content));
+	    } catch (err) {
+	        err.message = filename + ': ' + err.message;
+	        throw err;
+	    }
+	};
+
+
+	//Native extension for .node
+	// Module._extensions['.node'] = function(module, filename) {
+	//     return process.dlopen(module, path._makeLong(filename));
+	// };
+
+
+	// bootstrap main module.
+	Module.runMain = function() {
+	    // Load the main module--the command line argument.
+	    Module._load(process.argv[1], null, true);
+
+	    // Handle any nextTicks added in the first tick of the program
+	    // process._tickCallback();
+	};
+
+	Module._initPaths = function() {
+	    const isWindows = process.platform === 'win32';
+
+	    var homeDir;
+	    if (isWindows) {
+	        homeDir = process.env.USERPROFILE;
+	    } else {
+	        homeDir = process.env.HOME;
+	    }
+
+	    var paths = [path.resolve(process.execPath, '..', '..', 'lib', 'node')];
+
+	    if (homeDir) {
+	        paths.unshift(path.resolve(homeDir, '.node_libraries'));
+	        paths.unshift(path.resolve(homeDir, '.node_modules'));
+	    }
+
+	    var nodePath = process.env['NODE_PATH'];
+	    if (nodePath) {
+	        paths = nodePath.split(path.delimiter).filter(function(path) {
+	            return !!path;
+	        }).concat(paths);
+	    }
+
+	    modulePaths = paths;
+
+	    // clone as a read-only copy, for introspection.
+	    Module.globalPaths = modulePaths.slice(0);
+	};
+
+	// TODO(bnoordhuis) Unused, remove in the future.
+	// Module.requireRepl = internalUtil.deprecate(function() {
+	//     return NativeModule.require('internal/repl');
+	// }, 'Module.requireRepl is deprecated.');
+
+	Module._preloadModules = function(requests) {
+	    if (!Array.isArray(requests))
+	        return;
+
+	    // Preloaded modules have a dummy parent module which is deemed to exist
+	    // in the current working directory. This seeds the search path for
+	    // preloaded modules.
+	    var parent = new Module('internal/preload', null);
+	    try {
+	        parent.paths = Module._nodeModulePaths(process.cwd());
+	    } catch (e) {
+	        if (e.code !== 'ENOENT') {
+	            throw e;
+	        }
+	    }
+	    requests.forEach(function(request) {
+	        parent.require(request);
+	    });
+	};
+
+	Module._initPaths();
+
+	// backwards compatibility
+	Module.Module = Module;
+
+
+/***/ },
+/* 21 */
+/***/ function(module, exports, __webpack_require__) {
+
+	function NativeModule(id) {
+	    this.filename = id + '.js';
+	    this.id = id;
+	    this.exports = {};
+	    this.loaded = false;
+	    this.loading = false;
+	}
+
+	// NativeModule._source = process.binding('natives');
+	NativeModule._cache = {
+	    assert: null,
+	    buffer: null,
+	    console: null,
+	    eloop: null,
+	    events: null,
+	    fs: null,
+	    module: null,
+	    path: null,
+	    'static-arraybuffer': null,
+	    'static-buffer': null,
+	    stream: null,
+	    timers: null,
+	    util: null,
+	};
+
+	NativeModule.require = function(id) {
+	    if (id == 'native_module') {
+	        return NativeModule;
+	    }
+
+	    var cached = NativeModule.getCached(id);
+	    if (cached && (cached.loaded || cached.loading)) {
+	        return cached.exports;
+	    }
+
+	    if (!NativeModule.exists(id)) {
+	        throw new Error('No such native module '+ id);
+	    }
+
+	    process.moduleLoadList.push('NativeModule ' + id);
+
+	    var nativeModule = new NativeModule(id);
+
+	    nativeModule.cache();
+	    nativeModule.compile();
+
+	    return nativeModule.exports;
+	};
+
+	NativeModule.getCached = function(id) {
+	    return NativeModule._cache[id];
+	};
+
+	NativeModule.exists = function(id) {
+	    // return typeof NativeModule._cache[id] !== 'undefined';
+	    return NativeModule._cache.hasOwnProperty(id);
+	};
+
+	const EXPOSE_INTERNALS = process.execArgv.some(function(arg) {
+	    return arg.match(/^--expose[-_]internals$/);
+	});
+
+	if (EXPOSE_INTERNALS) {
+	    NativeModule.nonInternalExists = NativeModule.exists;
+
+	    NativeModule.isInternal = function(id) {
+	        return false;
+	    };
+	} else {
+	    NativeModule.nonInternalExists = function(id) {
+	        return NativeModule.exists(id) && !NativeModule.isInternal(id);
+	    };
+
+	    NativeModule.isInternal = function(id) {
+	        // return id.startsWith('internal/');
+	        var what = 'internal/';
+	        return id.substr(0, what.length) === what;
+	    };
+	}
+
+
+	NativeModule.getSource = function(id) {
+	    // return require('./' + id);
+	    // return NativeModule._source[id];
+	};
+
+	NativeModule.wrap = function(script) {
+	    return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
+	};
+
+	NativeModule.wrapper = [
+	    '(function (exports, require, module, __filename, __dirname) { ',
+	    '\n});'
+	];
+
+	NativeModule.prototype.compile = function() {
+	    var source = NativeModule.getSource(this.id);
+	    source = NativeModule.wrap(source);
+
+	    this.loading = true;
+
+	    try {
+	        // var fn = eval(source);
+	        // var fn = runInThisContext(source, {
+	        //     filename: this.filename,
+	        //     lineOffset: 0,
+	        //     displayErrors: true
+	        // });
+	        // fn(this.exports, NativeModule.require, this, this.filename);
+
+	        this.exports = __webpack_require__(22)("./" + this.id);
+
+	        this.loaded = true;
+	    } finally {
+	        this.loading = false;
+	    }
+	};
+
+	NativeModule.prototype.cache = function() {
+	    NativeModule._cache[this.id] = this;
+	};
+
+	exports.NativeModule = NativeModule;
+
+
+/***/ },
+/* 22 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var map = {
+		"./_stream_duplex": 23,
+		"./_stream_passthrough": 29,
+		"./_stream_readable": 24,
+		"./_stream_transform": 28,
+		"./_stream_writable": 26,
+		"./assert": 32,
+		"./boot": 1,
+		"./buffer": 2,
+		"./console": 33,
+		"./eloop": 15,
+		"./events": 13,
+		"./fs": 34,
+		"./internal/module": 37,
+		"./internal/streams/BufferList": 30,
+		"./internal/streams/lazy_transform": 39,
+		"./internal/util": 27,
+		"./module": 20,
+		"./native_module": 21,
+		"./path": 17,
+		"./process": 12,
+		"./static-arraybuffer": 5,
+		"./static-buffer": 11,
+		"./stream": 25,
+		"./timers": 16,
+		"./util": 18,
+		"./vm": 40
+	};
+	function webpackContext(req) {
+		return __webpack_require__(webpackContextResolve(req));
+	};
+	function webpackContextResolve(req) {
+		return map[req] || (function() { throw new Error("Cannot find module '" + req + "'.") }());
+	};
+	webpackContext.keys = function webpackContextKeys() {
+		return Object.keys(map);
+	};
+	webpackContext.resolve = webpackContextResolve;
+	module.exports = webpackContext;
+	webpackContext.id = 22;
 
 
 /***/ },
 /* 23 */
+/***/ function(module, exports, __webpack_require__) {
+
+	// a duplex stream is just a stream that is both readable and writable.
+	// Since JS doesn't have multiple prototypal inheritance, this class
+	// prototypally inherits from Readable, and then parasitically from
+	// Writable.
+
+	'use strict';
+
+	module.exports = Duplex;
+
+	const util = __webpack_require__(18);
+	const Readable = __webpack_require__(24);
+	const Writable = __webpack_require__(26);
+
+	util.inherits(Duplex, Readable);
+
+	var keys = Object.keys(Writable.prototype);
+	for (var v = 0; v < keys.length; v++) {
+	    var method = keys[v];
+	    if (!Duplex.prototype[method])
+	        Duplex.prototype[method] = Writable.prototype[method];
+	}
+
+	function Duplex(options) {
+	    if (!(this instanceof Duplex))
+	        return new Duplex(options);
+
+	    Readable.call(this, options);
+	    Writable.call(this, options);
+
+	    if (options && options.readable === false)
+	        this.readable = false;
+
+	    if (options && options.writable === false)
+	        this.writable = false;
+
+	    this.allowHalfOpen = true;
+	    if (options && options.allowHalfOpen === false)
+	        this.allowHalfOpen = false;
+
+	    this.once('end', onend);
+	}
+
+	// the no-half-open enforcer
+	function onend() {
+	    // if we allow half-open state, or if the writable side ended,
+	    // then we're ok.
+	    if (this.allowHalfOpen || this._writableState.ended)
+	        return;
+
+	    // no more data can be written.
+	    // But allow more writes to happen in this tick.
+	    process.nextTick(onEndNT, this);
+	}
+
+	function onEndNT(self) {
+	    self.end();
+	}
+
+
+/***/ },
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -7984,12 +8388,12 @@ var global = this;
 	module.exports = Readable;
 	Readable.ReadableState = ReadableState;
 
-	const EE = __webpack_require__(7);
-	const Stream = __webpack_require__(22);
-	const Buffer = __webpack_require__(3).Buffer;
-	const util = __webpack_require__(20);
+	const EE = __webpack_require__(13);
+	const Stream = __webpack_require__(25);
+	const Buffer = __webpack_require__(2).Buffer;
+	const util = __webpack_require__(18);
 	const debug = util.debuglog('stream');
-	const BufferList = __webpack_require__(24);
+	const BufferList = __webpack_require__(30);
 	var StringDecoder;
 
 	util.inherits(Readable, Stream);
@@ -8077,7 +8481,7 @@ var global = this;
 	    this.encoding = null;
 	    if (options.encoding) {
 	        if (!StringDecoder)
-	            StringDecoder = __webpack_require__(25).StringDecoder;
+	            StringDecoder = __webpack_require__(31).StringDecoder;
 	        this.decoder = new StringDecoder(options.encoding);
 	        this.encoding = options.encoding;
 	    }
@@ -8197,7 +8601,7 @@ var global = this;
 	// backwards compatibility.
 	Readable.prototype.setEncoding = function(enc) {
 	    if (!StringDecoder)
-	        StringDecoder = __webpack_require__(25).StringDecoder;
+	        StringDecoder = __webpack_require__(31).StringDecoder;
 	    this._readableState.decoder = new StringDecoder(enc);
 	    this._readableState.encoding = enc;
 	    return this;
@@ -8957,88 +9361,117 @@ var global = this;
 
 
 /***/ },
-/* 24 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	const Buffer = __webpack_require__(3).Buffer;
+	module.exports = Stream;
 
-	module.exports = BufferList;
+	const EE = __webpack_require__(13);
+	const util = __webpack_require__(18);
 
-	function BufferList() {
-	    this.head = null;
-	    this.tail = null;
-	    this.length = 0;
+	util.inherits(Stream, EE);
+	Stream.Readable = __webpack_require__(24);
+	Stream.Writable = __webpack_require__(26);
+	Stream.Duplex = __webpack_require__(23);
+	Stream.Transform = __webpack_require__(28);
+	Stream.PassThrough = __webpack_require__(29);
+
+	// Backwards-compat with node 0.4.x
+	Stream.Stream = Stream;
+
+
+	// old-style streams.  Note that the pipe method (the only relevant
+	// part of this class) is overridden in the Readable class.
+
+	function Stream() {
+	    EE.call(this);
 	}
 
-	BufferList.prototype.push = function(v) {
-	    const entry = { data: v, next: null };
-	    if (this.length > 0)
-	        this.tail.next = entry;
-	    else
-	        this.head = entry;
-	    this.tail = entry;
-	    ++this.length;
-	};
+	Stream.prototype.pipe = function(dest, options) {
+	    var source = this;
 
-	BufferList.prototype.unshift = function(v) {
-	    const entry = { data: v, next: this.head };
-	    if (this.length === 0)
-	        this.tail = entry;
-	    this.head = entry;
-	    ++this.length;
-	};
-
-	BufferList.prototype.shift = function() {
-	    if (this.length === 0)
-	        return;
-	    const ret = this.head.data;
-	    if (this.length === 1)
-	        this.head = this.tail = null;
-	    else
-	        this.head = this.head.next;
-	    --this.length;
-	    return ret;
-	};
-
-	BufferList.prototype.clear = function() {
-	    this.head = this.tail = null;
-	    this.length = 0;
-	};
-
-	BufferList.prototype.join = function(s) {
-	    if (this.length === 0)
-	        return '';
-	    var p = this.head;
-	    var ret = '' + p.data;
-	    while (p = p.next)
-	        ret += s + p.data;
-	    return ret;
-	};
-
-	BufferList.prototype.concat = function(n) {
-	    if (this.length === 0)
-	        return Buffer.alloc(0);
-	    if (this.length === 1)
-	        return this.head.data;
-	    const ret = Buffer.allocUnsafe(n >>> 0);
-	    var p = this.head;
-	    var i = 0;
-	    while (p) {
-	        p.data.copy(ret, i);
-	        i += p.data.length;
-	        p = p.next;
+	    function ondata(chunk) {
+	        if (dest.writable) {
+	            if (false === dest.write(chunk) && source.pause) {
+	                source.pause();
+	            }
+	        }
 	    }
-	    return ret;
+
+	    source.on('data', ondata);
+
+	    function ondrain() {
+	        if (source.readable && source.resume) {
+	            source.resume();
+	        }
+	    }
+
+	    dest.on('drain', ondrain);
+
+	    // If the 'end' option is not supplied, dest.end() will be called when
+	    // source gets the 'end' or 'close' events.  Only dest.end() once.
+	    if (!dest._isStdio && (!options || options.end !== false)) {
+	        source.on('end', onend);
+	        source.on('close', onclose);
+	    }
+
+	    var didOnEnd = false;
+	    function onend() {
+	        if (didOnEnd) return;
+	        didOnEnd = true;
+
+	        dest.end();
+	    }
+
+
+	    function onclose() {
+	        if (didOnEnd) return;
+	        didOnEnd = true;
+
+	        if (typeof dest.destroy === 'function') dest.destroy();
+	    }
+
+	    // don't leave dangling pipes when there are errors.
+	    function onerror(er) {
+	        cleanup();
+	        if (EE.listenerCount(this, 'error') === 0) {
+	            throw er; // Unhandled stream error in pipe.
+	        }
+	    }
+
+	    source.on('error', onerror);
+	    dest.on('error', onerror);
+
+	    // remove all the event listeners that were added.
+	    function cleanup() {
+	        source.removeListener('data', ondata);
+	        dest.removeListener('drain', ondrain);
+
+	        source.removeListener('end', onend);
+	        source.removeListener('close', onclose);
+
+	        source.removeListener('error', onerror);
+	        dest.removeListener('error', onerror);
+
+	        source.removeListener('end', cleanup);
+	        source.removeListener('close', cleanup);
+
+	        dest.removeListener('close', cleanup);
+	    }
+
+	    source.on('end', cleanup);
+	    source.on('close', cleanup);
+
+	    dest.on('close', cleanup);
+
+	    dest.emit('pipe', source);
+
+	    // Allow for unix-like usage: A.pipe(B).pipe(C)
+	    return dest;
 	};
 
-
-/***/ },
-/* 25 */
-/***/ function(module, exports) {
-
-	module.exports = require("string_decoder");
 
 /***/ },
 /* 26 */
@@ -9053,10 +9486,10 @@ var global = this;
 	module.exports = Writable;
 	Writable.WritableState = WritableState;
 
-	const util = __webpack_require__(20);
+	const util = __webpack_require__(18);
 	const internalUtil = __webpack_require__(27);
-	const Stream = __webpack_require__(22);
-	const Buffer = __webpack_require__(3).Buffer;
+	const Stream = __webpack_require__(25);
+	const Buffer = __webpack_require__(2).Buffer;
 
 	util.inherits(Writable, Stream);
 
@@ -9582,12 +10015,12 @@ var global = this;
 
 	'use strict';
 
-	// const binding = process.binding('util');
-	const binding = {};
-	const prefix = '(' + process.release.name + ':' + process.pid + ') ';
+	// var binding = process.binding('util');
+	var binding = {};
+	var prefix = '(' + process.release.name + ':' + process.pid + ') ';
 
-	const kArrowMessagePrivateSymbolIndex = binding['arrow_message_private_symbol'];
-	const kDecoratedPrivateSymbolIndex = binding['decorated_private_symbol'];
+	var kArrowMessagePrivateSymbolIndex = binding['arrow_message_private_symbol'];
+	var kDecoratedPrivateSymbolIndex = binding['decorated_private_symbol'];
 
 	exports.getHiddenValue = binding.getHiddenValue;
 	exports.setHiddenValue = binding.setHiddenValue;
@@ -9609,9 +10042,9 @@ var global = this;
 	};
 
 	exports.error = function(msg) {
-	    const fmt = prefix + msg;
+	    var fmt = prefix + msg;
 	    if (arguments.length > 1) {
-	        const args = new Array(arguments.length);
+	        var args = new Array(arguments.length);
 	        args[0] = fmt;
 	        for (var i = 1; i < arguments.length; ++i)
 	            args[i] = arguments[i];
@@ -9654,7 +10087,7 @@ var global = this;
 	        exports.getHiddenValue(err, kDecoratedPrivateSymbolIndex) === true)
 	        return;
 
-	    const arrow = exports.getHiddenValue(err, kArrowMessagePrivateSymbolIndex);
+	    var arrow = exports.getHiddenValue(err, kArrowMessagePrivateSymbolIndex);
 
 	    if (arrow) {
 	        err.stack = arrow + err.stack;
@@ -9670,7 +10103,7 @@ var global = this;
 	    return Object.prototype.toString.call(o);
 	};
 
-	const noCrypto = !process.versions.openssl;
+	var noCrypto = !process.versions.openssl;
 	exports.assertCrypto = function(exports) {
 	    if (noCrypto)
 	        throw new Error('Node.js is not compiled with openssl crypto support');
@@ -9679,69 +10112,6 @@ var global = this;
 
 /***/ },
 /* 28 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// a duplex stream is just a stream that is both readable and writable.
-	// Since JS doesn't have multiple prototypal inheritance, this class
-	// prototypally inherits from Readable, and then parasitically from
-	// Writable.
-
-	'use strict';
-
-	module.exports = Duplex;
-
-	const util = __webpack_require__(20);
-	const Readable = __webpack_require__(23);
-	const Writable = __webpack_require__(26);
-
-	util.inherits(Duplex, Readable);
-
-	var keys = Object.keys(Writable.prototype);
-	for (var v = 0; v < keys.length; v++) {
-	    var method = keys[v];
-	    if (!Duplex.prototype[method])
-	        Duplex.prototype[method] = Writable.prototype[method];
-	}
-
-	function Duplex(options) {
-	    if (!(this instanceof Duplex))
-	        return new Duplex(options);
-
-	    Readable.call(this, options);
-	    Writable.call(this, options);
-
-	    if (options && options.readable === false)
-	        this.readable = false;
-
-	    if (options && options.writable === false)
-	        this.writable = false;
-
-	    this.allowHalfOpen = true;
-	    if (options && options.allowHalfOpen === false)
-	        this.allowHalfOpen = false;
-
-	    this.once('end', onend);
-	}
-
-	// the no-half-open enforcer
-	function onend() {
-	    // if we allow half-open state, or if the writable side ended,
-	    // then we're ok.
-	    if (this.allowHalfOpen || this._writableState.ended)
-	        return;
-
-	    // no more data can be written.
-	    // But allow more writes to happen in this tick.
-	    process.nextTick(onEndNT, this);
-	}
-
-	function onEndNT(self) {
-	    self.end();
-	}
-
-
-/***/ },
-/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a transform stream is a readable/writable stream where you do
@@ -9790,8 +10160,8 @@ var global = this;
 
 	module.exports = Transform;
 
-	const Duplex = __webpack_require__(28);
-	const util = __webpack_require__(20);
+	const Duplex = __webpack_require__(23);
+	const util = __webpack_require__(18);
 	util.inherits(Transform, Duplex);
 
 
@@ -9942,7 +10312,7 @@ var global = this;
 
 
 /***/ },
-/* 30 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a passthrough stream.
@@ -9953,8 +10323,8 @@ var global = this;
 
 	module.exports = PassThrough;
 
-	const Transform = __webpack_require__(29);
-	const util = __webpack_require__(20);
+	const Transform = __webpack_require__(28);
+	const util = __webpack_require__(18);
 	util.inherits(PassThrough, Transform);
 
 	function PassThrough(options) {
@@ -9970,853 +10340,91 @@ var global = this;
 
 
 /***/ },
-/* 31 */,
-/* 32 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var NativeModule = __webpack_require__(33).NativeModule;
-	var util = __webpack_require__(20);
-	var internalModule = __webpack_require__(37);
-	var internalUtil = __webpack_require__(27);
-	var vm = __webpack_require__(44);
-	var assert = __webpack_require__(35).ok;
-	var fs = __webpack_require__(16);
-	// var fs = require('fs');
-	var path = __webpack_require__(19);
+	const Buffer = __webpack_require__(2).Buffer;
 
-	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
-	// const internalModuleStat = process.binding('fs').internalModuleStat;
-	// const preserveSymlinks = !!process.binding('config').preserveSymlinks;
-	// const internalModuleReadFile = ;
-	// const internalModuleStat = ;
-	var preserveSymlinks = true;
+	module.exports = BufferList;
 
-
-	// If obj.hasOwnProperty has been overridden, then calling
-	// obj.hasOwnProperty(prop) will break.
-	// See: https://github.com/joyent/node/issues/1707
-	function hasOwnProperty(obj, prop) {
-	    return Object.prototype.hasOwnProperty.call(obj, prop);
+	function BufferList() {
+	    this.head = null;
+	    this.tail = null;
+	    this.length = 0;
 	}
 
-	function stat(filename) {
-	    filename = path._makeLong(filename);
-	    var cache = stat.cache;
-	    if (cache !== null) {
-	        var result = cache[filename];
-	        if (result !== undefined) return result;
-	    }
-	    // const result = internalModuleStat(filename);
-	    var result;
-	    try {
-	        result = fs.statSync(filename);
-	        console.log('res', result);
-	        return true;
-	    } catch(e) {
-	        result = false;
-	    }
-	    if (cache !== null) cache[filename] = result;
-	    // console.log('result', result);
-	    return result;
-	}
-	stat.cache = null;
-
-
-	function Module(id, parent) {
-	    this.id = id;
-	    this.exports = {};
-	    this.parent = parent;
-	    if (parent && parent.children) {
-	        parent.children.push(this);
-	    }
-
-	    this.filename = null;
-	    this.loaded = false;
-	    this.children = [];
-	}
-	module.exports = Module;
-
-	Module._cache = {};
-	Module._pathCache = {};
-	Module._extensions = {};
-	var modulePaths = [];
-	Module.globalPaths = [];
-
-	Module.wrapper = NativeModule.wrapper;
-	Module.wrap = NativeModule.wrap;
-	Module._debug = util.debuglog('module');
-
-	// We use this alias for the preprocessor that filters it out
-	var debug = Module._debug;
-
-
-	// given a module name, and a list of paths to test, returns the first
-	// matching file in the following precedence.
-	//
-	// require("a.<ext>")
-	//   -> a.<ext>
-	//
-	// require("a")
-	//   -> a
-	//   -> a.<ext>
-	//   -> a/index.<ext>
-
-	// check if the directory is a package.json dir
-	var packageMainCache = {};
-
-	function readPackage(requestPath) {
-
-	    if (hasOwnProperty(packageMainCache, requestPath)) {
-	        return packageMainCache[requestPath];
-	    }
-
-	    // var jsonPath = path.resolve(requestPath, 'package.json');
-
-	    // const json = internalModuleReadFile(path._makeLong(jsonPath));
-	    // console.log(jsonPath);
-	    try {
-	        var jsonPath = path.resolve(requestPath, 'package.json');
-	        var json = fs.readFileSync(path._makeLong(jsonPath), 'utf8');
-	    } catch (e) {
-	        return false;
-	    }
-
-
-	    if (json === undefined) {
-	        return false;
-	    }
-
-	    try {
-	        var pkg = packageMainCache[requestPath] = JSON.parse(json).main;
-	    } catch (e) {
-	        e.path = jsonPath;
-	        e.message = 'Error parsing ' + jsonPath + ': ' + e.message;
-	        throw e;
-	    }
-	    return pkg;
-	}
-
-	function tryPackage(requestPath, exts, isMain) {
-	    var pkg = readPackage(requestPath);
-
-	    if (!pkg) return false;
-
-	    var filename = path.resolve(requestPath, pkg);
-	    return tryFile(filename, isMain) ||
-	        tryExtensions(filename, exts, isMain) ||
-	        tryExtensions(path.resolve(filename, 'index'), exts, isMain);
-	}
-
-	// check if the file exists and is not a directory
-	// if using --preserve-symlinks and isMain is false,
-	// keep symlinks intact, otherwise resolve to the
-	// absolute realpath.
-	function tryFile(requestPath, isMain) {
-	    // console.log(requestPath, isMain);
-	    return requestPath;
-	    var rc = stat(requestPath);
-	    console.log('rc', rc);
-	    if(rc) return requestPath;
-	    else return false;
-	    // console.log(rc);
-	    // if (preserveSymlinks && !isMain) {
-	    //     return rc === 0 && path.resolve(requestPath);
-	    // }
-	    // return rc === 0 && fs.realpathSync(requestPath);
-	}
-
-	// given a path check a the file exists with any of the set extensions
-	function tryExtensions(p, exts, isMain) {
-	    for (var i = 0; i < exts.length; i++) {
-
-	        var filename = tryFile(p + exts[i], isMain);
-
-	        if (filename) {
-	            return filename;
-	        }
-	    }
-	    return false;
-	}
-
-	var warned = false;
-	Module._findPath = function(request, paths, isMain) {
-	    if (path.isAbsolute(request)) {
-	        paths = [''];
-	    } else if (!paths || paths.length === 0) {
-	        return false;
-	    }
-
-	    const cacheKey = JSON.stringify({request: request, paths: paths});
-	    if (Module._pathCache[cacheKey]) {
-	        return Module._pathCache[cacheKey];
-	    }
-
-	    var exts;
-	    const trailingSlash = request.length > 0 &&
-	        request.charCodeAt(request.length - 1) === 47/*/*/;
-
-	    // For each path
-	    for (var i = 0; i < paths.length; i++) {
-	        // Don't search further if path doesn't exist
-	        var curPath = paths[i];
-	        if (curPath && stat(curPath) < 1) continue;
-	        var basePath = path.resolve(curPath, request);
-
-	        var filename;
-
-	        if (!trailingSlash) {
-	            var rc = stat(basePath);
-	            if (rc === 0) {  // File.
-	                if (preserveSymlinks && !isMain) {
-	                    filename = path.resolve(basePath);
-	                } else {
-	                    filename = fs.realpathSync(basePath);
-	                }
-	            } else if (rc === 1) {  // Directory.
-	                if (exts === undefined)
-	                    exts = Object.keys(Module._extensions);
-	                filename = tryPackage(basePath, exts, isMain);
-	            }
-
-	            if (!filename) {
-	                // try it with each of the extensions
-	                if (exts === undefined)
-	                    exts = Object.keys(Module._extensions);
-	                filename = tryExtensions(basePath, exts, isMain);
-	            }
-	        }
-
-	        if (!filename) {
-	            if (exts === undefined)
-	                exts = Object.keys(Module._extensions);
-	            filename = tryPackage(basePath, exts, isMain);
-	        }
-
-	        if (!filename) {
-	            // try it with each of the extensions at "index"
-	            if (exts === undefined)
-	                exts = Object.keys(Module._extensions);
-	            filename = tryExtensions(path.resolve(basePath, 'index'), exts, isMain);
-	        }
-
-	        if (filename) {
-	            // Warn once if '.' resolved outside the module dir
-	            if (request === '.' && i > 0) {
-	                warned = internalUtil.printDeprecationMessage(
-	                    'warning: require(\'.\') resolved outside the package ' +
-	                    'directory. This functionality is deprecated and will be removed ' +
-	                    'soon.', warned);
-	            }
-
-	            Module._pathCache[cacheKey] = filename;
-	            return filename;
-	        }
-	    }
-
-	    return false;
+	BufferList.prototype.push = function(v) {
+	    const entry = { data: v, next: null };
+	    if (this.length > 0)
+	        this.tail.next = entry;
+	    else
+	        this.head = entry;
+	    this.tail = entry;
+	    ++this.length;
 	};
 
-	// 'node_modules' character codes reversed
-	var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
-	var nmLen = nmChars.length;
-	if (process.platform === 'win32') {
-	    // 'from' is the __dirname of the module.
-	    Module._nodeModulePaths = function(from) {
-	        // guarantee that 'from' is absolute.
-	        from = path.resolve(from);
-
-	        // note: this approach *only* works when the path is guaranteed
-	        // to be absolute.  Doing a fully-edge-case-correct path.split
-	        // that works on both Windows and Posix is non-trivial.
-	        var paths = [];
-	        var p = 0;
-	        var last = from.length;
-	        for (var i = from.length - 1; i >= 0; --i) {
-	            var code = from.charCodeAt(i);
-	            if (code === 92/*\*/ || code === 47/*/*/) {
-	                if (p !== nmLen)
-	                    paths.push(from.slice(0, last) + '\\node_modules');
-	                last = i;
-	                p = 0;
-	            } else if (p !== -1 && p < nmLen) {
-	                if (nmChars[p] === code) {
-	                    ++p;
-	                } else {
-	                    p = -1;
-	                }
-	            }
-	        }
-
-	        return paths;
-	    };
-	} else { // posix
-	         // 'from' is the __dirname of the module.
-	    Module._nodeModulePaths = function(from) {
-	        // guarantee that 'from' is absolute.
-	        from = path.resolve(from);
-	        // Return early not only to avoid unnecessary work, but to *avoid* returning
-	        // an array of two items for a root: [ '//node_modules', '/node_modules' ]
-	        if (from === '/')
-	            return ['/node_modules'];
-
-	        // note: this approach *only* works when the path is guaranteed
-	        // to be absolute.  Doing a fully-edge-case-correct path.split
-	        // that works on both Windows and Posix is non-trivial.
-	        var paths = [];
-	        var p = 0;
-	        var last = from.length;
-	        for (var i = from.length - 1; i >= 0; --i) {
-	            var code = from.charCodeAt(i);
-	            if (code === 47/*/*/) {
-	                if (p !== nmLen)
-	                    paths.push(from.slice(0, last) + '/node_modules');
-	                last = i;
-	                p = 0;
-	            } else if (p !== -1 && p < nmLen) {
-	                if (nmChars[p] === code) {
-	                    ++p;
-	                } else {
-	                    p = -1;
-	                }
-	            }
-	        }
-
-	        return paths;
-	    };
-	}
-
-
-	// 'index.' character codes
-	var indexChars = [ 105, 110, 100, 101, 120, 46 ];
-	var indexLen = indexChars.length;
-	Module._resolveLookupPaths = function(request, parent) {
-	    if (NativeModule.nonInternalExists(request)) {
-	        return [request, []];
-	    }
-
-	    var reqLen = request.length;
-	    // Check for relative path
-	    if (reqLen < 2 ||
-	        request.charCodeAt(0) !== 46/*.*/ ||
-	        (request.charCodeAt(1) !== 46/*.*/ &&
-	        request.charCodeAt(1) !== 47/*/*/)) {
-	        var paths = modulePaths;
-	        if (parent) {
-	            if (!parent.paths)
-	                paths = parent.paths = [];
-	            else
-	                paths = parent.paths.concat(paths);
-	        }
-
-	        // Maintain backwards compat with certain broken uses of require('.')
-	        // by putting the module's directory in front of the lookup paths.
-	        if (request === '.') {
-	            if (parent && parent.filename) {
-	                paths.unshift(path.dirname(parent.filename));
-	            } else {
-	                paths.unshift(path.resolve(request));
-	            }
-	        }
-	        return [request, paths];
-	    }
-
-	    // with --eval, parent.id is not set and parent.filename is null
-	    if (!parent || !parent.id || !parent.filename) {
-	        // make require('./path/to/foo') work - normally the path is taken
-	        // from realpath(__filename) but with eval there is no filename
-	        var mainPaths = ['.'].concat(Module._nodeModulePaths('.'), modulePaths);
-	        return [request, mainPaths];
-	    }
-
-	    // Is the parent an index module?
-	    // We can assume the parent has a valid extension,
-	    // as it already has been accepted as a module.
-	    const base = path.basename(parent.filename);
-	    var parentIdPath;
-	    if (base.length > indexLen) {
-	        var i = 0;
-	        for (; i < indexLen; ++i) {
-	            if (indexChars[i] !== base.charCodeAt(i))
-	                break;
-	        }
-	        if (i === indexLen) {
-	            // We matched 'index.', let's validate the rest
-	            for (; i < base.length; ++i) {
-	                const code = base.charCodeAt(i);
-	                if (code !== 95/*_*/ &&
-	                    (code < 48/*0*/ || code > 57/*9*/) &&
-	                    (code < 65/*A*/ || code > 90/*Z*/) &&
-	                    (code < 97/*a*/ || code > 122/*z*/))
-	                    break;
-	            }
-	            if (i === base.length) {
-	                // Is an index module
-	                parentIdPath = parent.id;
-	            } else {
-	                // Not an index module
-	                parentIdPath = path.dirname(parent.id);
-	            }
-	        } else {
-	            // Not an index module
-	            parentIdPath = path.dirname(parent.id);
-	        }
-	    } else {
-	        // Not an index module
-	        parentIdPath = path.dirname(parent.id);
-	    }
-	    var id = path.resolve(parentIdPath, request);
-
-	    // make sure require('./path') and require('path') get distinct ids, even
-	    // when called from the toplevel js file
-	    if (parentIdPath === '.' && id.indexOf('/') === -1) {
-	        id = './' + id;
-	    }
-
-	    debug('RELATIVE: requested: %s set ID to: %s from %s', request, id,
-	        parent.id);
-
-
-	    return [id, [path.dirname(parent.filename)]];
+	BufferList.prototype.unshift = function(v) {
+	    const entry = { data: v, next: this.head };
+	    if (this.length === 0)
+	        this.tail = entry;
+	    this.head = entry;
+	    ++this.length;
 	};
 
-
-	// Check the cache for the requested file.
-	// 1. If a module already exists in the cache: return its exports object.
-	// 2. If the module is native: call `NativeModule.require()` with the
-	//    filename and return the result.
-	// 3. Otherwise, create a new module for the file and save it to the cache.
-	//    Then have it load  the file contents before returning its exports
-	//    object.
-	Module._load = function(request, parent, isMain) {
-	    if (parent) {
-	        debug('Module._load REQUEST %s parent: %s', request, parent.id);
-	    }
-
-	    var filename = Module._resolveFilename(request, parent, isMain);
-
-	    var cachedModule = Module._cache[filename];
-	    if (cachedModule) {
-	        return cachedModule.exports;
-	    }
-
-	    if (NativeModule.nonInternalExists(filename)) {
-	        debug('load native module %s', request);
-	        return NativeModule.require(filename);
-	    }
-
-	    var module = new Module(filename, parent);
-
-	    if (isMain) {
-	        process.mainModule = module;
-	        module.id = '.';
-	    }
-
-	    Module._cache[filename] = module;
-
-	    tryModuleLoad(module, filename);
-
-	    return module.exports;
-	};
-
-	function tryModuleLoad(module, filename) {
-	    var threw = true;
-	    try {
-	        module.load(filename);
-	        threw = false;
-	    } finally {
-	        if (threw) {
-	            delete Module._cache[filename];
-	        }
-	    }
-	}
-
-	Module._resolveFilename = function(request, parent, isMain) {
-	    if (NativeModule.nonInternalExists(request)) {
-	        return request;
-	    }
-
-	    var resolvedModule = Module._resolveLookupPaths(request, parent);
-	    var id = resolvedModule[0];
-	    var paths = resolvedModule[1];
-
-	    // look up the filename first, since that's the cache key.
-	    debug('looking for %j in %j', id, paths);
-
-	    var filename = Module._findPath(request, paths, isMain);
-	    console.log(filename);
-
-	    if (!filename) {
-	        var err = new Error("Cannot find module '" + request + "'");
-	        err.code = 'MODULE_NOT_FOUND';
-	        throw err;
-	    }
-
-	    return filename;
-	};
-
-
-	// Given a file name, pass it to the proper extension handler.
-	Module.prototype.load = function(filename) {
-	    debug('load %j for module %j', filename, this.id);
-
-	    assert(!this.loaded);
-	    this.filename = filename;
-	    this.paths = Module._nodeModulePaths(path.dirname(filename));
-
-	    var extension = path.extname(filename) || '.js';
-	    if (!Module._extensions[extension]) extension = '.js';
-	    Module._extensions[extension](this, filename);
-	    this.loaded = true;
-	};
-
-
-	// Loads a module at the given file path. Returns that module's
-	// `exports` property.
-	Module.prototype.require = function(path) {
-	    assert(path, 'missing path');
-	    assert(typeof path === 'string', 'path must be a string');
-	    return Module._load(path, this, /* isMain */ false);
-	};
-
-
-	// Resolved path to process.argv[1] will be lazily placed here
-	// (needed for setting breakpoint when called with --debug-brk)
-	var resolvedArgv;
-
-
-	// Run the file contents in the correct scope or sandbox. Expose
-	// the correct helper variables (require, module, exports) to
-	// the file.
-	// Returns exception, if any.
-	Module.prototype._compile = function(content, filename) {
-	    // Remove shebang
-	    var contLen = content.length;
-	    if (contLen >= 2) {
-	        if (content.charCodeAt(0) === 35/*#*/ &&
-	            content.charCodeAt(1) === 33/*!*/) {
-	            if (contLen === 2) {
-	                // Exact match
-	                content = '';
-	            } else {
-	                // Find end of shebang line and slice it off
-	                var i = 2;
-	                for (; i < contLen; ++i) {
-	                    var code = content.charCodeAt(i);
-	                    if (code === 10/*\n*/ || code === 13/*\r*/)
-	                        break;
-	                }
-	                if (i === contLen)
-	                    content = '';
-	                else {
-	                    // Note that this actually includes the newline character(s) in the
-	                    // new output. This duplicates the behavior of the regular expression
-	                    // that was previously used to replace the shebang line
-	                    content = content.slice(i);
-	                }
-	            }
-	        }
-	    }
-
-	    // create wrapper function
-	    var wrapper = Module.wrap(content);
-
-
-	    var compiledWrapper = eval(wrapper);
-	    // var compiledWrapper = vm.runInThisContext(wrapper, {
-	    //     filename: filename,
-	    //     lineOffset: 0,
-	    //     displayErrors: true
-	    // });
-
-	    /*if (process._debugWaitConnect) {
-	        if (!resolvedArgv) {
-	            // we enter the repl if we're not given a filename argument.
-	            if (process.argv[1]) {
-	                resolvedArgv = Module._resolveFilename(process.argv[1], null);
-	            } else {
-	                resolvedArgv = 'repl';
-	            }
-	        }
-
-	        // Set breakpoint on module start
-	        if (filename === resolvedArgv) {
-	            delete process._debugWaitConnect;
-	            const Debug = vm.runInDebugContext('Debug');
-	            Debug.setBreakPoint(compiledWrapper, 0, 0);
-	        }
-	    }*/
-	    var dirname = path.dirname(filename);
-	    var require = internalModule.makeRequireFunction.call(this);
-	    var args = [this.exports, require, this, filename, dirname];
-	    var depth = internalModule.requireDepth;
-	    // if (depth === 0) stat.cache = new Map();
-	    var result = compiledWrapper.apply(this.exports, args);
-	    // if (depth === 0) stat.cache = null;
-	    return result;
-	};
-
-
-	// Native extension for .js
-	Module._extensions['.js'] = function(module, filename) {
-	    var content = fs.readFileSync(filename, 'utf8');
-	    module._compile(internalModule.stripBOM(content), filename);
-	};
-
-
-	// Native extension for .json
-	Module._extensions['.json'] = function(module, filename) {
-	    var content = fs.readFileSync(filename, 'utf8');
-	    try {
-	        module.exports = JSON.parse(internalModule.stripBOM(content));
-	    } catch (err) {
-	        err.message = filename + ': ' + err.message;
-	        throw err;
-	    }
-	};
-
-
-	//Native extension for .node
-	Module._extensions['.node'] = function(module, filename) {
-	    return process.dlopen(module, path._makeLong(filename));
-	};
-
-
-	// bootstrap main module.
-	Module.runMain = function() {
-	    // Load the main module--the command line argument.
-	    Module._load(process.argv[1], null, true);
-	    // Handle any nextTicks added in the first tick of the program
-	    process._tickCallback();
-	};
-
-	Module._initPaths = function() {
-	    const isWindows = process.platform === 'win32';
-
-	    var homeDir;
-	    if (isWindows) {
-	        homeDir = process.env.USERPROFILE;
-	    } else {
-	        homeDir = process.env.HOME;
-	    }
-
-	    var paths = [path.resolve(process.execPath, '..', '..', 'lib', 'node')];
-
-	    if (homeDir) {
-	        paths.unshift(path.resolve(homeDir, '.node_libraries'));
-	        paths.unshift(path.resolve(homeDir, '.node_modules'));
-	    }
-
-	    var nodePath = process.env['NODE_PATH'];
-	    if (nodePath) {
-	        paths = nodePath.split(path.delimiter).filter(function(path) {
-	            return !!path;
-	        }).concat(paths);
-	    }
-
-	    modulePaths = paths;
-
-	    // clone as a read-only copy, for introspection.
-	    Module.globalPaths = modulePaths.slice(0);
-	};
-
-	// TODO(bnoordhuis) Unused, remove in the future.
-	Module.requireRepl = internalUtil.deprecate(function() {
-	    return NativeModule.require('internal/repl');
-	}, 'Module.requireRepl is deprecated.');
-
-	Module._preloadModules = function(requests) {
-	    if (!Array.isArray(requests))
+	BufferList.prototype.shift = function() {
+	    if (this.length === 0)
 	        return;
-
-	    // Preloaded modules have a dummy parent module which is deemed to exist
-	    // in the current working directory. This seeds the search path for
-	    // preloaded modules.
-	    var parent = new Module('internal/preload', null);
-	    try {
-	        parent.paths = Module._nodeModulePaths(process.cwd());
-	    } catch (e) {
-	        if (e.code !== 'ENOENT') {
-	            throw e;
-	        }
-	    }
-	    requests.forEach(function(request) {
-	        parent.require(request);
-	    });
+	    const ret = this.head.data;
+	    if (this.length === 1)
+	        this.head = this.tail = null;
+	    else
+	        this.head = this.head.next;
+	    --this.length;
+	    return ret;
 	};
 
-	Module._initPaths();
+	BufferList.prototype.clear = function() {
+	    this.head = this.tail = null;
+	    this.length = 0;
+	};
 
-	// backwards compatibility
-	Module.Module = Module;
+	BufferList.prototype.join = function(s) {
+	    if (this.length === 0)
+	        return '';
+	    var p = this.head;
+	    var ret = '' + p.data;
+	    while (p = p.next)
+	        ret += s + p.data;
+	    return ret;
+	};
+
+	BufferList.prototype.concat = function(n) {
+	    if (this.length === 0)
+	        return Buffer.alloc(0);
+	    if (this.length === 1)
+	        return this.head.data;
+	    const ret = Buffer.allocUnsafe(n >>> 0);
+	    var p = this.head;
+	    var i = 0;
+	    while (p) {
+	        p.data.copy(ret, i);
+	        i += p.data.length;
+	        p = p.next;
+	    }
+	    return ret;
+	};
 
 
 /***/ },
-/* 33 */
-/***/ function(module, exports, __webpack_require__) {
+/* 31 */
+/***/ function(module, exports) {
 
-	function NativeModule(id) {
-	    this.filename = id + '.js';
-	    this.id = id;
-	    this.exports = {};
-	    this.loaded = false;
-	    this.loading = false;
-	}
-
-	// NativeModule._source = process.binding('natives');
-	NativeModule._cache = {};
-
-	NativeModule.require = function(id) {
-	    if (id == 'native_module') {
-	        return NativeModule;
-	    }
-
-	    var cached = NativeModule.getCached(id);
-	    if (cached && (cached.loaded || cached.loading)) {
-	        return cached.exports;
-	    }
-
-	    if (!NativeModule.exists(id)) {
-	        throw new Error('No such native module '+ id);
-	    }
-
-	    process.moduleLoadList.push('NativeModule ' + id);
-
-	    var nativeModule = new NativeModule(id);
-
-	    nativeModule.cache();
-	    nativeModule.compile();
-
-	    return nativeModule.exports;
-	};
-
-	NativeModule.getCached = function(id) {
-	    return NativeModule._cache[id];
-	};
-
-	NativeModule.exists = function(id) {
-	    try {
-	        __webpack_require__(34)("./" + id);
-	        return true;
-	    } catch(e) {
-	        return false;
-	    }
-	    // return NativeModule._source.hasOwnProperty(id);
-	};
-
-	const EXPOSE_INTERNALS = process.execArgv.some(function(arg) {
-	    return arg.match(/^--expose[-_]internals$/);
-	});
-
-	if (EXPOSE_INTERNALS) {
-	    NativeModule.nonInternalExists = NativeModule.exists;
-
-	    NativeModule.isInternal = function(id) {
-	        return false;
-	    };
-	} else {
-	    NativeModule.nonInternalExists = function(id) {
-	        return NativeModule.exists(id) && !NativeModule.isInternal(id);
-	    };
-
-	    NativeModule.isInternal = function(id) {
-	        return id.startsWith('internal/');
-	    };
-	}
-
-
-	NativeModule.getSource = function(id) {
-	    return __webpack_require__(34)("./" + id);
-	    // return NativeModule._source[id];
-	};
-
-	NativeModule.wrap = function(script) {
-	    return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
-	};
-
-	NativeModule.wrapper = [
-	    '(function (exports, require, module, __filename, __dirname) { ',
-	    '\n});'
-	];
-
-	NativeModule.prototype.compile = function() {
-	    var source = NativeModule.getSource(this.id);
-	    source = NativeModule.wrap(source);
-
-	    this.loading = true;
-
-	    try {
-	        var fn = runInThisContext(source, {
-	            filename: this.filename,
-	            lineOffset: 0,
-	            displayErrors: true
-	        });
-	        fn(this.exports, NativeModule.require, this, this.filename);
-
-	        this.loaded = true;
-	    } finally {
-	        this.loading = false;
-	    }
-	};
-
-	NativeModule.prototype.cache = function() {
-	    NativeModule._cache[this.id] = this;
-	};
-
-	exports.NativeModule = NativeModule;
-
+	module.exports = require("string_decoder");
 
 /***/ },
-/* 34 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var map = {
-		"./_stream_duplex": 28,
-		"./_stream_passthrough": 30,
-		"./_stream_readable": 23,
-		"./_stream_transform": 29,
-		"./_stream_writable": 26,
-		"./assert": 35,
-		"./boot": 1,
-		"./buffer": 3,
-		"./console": 36,
-		"./eloop": 2,
-		"./events": 7,
-		"./fs": 16,
-		"./internal/module": 37,
-		"./internal/streams/BufferList": 24,
-		"./internal/streams/lazy_transform": 39,
-		"./internal/util": 27,
-		"./module": 32,
-		"./native_module": 33,
-		"./path": 19,
-		"./process": 6,
-		"./static-arraybuffer": 40,
-		"./static-buffer": 41,
-		"./stream": 22,
-		"./sys": 42,
-		"./timers": 15,
-		"./typing": 14,
-		"./util": 20,
-		"./vm": 44
-	};
-	function webpackContext(req) {
-		return __webpack_require__(webpackContextResolve(req));
-	};
-	function webpackContextResolve(req) {
-		return map[req] || (function() { throw new Error("Cannot find module '" + req + "'.") }());
-	};
-	webpackContext.keys = function webpackContextKeys() {
-		return Object.keys(map);
-	};
-	webpackContext.resolve = webpackContextResolve;
-	module.exports = webpackContext;
-	webpackContext.id = 34;
-
-
-/***/ },
-/* 35 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
@@ -10847,8 +10455,8 @@ var global = this;
 
 	// UTILITY
 	// const compare = process.binding('buffer').compare;
-	const util = __webpack_require__(20);
-	const Buffer = __webpack_require__(3).Buffer;
+	const util = __webpack_require__(18);
+	const Buffer = __webpack_require__(2).Buffer;
 	const pToString = function(obj) { return Object.prototype.toString.call(obj); };
 
 	// 1. The assert module provides functions that throw
@@ -11191,10 +10799,10 @@ var global = this;
 
 
 /***/ },
-/* 36 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var util = __webpack_require__(20);
+	var util = __webpack_require__(18);
 
 
 	function Console(stdout, stderr) {
@@ -11293,7 +10901,7 @@ var global = this;
 
 	Console.prototype.assert = function(expression) {
 	    if (!expression) {
-	        __webpack_require__(35).ok(false, util.format.apply(null, arguments));
+	        __webpack_require__(32).ok(false, util.format.apply(null, arguments));
 	    }
 	};
 
@@ -11303,10 +10911,810 @@ var global = this;
 
 
 /***/ },
+/* 34 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var build = __webpack_require__(35).build;
+
+
+	var fs = module.exports = build({
+	    path: __webpack_require__(17),
+	    EventEmitter: __webpack_require__(13).EventEmitter,
+	    Buffer: __webpack_require__(2).Buffer,
+	    Readable: __webpack_require__(25).Readable,
+	    Writable: __webpack_require__(25).Writable
+	});
+
+
+
+
+/***/ },
+/* 35 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var libjs = __webpack_require__(6);
+	var inotify_1 = __webpack_require__(36);
+	if (true) {
+	    exports.isFullJS = true;
+	}
+	function extend(a, b) {
+	    for (var i in b)
+	        a[i] = b[i];
+	    return a;
+	}
+	function noop() { }
+	function formatError(errno, func, path, path2) {
+	    if (func === void 0) { func = ''; }
+	    if (path === void 0) { path = ''; }
+	    if (path2 === void 0) { path2 = ''; }
+	    switch (-errno) {
+	        case 2: return "ENOENT: no such file or directory, " + func + " '" + path + "'";
+	        case 9: return "EBADF: bad file descriptor, " + func;
+	        case 22: return "EINVAL: invalid argument, " + func;
+	        case 1: return "EPERM: operation not permitted, " + func + " '" + path + "' -> '" + path2 + "'";
+	        case 71: return "EPROTO: protocol error, " + func + " '" + path + "' -> '" + path2 + "'";
+	        case 17: return "EEXIST: file already exists, " + func + " '" + path + "' -> '" + path2 + "'";
+	        default: return "Error occurred in " + func + ": errno = " + errno;
+	    }
+	}
+	function throwError(errno, func, path, path2) {
+	    if (func === void 0) { func = ''; }
+	    if (path === void 0) { path = ''; }
+	    if (path2 === void 0) { path2 = ''; }
+	    throw Error(formatError(errno, func, path, path2));
+	}
+	function validPathOrThrow(path) {
+	    if (path instanceof Buffer)
+	        path = path.toString();
+	    if (typeof path !== 'string')
+	        throw TypeError('path must be a string');
+	    return path;
+	}
+	function validateFd(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError('fd must be a file descriptor');
+	}
+	(function (flags) {
+	    flags[flags["r"] = 0] = "r";
+	    flags[flags['r+'] = 2] = 'r+';
+	    flags[flags["rs"] = 1069056] = "rs";
+	    flags[flags['rs+'] = 1069058] = 'rs+';
+	    flags[flags["w"] = 577] = "w";
+	    flags[flags["wx"] = 705] = "wx";
+	    flags[flags['w+'] = 578] = 'w+';
+	    flags[flags['wx+'] = 706] = 'wx+';
+	    flags[flags["a"] = 1089] = "a";
+	    flags[flags["ax"] = 1217] = "ax";
+	    flags[flags['a+'] = 1090] = 'a+';
+	    flags[flags['ax+'] = 1218] = 'ax+';
+	})(exports.flags || (exports.flags = {}));
+	var flags = exports.flags;
+	var MODE_DEFAULT = 438;
+	var F_OK = 0;
+	var R_OK = 4;
+	var W_OK = 2;
+	var X_OK = 1;
+	var appendFileDefaults = {
+	    encoding: 'utf8',
+	    mode: MODE_DEFAULT,
+	    flag: 'a'
+	};
+	var Stats = (function () {
+	    function Stats() {
+	    }
+	    Stats.prototype.isFile = function () {
+	        return (this.mode & 32768) == 32768;
+	    };
+	    Stats.prototype.isDirectory = function () {
+	        return (this.mode & 16384) == 16384;
+	    };
+	    Stats.prototype.isBlockDevice = function () {
+	        return (this.mode & 24576) == 24576;
+	    };
+	    Stats.prototype.isCharacterDevice = function () {
+	        return (this.mode & 8192) == 8192;
+	    };
+	    Stats.prototype.isSymbolicLink = function () {
+	        return (this.mode & 40960) == 40960;
+	    };
+	    Stats.prototype.isFIFO = function () {
+	        return (this.mode & 4096) == 4096;
+	    };
+	    Stats.prototype.isSocket = function () {
+	        return (this.mode & 49152) == 49152;
+	    };
+	    return Stats;
+	}());
+	exports.Stats = Stats;
+	function build(deps) {
+	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
+	    var EE = _EE;
+	    function accessSync(path, mode) {
+	        if (mode === void 0) { mode = F_OK; }
+	        var vpath = validPathOrThrow(path);
+	        var res = libjs.access(vpath, mode);
+	        if (res < 0)
+	            throwError(res, 'access', vpath);
+	    }
+	    function appendFile(file, data, options, callback) {
+	    }
+	    function appendFileSync(file, data, options) {
+	        if (options === void 0) { options = {}; }
+	        options = extend(options, appendFileDefaults);
+	    }
+	    function chmod(path, mode, callback) {
+	    }
+	    function chmodSync(path, mode) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof mode !== 'number')
+	            throw TypeError('mode must be an integer');
+	        var result = libjs.chmod(vpath, mode);
+	        if (result < 0)
+	            throwError(result, 'chmod', vpath);
+	    }
+	    function fchmod(fd, mode, callback) { }
+	    function fchmodSync(fd, mode) {
+	        validateFd(fd);
+	        if (typeof mode !== 'number')
+	            throw TypeError('mode must be an integer');
+	        var result = libjs.fchmod(fd, mode);
+	        if (result < 0)
+	            throwError(result, 'chmod');
+	    }
+	    function chown(path, uid, gid, callback) { }
+	    function chownSync(path, uid, gid) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof uid !== 'number')
+	            throw TypeError('uid must be an unsigned int');
+	        if (typeof gid !== 'number')
+	            throw TypeError('gid must be an unsigned int');
+	        var result = libjs.chown(vpath, uid, gid);
+	        if (result < 0)
+	            throwError(result, 'chown', vpath);
+	    }
+	    function fchown(fd, uid, gid, callback) { }
+	    function fchownSync(fd, uid, gid) {
+	        validateFd(fd);
+	        if (typeof uid !== 'number')
+	            throw TypeError('uid must be an unsigned int');
+	        if (typeof gid !== 'number')
+	            throw TypeError('gid must be an unsigned int');
+	        var result = libjs.fchown(fd, uid, gid);
+	        if (result < 0)
+	            throwError(result, 'fchown');
+	    }
+	    function lchown(path, uid, gid, callback) { }
+	    function lchownSync(path, uid, gid) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof uid !== 'number')
+	            throw TypeError('uid must be an unsigned int');
+	        if (typeof gid !== 'number')
+	            throw TypeError('gid must be an unsigned int');
+	        var result = libjs.lchown(vpath, uid, gid);
+	        if (result < 0)
+	            throwError(result, 'lchown', vpath);
+	    }
+	    function closeSync(fd) {
+	        if (typeof fd !== 'number')
+	            throw TypeError('fd must be a file descriptor');
+	        var result = libjs.close(fd);
+	        if (result < 0)
+	            throwError(result, 'close');
+	    }
+	    function createWriteStream(path, options) { }
+	    function existsSync(path) {
+	        console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
+	        try {
+	            accessSync(path);
+	            return true;
+	        }
+	        catch (e) {
+	            return false;
+	        }
+	    }
+	    function fsyncSync(fd) {
+	        if (typeof fd !== 'number')
+	            throw TypeError('fd must be a file descriptor');
+	        var result = libjs.fsync(fd);
+	        if (result < 0)
+	            throwError(result, 'fsync');
+	    }
+	    function fdatasyncSync(fd) {
+	        if (typeof fd !== 'number')
+	            throw TypeError('fd must be a file descriptor');
+	        var result = libjs.fdatasync(fd);
+	        if (result < 0)
+	            throwError(result, 'fdatasync');
+	    }
+	    function createStatsObject(res) {
+	        var stats = new Stats;
+	        stats.dev = res.dev;
+	        stats.mode = res.mode;
+	        stats.nlink = res.nlink;
+	        stats.uid = res.uid;
+	        stats.gid = res.gid;
+	        stats.rdev = res.rdev;
+	        stats.blksize = res.blksize;
+	        stats.ino = res.ino;
+	        stats.size = res.size;
+	        stats.blocks = res.blocks;
+	        stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
+	        stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
+	        stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
+	        stats.birthtime = stats.ctime;
+	        return stats;
+	    }
+	    function statSync(path) {
+	        var vpath = validPathOrThrow(path);
+	        try {
+	            var res = libjs.stat(vpath);
+	            return createStatsObject(res);
+	        }
+	        catch (errno) {
+	            throwError(errno, 'stat', vpath);
+	        }
+	    }
+	    function stat(path, callback) {
+	        var vpath = validPathOrThrow(path);
+	        libjs.statAsync(vpath, function (err, res) {
+	            if (err)
+	                return callback(Error(formatError(err, 'stat', vpath)));
+	            callback(null, createStatsObject(res));
+	        });
+	    }
+	    function fstatSync(fd) {
+	        validateFd(fd);
+	        try {
+	            var res = libjs.fstat(fd);
+	            return createStatsObject(res);
+	        }
+	        catch (errno) {
+	            throwError(errno, 'fstat');
+	        }
+	    }
+	    function lstatSync(path) {
+	        var vpath = validPathOrThrow(path);
+	        try {
+	            var res = libjs.lstat(vpath);
+	            return createStatsObject(res);
+	        }
+	        catch (errno) {
+	            throwError(errno, 'lstat', vpath);
+	        }
+	    }
+	    function truncateSync(path, len) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof len !== 'number')
+	            throw TypeError('len must be an integer');
+	        var res = libjs.truncate(vpath, len);
+	        if (res < 0)
+	            throwError(res, 'truncate', vpath);
+	    }
+	    function ftruncateSync(fd, len) {
+	        validateFd(fd);
+	        if (typeof len !== 'number')
+	            throw TypeError('len must be an integer');
+	        var res = libjs.ftruncate(fd, len);
+	        if (res < 0)
+	            throwError(res, 'ftruncate');
+	    }
+	    function utimesSync(path, atime, mtime) {
+	        path = validPathOrThrow(path);
+	        if (typeof atime === 'string')
+	            atime = parseInt(atime);
+	        if (typeof mtime === 'string')
+	            mtime = parseInt(mtime);
+	        if (typeof atime !== 'number')
+	            throw TypeError('atime must be an integer');
+	        if (typeof mtime !== 'number')
+	            throw TypeError('mtime must be an integer');
+	        var vatime = atime;
+	        var vmtime = mtime;
+	        if (!isFinite(vatime))
+	            vatime = Date.now();
+	        if (!isFinite(vmtime))
+	            vmtime = Date.now();
+	        vatime = Math.round(vatime / 1000);
+	        vmtime = Math.round(vmtime / 1000);
+	        var times = {
+	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	        };
+	        var res = libjs.utime(path, times);
+	        console.log(res);
+	        if (res < 0)
+	            throwError(res, 'utimes', path);
+	    }
+	    function linkSync(srcpath, dstpath) {
+	        var vsrcpath = validPathOrThrow(srcpath);
+	        var vdstpath = validPathOrThrow(dstpath);
+	        var res = libjs.link(vsrcpath, vdstpath);
+	        if (res < 0)
+	            throwError(res, 'link', vsrcpath, vdstpath);
+	    }
+	    function mkdirSync(path, mode) {
+	        if (mode === void 0) { mode = MODE_DEFAULT; }
+	        var vpath = validPathOrThrow(path);
+	        if (typeof mode !== 'number')
+	            throw TypeError('mode must be an integer');
+	        var res = libjs.mkdir(vpath, mode);
+	        if (res < 0)
+	            throwError(res, 'mkdir', vpath);
+	    }
+	    function randomString6() {
+	        return (+new Date).toString(36).slice(-6);
+	    }
+	    function mkdtempSync(prefix, options) {
+	        if (options === void 0) { options = {}; }
+	        if (!prefix || typeof prefix !== 'string')
+	            throw new TypeError('filename prefix is required');
+	        var retries = 10;
+	        var fullname;
+	        var found_tmp_name = false;
+	        for (var i = 0; i < retries; i++) {
+	            fullname = prefix + randomString6();
+	            try {
+	                accessSync(fullname);
+	            }
+	            catch (e) {
+	                found_tmp_name = true;
+	                break;
+	            }
+	        }
+	        if (found_tmp_name) {
+	            mkdirSync(fullname);
+	            return fullname;
+	        }
+	        else {
+	            throw Error("Could not find a new name, mkdtemp");
+	        }
+	    }
+	    function flagsToFlagsValue(f) {
+	        if (typeof f === 'number')
+	            return flags;
+	        if (typeof f !== 'string')
+	            throw TypeError("flags must be string or number");
+	        var flagsval = flags[f];
+	        if (typeof flagsval !== 'number')
+	            throw TypeError("Invalid flags string value '" + f + "'");
+	        return flagsval;
+	    }
+	    function openSync(path, flags, mode) {
+	        if (mode === void 0) { mode = MODE_DEFAULT; }
+	        var vpath = validPathOrThrow(path);
+	        var flagsval = flagsToFlagsValue(flags);
+	        if (typeof mode !== 'number')
+	            throw TypeError('mode must be an integer');
+	        var res = libjs.open(vpath, flagsval, mode);
+	        if (res < 0)
+	            throwError(res, 'open', vpath);
+	        return res;
+	    }
+	    function readSync(fd, buffer, offset, length, position) {
+	        validateFd(fd);
+	        if (!(buffer instanceof Buffer))
+	            throw TypeError('buffer must be an instance of Buffer');
+	        if (typeof offset !== 'number')
+	            throw TypeError('offset must be an integer');
+	        if (typeof length !== 'number')
+	            throw TypeError('length must be an integer');
+	        if (position !== null) {
+	            if (typeof position !== 'number')
+	                throw TypeError('position must be an integer');
+	            var seekres = libjs.lseek(fd, position, 0);
+	            if (seekres < 0)
+	                throwError(seekres, 'read');
+	        }
+	        var buf = buffer.slice(offset, offset + length);
+	        var res = libjs.read(fd, buf);
+	        if (res < 0)
+	            throwError(res, 'read');
+	        return res;
+	    }
+	    var optionsDefaults = {
+	        encoding: 'utf8'
+	    };
+	    function readdirSync(path, options) {
+	        if (options === void 0) { options = {}; }
+	        var vpath = validPathOrThrow(path);
+	        options = extend(options, optionsDefaults);
+	        return libjs.readdirList(vpath, options.encoding);
+	    }
+	    var readFileOptionsDefaults = {
+	        flag: 'r'
+	    };
+	    function readFileSync(file, options) {
+	        if (options === void 0) { options = {}; }
+	        var opts;
+	        if (typeof options === 'string')
+	            opts = extend({ encoding: options }, readFileOptionsDefaults);
+	        else if (typeof options !== 'object')
+	            throw TypeError('Invalid options');
+	        else
+	            opts = extend(options, readFileOptionsDefaults);
+	        if (opts.encoding && (typeof opts.encoding != 'string'))
+	            throw TypeError('Invalid encoding');
+	        var fd;
+	        if (typeof file === 'number')
+	            fd = file;
+	        else {
+	            var vfile = validPathOrThrow(file);
+	            var flag = flags[opts.flag];
+	            fd = libjs.open(vfile, flag, MODE_DEFAULT);
+	            if (fd < 0)
+	                throwError(fd, 'readFile', vfile);
+	        }
+	        var CHUNK = 4096;
+	        var list = [];
+	        do {
+	            var buf = new Buffer(CHUNK);
+	            var res = libjs.read(fd, buf);
+	            if (res < CHUNK)
+	                buf = buf.slice(0, res);
+	            list.push(buf);
+	            if (res < 0)
+	                throwError(res, 'readFile');
+	        } while (res > 0);
+	        libjs.close(fd);
+	        var buffer = Buffer.concat(list);
+	        if (opts.encoding)
+	            return buffer.toString(opts.encoding);
+	        else
+	            return buffer;
+	    }
+	    function readlinkSync(path, options) {
+	        if (options === void 0) { options = null; }
+	        path = validPathOrThrow(path);
+	        var buf = new Buffer(64);
+	        var res = libjs.readlink(path, buf);
+	        if (res < 0)
+	            throwError(res, 'readlink', path);
+	        var encoding = 'buffer';
+	        if (options) {
+	            if (typeof options === 'string')
+	                encoding = options;
+	            else if (typeof options === 'object') {
+	                if (typeof options.encoding != 'string')
+	                    throw TypeError('Encoding must be string.');
+	                else
+	                    encoding = options.encoding;
+	            }
+	            else
+	                throw TypeError('Invalid options.');
+	        }
+	        buf = buf.slice(0, res);
+	        return encoding == 'buffer' ? buf : buf.toString(encoding);
+	    }
+	    function renameSync(oldPath, newPath) {
+	        var voldPath = validPathOrThrow(oldPath);
+	        var vnewPath = validPathOrThrow(newPath);
+	        var res = libjs.rename(voldPath, vnewPath);
+	        if (res < 0)
+	            throwError(res, 'rename', voldPath, vnewPath);
+	    }
+	    function rmdirSync(path) {
+	        var vpath = validPathOrThrow(path);
+	        var res = libjs.rmdir(vpath);
+	        if (res < 0)
+	            throwError(res, 'rmdir', vpath);
+	    }
+	    function symlinkSync(target, path) {
+	        var vtarget = validPathOrThrow(target);
+	        var vpath = validPathOrThrow(path);
+	        var res = libjs.symlink(vtarget, vpath);
+	        if (res < 0)
+	            throwError(res, 'symlink', vtarget, vpath);
+	    }
+	    function unlinkSync(path) {
+	        var vpath = validPathOrThrow(path);
+	        var res = libjs.unlink(vpath);
+	        if (res < 0)
+	            throwError(res, 'unlink', vpath);
+	    }
+	    var FSWatcher = (function (_super) {
+	        __extends(FSWatcher, _super);
+	        function FSWatcher() {
+	            _super.apply(this, arguments);
+	            this.inotify = new inotify_1.Inotify;
+	        }
+	        FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
+	            var _this = this;
+	            this.inotify.encoding = encoding;
+	            this.inotify.onerror = noop;
+	            this.inotify.onevent = function (event) {
+	                var is_rename = (event.mask & 192) || (event.mask & 256);
+	                if (is_rename) {
+	                    _this.emit('change', 'rename', event.name);
+	                }
+	                else {
+	                    _this.emit('change', 'change', event.name);
+	                }
+	            };
+	            this.inotify.start();
+	            this.inotify.addPath(filename);
+	        };
+	        FSWatcher.prototype.close = function () {
+	            this.inotify.stop();
+	            this.inotify = null;
+	        };
+	        return FSWatcher;
+	    }(EE));
+	    var watchOptionsDefaults = {
+	        encoding: 'utf8',
+	        persistent: true,
+	        recursive: false
+	    };
+	    var StatWatcher = (function (_super) {
+	        __extends(StatWatcher, _super);
+	        function StatWatcher() {
+	            _super.apply(this, arguments);
+	            this.last = null;
+	        }
+	        StatWatcher.prototype.loop = function () {
+	            var _this = this;
+	            stat(this.filename, function (err, stats) {
+	                if (err)
+	                    return _this.emit('error', err);
+	                if (_this.last instanceof Stats) {
+	                    if (_this.last.atime.getTime() != stats.atime.getTime()) {
+	                        _this.emit('change', stats, _this.last);
+	                    }
+	                }
+	                _this.last = stats;
+	            });
+	        };
+	        StatWatcher.prototype.start = function (filename, persistent, interval) {
+	            var _this = this;
+	            this.filename = filename;
+	            stat(filename, function (err, stats) {
+	                if (err)
+	                    return _this.emit('error', err);
+	                _this.last = stats;
+	                _this.interval = setInterval(_this.loop.bind(_this), interval);
+	            });
+	        };
+	        StatWatcher.prototype.stop = function () {
+	            clearInterval(this.interval);
+	            this.last = null;
+	        };
+	        StatWatcher.map = {};
+	        return StatWatcher;
+	    }(EE));
+	    var watchFileOptionDefaults = {
+	        persistent: true,
+	        interval: 5007
+	    };
+	    function watchFile(filename, a, b) {
+	        if (a === void 0) { a = {}; }
+	        var vfilename = validPathOrThrow(filename);
+	        vfilename = pathModule.resolve(vfilename);
+	        var opts;
+	        var listener;
+	        if (typeof a !== 'object') {
+	            opts = watchFileOptionDefaults;
+	            listener = a;
+	        }
+	        else {
+	            opts = extend(a, watchFileOptionDefaults);
+	            listener = b;
+	        }
+	        if (typeof listener !== 'function')
+	            throw new Error('"watchFile()" requires a listener function');
+	        var watcher = StatWatcher.map[vfilename];
+	        if (!watcher) {
+	            watcher = new StatWatcher;
+	            watcher.start(vfilename, opts.persistent, opts.interval);
+	            StatWatcher.map[vfilename] = watcher;
+	        }
+	        watcher.on('change', listener);
+	        return watcher;
+	    }
+	    function unwatchFile(filename, listener) {
+	        var vfilename = validPathOrThrow(filename);
+	        vfilename = pathModule.resolve(vfilename);
+	        var watcher = StatWatcher.map[vfilename];
+	        if (!watcher)
+	            return;
+	        if (typeof listener === 'function')
+	            watcher.removeListener('change', listener);
+	        else
+	            watcher.removeAllListeners('change');
+	        if (watcher.listenerCount('change') === 0) {
+	            watcher.stop();
+	            delete StatWatcher.map[vfilename];
+	        }
+	    }
+	    function writeSync(fd, data, a, b, c) {
+	        validateFd(fd);
+	        var buf;
+	        var position;
+	        if (typeof b === 'number') {
+	            if (!(data instanceof Buffer))
+	                throw TypeError('buffer must be instance of Buffer.');
+	            var offset = a;
+	            if (typeof offset !== 'number')
+	                throw TypeError('offset must be an integer');
+	            var length = b;
+	            buf = data.slice(offset, offset + length);
+	            position = c;
+	        }
+	        else {
+	            var encoding = 'utf8';
+	            if (b) {
+	                if (typeof b !== 'string')
+	                    throw TypeError('encoding must be a string');
+	                encoding = b;
+	            }
+	            if (data instanceof Buffer)
+	                buf = data;
+	            else if (typeof data === 'string') {
+	                buf = new Buffer(data, encoding);
+	            }
+	            else
+	                throw TypeError('data must be a Buffer or a string.');
+	            position = a;
+	        }
+	        if (typeof position === 'number') {
+	            var sres = libjs.lseek(fd, position, 0);
+	            if (sres < 0)
+	                throwError(sres, 'write:lseek');
+	        }
+	        var res = libjs.write(fd, buf);
+	        if (res < 0)
+	            throwError(res, 'write');
+	    }
+	    return {
+	        flags: flags,
+	        F_OK: F_OK,
+	        R_OK: R_OK,
+	        W_OK: W_OK,
+	        X_OK: X_OK,
+	        accessSync: accessSync,
+	        appendFileSync: appendFileSync,
+	        chmodSync: chmodSync,
+	        chownSync: chownSync,
+	        closeSync: closeSync,
+	        existsSync: existsSync,
+	        fchmodSync: fchmodSync,
+	        fchownSync: fchownSync,
+	        fdatasyncSync: fdatasyncSync,
+	        fstatSync: fstatSync,
+	        fsyncSync: fsyncSync,
+	        ftruncateSync: ftruncateSync,
+	        lchownSync: lchownSync,
+	        linkSync: linkSync,
+	        lstatSync: lstatSync,
+	        mkdtempSync: mkdtempSync,
+	        mkdirSync: mkdirSync,
+	        openSync: openSync,
+	        readFileSync: readFileSync,
+	        readlinkSync: readlinkSync,
+	        symlinkSync: symlinkSync,
+	        statSync: statSync,
+	        truncateSync: truncateSync,
+	        renameSync: renameSync,
+	        readSync: readSync,
+	        writeSync: writeSync,
+	        unlinkSync: unlinkSync,
+	        rmdirSync: rmdirSync
+	    };
+	}
+	exports.build = build;
+
+
+/***/ },
+/* 36 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var libjs = __webpack_require__(6);
+	function noop() { }
+	var Inotify = (function () {
+	    function Inotify(poll_interval, buffer_size) {
+	        if (poll_interval === void 0) { poll_interval = 200; }
+	        if (buffer_size === void 0) { buffer_size = 4096; }
+	        this.onevent = noop;
+	        this.onerror = noop;
+	        this.wdCount = 0;
+	        this.wd = {};
+	        this.wdr = {};
+	        this.pollBound = this.poll.bind(this);
+	        this.encoding = 'utf8';
+	        this.pollInterval = poll_interval;
+	        this.bufSize = buffer_size;
+	    }
+	    Inotify.prototype.poll = function () {
+	        var res = libjs.read(this.fd, this.buf);
+	        if (res < 0) {
+	            if (-res == 11) {
+	            }
+	            else {
+	                this.onerror(Error("Could not poll for events: errno = " + res), res);
+	            }
+	            this.nextTick();
+	            return;
+	        }
+	        if (res > 0) {
+	            var offset = 0;
+	            var struct = libjs.inotify_event;
+	            while (offset < res) {
+	                var event = struct.unpack(this.buf, offset);
+	                var name_off = offset + struct.size;
+	                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
+	                name = name.substr(0, name.indexOf("\0"));
+	                event.name = name;
+	                event.path = this.wdr[event.wd];
+	                this.onevent(event);
+	                offset += struct.size + event.len;
+	            }
+	        }
+	        this.nextTick();
+	    };
+	    Inotify.prototype.nextTick = function () {
+	        if (this.hasStarted() && this.wdCount)
+	            this.timeout = setTimeout(this.pollBound, this.pollInterval);
+	    };
+	    Inotify.prototype.stopPolling = function () {
+	        clearTimeout(this.timeout);
+	        this.timeout = null;
+	    };
+	    Inotify.prototype.hasStarted = function () {
+	        return !!this.fd;
+	    };
+	    Inotify.prototype.start = function () {
+	        this.fd = libjs.inotify_init1(2048);
+	        if (this.fd < 0)
+	            throw Error("Could not init: errno = " + this.fd);
+	        this.buf = new Buffer(this.bufSize);
+	        return this.fd;
+	    };
+	    Inotify.prototype.stop = function () {
+	        this.stopPolling();
+	        for (var pathname in this.wd)
+	            this.removePath(pathname);
+	        var fd = this.fd;
+	        this.fd = 0;
+	        return libjs.close(fd);
+	    };
+	    Inotify.prototype.addPath = function (pathname, events) {
+	        if (events === void 0) { events = 4095; }
+	        if (!this.fd)
+	            throw Error("inotify file descriptor not initialized, call .init() first.");
+	        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
+	        if (wd < 0)
+	            throw Error("Could not add watch: errno = " + wd);
+	        this.wdCount++;
+	        this.wd[pathname] = wd;
+	        this.wdr[wd] = pathname;
+	        if (this.wdCount == 1)
+	            this.nextTick();
+	        return wd;
+	    };
+	    Inotify.prototype.removePath = function (pathname) {
+	        var wd = this.wd[pathname];
+	        if (!wd)
+	            return -1;
+	        delete this.wd[pathname];
+	        delete this.wdr[wd];
+	        this.wdCount--;
+	        return libjs.inotify_rm_watch(this.fd, wd);
+	    };
+	    return Inotify;
+	}());
+	exports.Inotify = Inotify;
+
+
+/***/ },
 /* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	'use strict';
+	var require;'use strict';
 
 	exports = module.exports = {
 	    makeRequireFunction: makeRequireFunction,
@@ -11382,6 +11790,7 @@ var global = this;
 
 	    Object.defineProperty(object, name, {
 	            get: function() {
+	                var r = require;
 	            var lib = __webpack_require__(38)(name);
 
 	    // Disable the current getter/setter and set up a new
@@ -11410,7 +11819,7 @@ var global = this;
 
 	var map = {
 		"./module": 37,
-		"./streams/BufferList": 24,
+		"./streams/BufferList": 30,
 		"./streams/lazy_transform": 39,
 		"./util": 27
 	};
@@ -11437,8 +11846,8 @@ var global = this;
 	// for the stream, one conventional and one non-conventional.
 	'use strict';
 
-	const stream = __webpack_require__(22);
-	const util = __webpack_require__(20);
+	const stream = __webpack_require__(25);
+	const util = __webpack_require__(18);
 
 	module.exports = LazyTransform;
 
@@ -11475,300 +11884,6 @@ var global = this;
 
 /***/ },
 /* 40 */
-/***/ function(module, exports, __webpack_require__) {
-
-	exports.StaticArrayBuffer = StaticArrayBuffer;
-
-
-	function prot2num(prot) {
-	    if(typeof prot !== 'string')
-	        throw TypeError('Protection must be a string.');
-	    if(prot.match(/[^rwe]/))
-	        throw TypeError('Protection string can contain only "r", "w" and "e" characters, given "' + prot + '".');
-
-	    var val = 0 /* PROT_NONE */;
-	    if(prot.indexOf('r') > -1) val |= 1 /* PROT_READ */;
-	    if(prot.indexOf('w') > -1) val |= 2 /* PROT_WRITE */;
-	    if(prot.indexOf('e') > -1) val |= 4 /* PROT_EXEC */;
-	    return val;
-	}
-
-
-	// "frame" because it does not allocate,
-	// just frames a slice of memory into ArrayBuffer.
-	function frame(addr, size) {
-	    var ab = process.frame(addr, size);
-	    if(!(ab instanceof ArrayBuffer))
-	        throw Error('Could not allocate ArrayBuffer.');
-	    return ab;
-	}
-
-
-	function alloc(size, prot) {
-	    if (typeof size !== 'number')
-	        throw TypeError('size must be a number.');
-	    if (size < 0)
-	        throw TypeError('Invalid size argument.');
-
-	    if (!prot) prot = 'rw';
-
-	    var flags = 2 /* MAP_PRIVATE */ | 32 /* MAP_ANONYMOUS */;
-	    var protnum = prot2num(prot);
-	    var libjs = __webpack_require__(9);
-	    var addr = libjs.mmap(0, size, protnum, flags, -1, 0);
-	    if (addr[1] < 0)
-	        throw Error('Could not allocate memory.');
-
-	    var ab = frame(addr, size);
-	    return ab;
-	}
-
-
-	function StaticArrayBuffer(size, prot) {
-	    var ab;
-	    if(size instanceof ArrayBuffer) {
-	        ab = size;
-	    } else {
-	        ab = alloc(size, prot);
-	    }
-	    ab.__proto__ = StaticArrayBuffer.prototype;
-	    return ab;
-	}
-
-	ArrayBuffer.Static = StaticArrayBuffer;
-
-	StaticArrayBuffer.alloc = function(size, prot) {
-	    return new StaticArrayBuffer(size, prot);
-	};
-
-	StaticArrayBuffer.allocAt = function(addr, size) {
-	    return new StaticArrayBuffer(allocAt(addr, size));
-	};
-
-	StaticArrayBuffer.isStaticArrayBuffer = function(sab) {
-	    if((sab instanceof StaticArrayBuffer) && (typeof sab.getAddress === 'function')) return true;
-	    return false;
-	};
-
-	StaticArrayBuffer.prototype.__proto__ =
-	    ArrayBuffer.prototype;
-
-	StaticArrayBuffer.prototype.call = function(args, offset) {
-	    // if(!args) args = [];
-	    if(!offset) offset = 0;
-	    return libsys.call(this, offset, args);
-	};
-
-	StaticArrayBuffer.prototype.setProtection = function(prot) {
-	    var protnum = prot2num(prot);
-	    // return libjs.mprotect(this, this.length, protnum);
-	    var libjs = __webpack_require__(9);
-	    var res = libjs.mprotect(this, this.length, protnum);
-	    if(res < -1) throw Error('Could not change protection level.');
-	};
-
-	StaticArrayBuffer.prototype.free = function() {
-	    var libjs = __webpack_require__(9);
-	    var res = libjs.munmap(this, this.length);
-	    if(res < 0) throw Error('Error on freeing memory.');
-	};
-
-	StaticArrayBuffer.prototype.getAddress = function(offset) {
-	    return process.getAddress(this, offset);
-	};
-
-
-/***/ },
-/* 41 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var StaticArrayBuffer = __webpack_require__(40).StaticArrayBuffer;
-
-
-	exports.StaticBuffer = StaticBuffer;
-
-
-	function toChar(num) {
-	    if(num < 30) return '.';
-	    else return String.fromCharCode(num);
-	}
-
-	function printBuffer(buf) {
-	    var int_size = 8;
-	    var ints = Math.ceil(buf.length / int_size);
-	    var lines = [];
-
-	    for(var j = 0; j < ints; j++) {
-	        var parts = [];
-	        var chars = [];
-
-	        var addr = '';
-	        addr = (j * int_size).toString();
-	        if(addr.length < 6)
-	            addr = (new Array(7 - addr.length)).join('0') + addr;
-
-	        parts.push(addr + ' ');
-
-	        for(var m = 0; m < int_size; m++) {
-	            var index = (j * int_size) + m;
-	            if(index >= buf.length) break;
-	            var char = buf[index];
-	            chars.push(toChar(char));
-	            var hex = char.toString(16);
-	            if(hex.length === 1) hex = '0' + hex;
-	            parts.push(hex);
-	        }
-
-	        var len = parts.join(' ').length;
-	        if(len < 32) parts.push((new Array(32 - len)).join(' '))
-	        else parts.push('  ');
-	        parts.push(chars.join(''));
-	        lines.push(parts.join(' '));
-	    }
-
-	    var str = lines.join('\n');
-	    console.log(str);
-	}
-
-
-	// function bufferNew(size) {
-	//     return new Buffer(size); // Node < 6.0
-	// return Buffer.allocUnsafe(size); // Node 6.0
-	// }
-
-	function bufferFrom(arr, a, b) {
-	    return new Buffer(arr, a, b); // Node < 6.0
-	    // return Buffer.from(arr, a, b); // Node 6.0
-	}
-
-	// function StaticBuffer(staticArrayBuffer, byteOffset, length);
-	// function StaticBuffer(size, prot);
-	function StaticBuffer(a, b, c) {
-	    var buf;
-	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
-	        var staticArrayBuffer = a, byteOffset = b, length = c;
-	        if(!byteOffset) byteOffset = 0;
-	        if(!length) length = staticArrayBuffer.byteLength;
-	        buf = bufferFrom(staticArrayBuffer);
-	        buf = buf.slice(byteOffset, byteOffset + length);
-	    } else if(typeof a === 'number') {
-	        var size = a, prot = b;
-	        var sab = new StaticArrayBuffer(size, prot);
-	        buf = bufferFrom(sab);
-	    } else
-	        throw TypeError('Invalid StaticBuffer constructor arguments.');
-
-	    buf.__proto__ = StaticBuffer.prototype;
-	    return buf;
-	}
-
-	Buffer.Static = StaticBuffer;
-
-	StaticBuffer.isStaticBuffer = function(sbuf) {
-	    if((sbuf instanceof StaticBuffer) && (typeof sbuf.getAddress === 'function')) return true;
-	    else return false;
-	};
-
-	StaticBuffer.allocUnsafe = function(size, prot) {
-	    return new StaticBuffer(size, prot);
-	};
-
-	StaticBuffer.alloc = function(size, fill, encoding, prot) {
-	    var sab = new StaticBuffer(size, prot);
-	    sab.fill(fill, 0, sab.length, encoding);
-	    return sab;
-	};
-
-	StaticBuffer.from = function(obj, a, b, c) {
-	    if(obj instanceof Array) {
-	        var array = obj;
-	        var size = array.length;
-	        var prot = a;
-	        var sbuf = new StaticBuffer(size, prot);
-
-	        // var buf = bufferFrom(array);
-	        // buf.copy(sbuf);
-	        for(var i = 0; i < array.length; i++)
-	            sbuf[i] = array[i];
-
-	        return sbuf;
-	    } else if(StaticArrayBuffer.isStaticArrayBuffer(obj)) {
-	        var staticArrayBuffer = obj, byteOffset = a, length = b;
-	        return new StaticBuffer(staticArrayBuffer, byteOffset, length);
-	    } else if(obj instanceof ArrayBuffer) {
-	        var arrayBuffer = obj, byteOffset = a, length = b, prot = c;
-	        var buf = bufferFrom(arrayBuffer, byteOffset, length);
-	        var size = buf.length;
-	        var sbuf = new StaticBuffer(size, prot);
-	        sbuf.fill(buf);
-	        return sbuf;
-	    } else if(obj instanceof Uint8Array) {
-	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
-	        var buf = bufferFrom(obj);
-	        var size = buf.length;
-	        var prot = a;
-	        var sbuf = new StaticBuffer(size, prot);
-	        sbuf.fill(buf);
-	        return sbuf;
-	    } else
-	        throw TypeError("Don't know how to create StaticBuffer from this type.");
-	};
-
-	StaticBuffer.prototype.__proto__ =
-	    Buffer.prototype;
-
-	StaticBuffer.prototype.call = function(args, offset) {
-	    if(!args) args = [];
-	    if(!offset) offset = 0;
-	    return this.buffer.call(args, this.byteOffset + offset);
-	};
-
-	StaticBuffer.prototype.getAddress = function(offset) {
-	    if(!offset) offset = 0;
-	    return this.buffer.getAddress(this.buffer.byteOffset + offset);
-	};
-
-	// In general we extend the `Buffer` object and all methods return
-	// either something that is not buffer or `Buffer` objects that is `this`
-	// except for `.slice()` method that creates a new `Buffer`. We overwrite it
-	// because we want to return an object of `StaticBuffer` instead.
-	StaticBuffer.prototype.slice = function(start, end) {
-	    if(!start) start = 0;
-	    if(!end) end = this.length;
-	    if(typeof start !== 'number') throw TypeError('start must be number');
-	    if(typeof end !== 'number') throw TypeError('end must be number');
-	    var length = end - start;
-	    if(length <= 0) throw TypeError('end must be greater than start');
-	    return new StaticBuffer(this.buffer, start, length);
-	};
-
-	StaticBuffer.prototype.print = function() {
-	    printBuffer(this);
-	};
-
-
-/***/ },
-/* 42 */
-/***/ function(module, exports, __webpack_require__) {
-
-	'use strict';
-
-	// the sys module was renamed to 'util'.
-	// this shim remains to keep old programs working.
-	// sys is deprecated and shouldn't be used
-
-	module.exports = __webpack_require__(43);
-	util.printDeprecationMessage('sys is deprecated. Use util instead.');
-
-
-/***/ },
-/* 43 */
-/***/ function(module, exports) {
-
-	module.exports = require("util");
-
-/***/ },
-/* 44 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify
