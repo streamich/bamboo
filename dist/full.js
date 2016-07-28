@@ -106,21 +106,19 @@ var global = this;
 	// Export `Buffer` as global. Other things use `Buffer`, so we export Buffer first.
 	Buffer = global.Buffer = __webpack_require__(2).Buffer;
 
+	var haveBinaryTools = process.call && process.frame;
 
-	// Export `StaticArrayBuffer`, required by `StaticBuffer`.
-	StaticArrayBuffer = global.StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
+	if(haveBinaryTools) {
+	    // Export `StaticArrayBuffer`, required by `StaticBuffer`.
+	    StaticArrayBuffer = global.StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
 
-
-	// Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
-	StaticBuffer = global.StaticBuffer = __webpack_require__(11).StaticBuffer;
+	    // Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
+	    StaticBuffer = global.StaticBuffer = __webpack_require__(11).StaticBuffer;
+	}
 
 
 	// Set-up `process` global.
 	__webpack_require__(12);
-
-	var sab = StaticArrayBuffer.alloc(10, 'rwe');
-	console.log(process.getAddress(sab));
-	sab.free();
 
 
 	// The main event loop, attached to `process` as `loop` property.
@@ -150,19 +148,23 @@ var global = this;
 	    // bet executed in this callback so all the micro-tasks get correctly
 	    // executed after this first task is processed.
 
+
+	    // Create `process.asyscall` and `process.asyscall64`
+	    if(haveBinaryTools && (true))
+	        __webpack_require__(17);
+
+
 	    try {
 
 	        // Eval the file specified in first argument `full app.js`
 	        if(process.argv[1]) {
-	            var path = __webpack_require__(17);
-	            var Module = __webpack_require__(20).Module;
-	            console.log(process.cwd());
-	            console.log(process.argv[1]);
+	            var path = __webpack_require__(21);
+	            var Module = __webpack_require__(24).Module;
+	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
-	            console.log(process.argv[1]);
-	            // setImmediate(function() {
-	            //     Module.runMain();
-	            // });
+	            setImmediate(function() {
+	                Module.runMain();
+	            });
 	        }
 
 	    } catch(e) {
@@ -174,7 +176,6 @@ var global = this;
 	};
 	loop.insert(task);
 	loop.start();
-
 
 
 /***/ },
@@ -193,7 +194,9 @@ var global = this;
 	 */
 
 
-	// The absence of semicolons breaks my editor ffs
+	// The absence of semicolons breaks my editor ffs,
+	// TODO: Let's use the no-ArrayBuffer feature to suuport JS engines that don't have ArrayBuffers.
+
 
 	var lookup = []
 	var revLookup = []
@@ -341,9 +344,10 @@ var global = this;
 	 * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
 	 * get the Object implementation, which is slower but behaves correctly.
 	 */
-	Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
-	    ? global.TYPED_ARRAY_SUPPORT
-	    : typedArraySupport()
+	Buffer.TYPED_ARRAY_SUPPORT = true;
+	// Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+	//     ? global.TYPED_ARRAY_SUPPORT
+	//     : typedArraySupport()
 
 	/*
 	 * Export kMaxLength after typed array support is determined.
@@ -411,7 +415,9 @@ var global = this;
 	        }
 	        return allocUnsafe(this, arg)
 	    }
-	    return from(this, arg, encodingOrOffset, length)
+
+	    var buf = from(this, arg, encodingOrOffset, length)
+	    return buf;
 	}
 
 	Buffer.poolSize = 8192 // not used by this implementation
@@ -567,6 +573,7 @@ var global = this;
 	        // Fallback: Return an object instance of the Buffer class
 	        that = fromArrayLike(that, array)
 	    }
+
 	    return that
 	}
 
@@ -3472,8 +3479,9 @@ var global = this;
 	    // return Buffer.from(arr, a, b); // Node 6.0
 	}
 
-	// function StaticBuffer(staticArrayBuffer, byteOffset, length);
-	// function StaticBuffer(size, prot);
+
+	// new StaticBuffer(size);
+	// new StaticBuffer(staticArrayBuffer, byteOffset, length);
 	function StaticBuffer(a, b, c) {
 	    var buf;
 	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
@@ -3481,10 +3489,12 @@ var global = this;
 	        if(!byteOffset) byteOffset = 0;
 	        if(!length) length = staticArrayBuffer.byteLength;
 	        buf = bufferFrom(staticArrayBuffer);
-	        buf = buf.slice(byteOffset, byteOffset + length);
+	        if((byteOffset !== 0) || (length !== staticArrayBuffer.byteLength)) {
+	            buf = buf.slice(byteOffset, byteOffset + length);
+	        }
 	    } else if(typeof a === 'number') {
-	        var size = a, prot = b;
-	        var sab = new StaticArrayBuffer(size, prot);
+	        var size = a;
+	        var sab = new StaticArrayBuffer(size);
 	        buf = bufferFrom(sab);
 	    } else
 	        throw TypeError('Invalid StaticBuffer constructor arguments.');
@@ -3493,84 +3503,110 @@ var global = this;
 	    return buf;
 	}
 
-	Buffer.Static = StaticBuffer;
+
+	// # Static methods
 
 	StaticBuffer.isStaticBuffer = function(sbuf) {
 	    if((sbuf instanceof StaticBuffer) && (typeof sbuf.getAddress === 'function')) return true;
 	    else return false;
 	};
 
-	StaticBuffer.allocUnsafe = function(size, prot) {
-	    return new StaticBuffer(size, prot);
+	StaticBuffer.alloc = function(size, prot) {
+	    var arr;
+	    if(size instanceof Array) {
+	        arr = size;
+	        size = size.length;
+	    }
+	    var sab = StaticArrayBuffer.alloc(size, prot);
+	    var sb = new StaticBuffer(sab);
+
+	    if(arr) sb.fillWith(arr);
+	    return sb;
 	};
 
-	StaticBuffer.alloc = function(size, fill, encoding, prot) {
-	    var sab = new StaticBuffer(size, prot);
-	    sab.fill(fill, 0, sab.length, encoding);
-	    return sab;
+	StaticBuffer.allocSafe = function(size, fill, encoding, prot) {
+	    var sb = StaticBuffer.alloc(size, prot);
+	    sb.fill(fill, 0, sab.length, encoding);
+	    return sb;
 	};
 
-	StaticBuffer.from = function(obj, a, b, c) {
+	StaticBuffer.frame = function(address, size) {
+	    var sab = StaticArrayBuffer.frame(address, size);
+	    return new StaticBuffer(sab);
+	};
+
+	// StaticBuffer.from([1, 2, 3]);
+	// StaticBuffer.from(new StaticArrayBuffer(100));
+	// StaticBuffer.from(new ArrayBuffer(100));
+	StaticBuffer.from = function(obj, a, b) {
 	    if(obj instanceof Array) {
 	        var array = obj;
 	        var size = array.length;
-	        var prot = a;
-	        var sbuf = new StaticBuffer(size, prot);
-
-	        // var buf = bufferFrom(array);
-	        // buf.copy(sbuf);
-	        for(var i = 0; i < array.length; i++)
-	            sbuf[i] = array[i];
-
-	        return sbuf;
+	        var sb = new StaticBuffer(size);
+	        for(var i = 0; i < size; i++) sbuf[i] = array[i];
+	        return sb;
 	    } else if(StaticArrayBuffer.isStaticArrayBuffer(obj)) {
 	        var staticArrayBuffer = obj, byteOffset = a, length = b;
 	        return new StaticBuffer(staticArrayBuffer, byteOffset, length);
 	    } else if(obj instanceof ArrayBuffer) {
-	        var arrayBuffer = obj, byteOffset = a, length = b, prot = c;
-	        var buf = bufferFrom(arrayBuffer, byteOffset, length);
-	        var size = buf.length;
-	        var sbuf = new StaticBuffer(size, prot);
-	        sbuf.fill(buf);
-	        return sbuf;
+	        var arrayBuffer = obj, byteOffset = a, length = b;
+	        return StaticBuffer.from(new StaticArrayBuffer(arrayBuffer), byteOffset, length);
 	    } else if(obj instanceof Uint8Array) {
 	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
-	        var buf = bufferFrom(obj);
-	        var size = buf.length;
-	        var prot = a;
-	        var sbuf = new StaticBuffer(size, prot);
-	        sbuf.fill(buf);
-	        return sbuf;
+	        var sb = new StaticBuffer(obj.length);
+	        sb.fill(obj);
+	        return sb;
 	    } else
-	        throw TypeError("Don't know how to create StaticBuffer from this type.");
+	        throw TypeError("Do not know how to create StaticBuffer from this type.");
 	};
+
+
+
 
 	StaticBuffer.prototype.__proto__ =
 	    Buffer.prototype;
 
-	StaticBuffer.prototype.call = function(args, offset) {
-	    if(!args) args = [];
-	    if(!offset) offset = 0;
-	    return this.buffer.call(args, this.byteOffset + offset);
+
+
+	// # Member instance methods
+
+	// Execute machine code inside the buffer.
+	StaticBuffer.prototype.call = function(offset, args) {
+	    offset += this.byteOffset;
+	    return this.buffer.call(offset, args);
 	};
 
 	StaticBuffer.prototype.getAddress = function(offset) {
 	    if(!offset) offset = 0;
-	    return this.buffer.getAddress(this.buffer.byteOffset + offset);
+	    offset += this.byteOffset;
+	    return this.buffer.getAddress(offset);
 	};
 
-	// In general we extend the `Buffer` object and all methods return
-	// either something that is not buffer or `Buffer` objects that is `this`
-	// except for `.slice()` method that creates a new `Buffer`. We overwrite it
-	// because we want to return an object of `StaticBuffer` instead.
+	// We don't add `setProtection` and `free` methods to `StaticBuffer`
+	// because those are really specific to the underlying `StaticArrayBuffer`.
+
+	// We extend the `Buffer`. In general, all methods of `Buffer` return
+	// something that IS NOT a `Buffer` OR they return `this`.
+	//
+	// The exception is `.slice()` method that creates a new `Buffer`, but
+	// we need to return `StaticBuffer`. So we override it here.
 	StaticBuffer.prototype.slice = function(start, end) {
 	    if(!start) start = 0;
 	    if(!end) end = this.length;
-	    if(typeof start !== 'number') throw TypeError('start must be number');
-	    if(typeof end !== 'number') throw TypeError('end must be number');
+	    if(typeof start !== 'number')   throw TypeError('start must be number');
+	    if(typeof end !== 'number')     throw TypeError('end must be number');
 	    var length = end - start;
 	    if(length <= 0) throw TypeError('end must be greater than start');
 	    return new StaticBuffer(this.buffer, start, length);
+	};
+
+
+	StaticBuffer.prototype.fillWith = function(arr, offset, offsetArr, len) {
+	    if(!offset) offset = 0;
+	    if(!offsetArr) offsetArr = 0;
+	    if(!len) len = arr.length;
+	    for(var i = 0; i < len; i++)
+	        this[offset + i] = arr[offsetArr + i];
 	};
 
 
@@ -4793,9 +4829,214 @@ var global = this;
 /* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
+	"use strict";
+	var index_1 = __webpack_require__(18);
+	var ctypes_1 = __webpack_require__(10);
+	var asyscall = new index_1.Asyscall;
+	asyscall.build();
+	process.asyscall64 = asyscall.exec.bind(asyscall);
+	process.asyscall = function () {
+	    var callback = arguments[arguments.length - 1];
+	    arguments[arguments.length - 1] = function (num64) {
+	        if (num64[1] === 0)
+	            callback(num64[0]);
+	        else
+	            callback(ctypes_1.UInt64.joinToNumber(num64[1], num64[0]));
+	    };
+	    process.asyscall64.apply(null, arguments);
+	};
+
+
+/***/ },
+/* 18 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var util_1 = __webpack_require__(19);
+	var Asyscall = (function () {
+	    function Asyscall() {
+	        this.sb = null;
+	        this.threads = 0;
+	        this.queue = 100;
+	        this.intsize = 8;
+	        this.stackSize = 10 * this.intsize;
+	        this.stacksSize = 0;
+	        this.queueBlockSize = 8 * this.intsize;
+	        this.queueLength = 0;
+	        this.queueSize = 0;
+	        this.id = 0;
+	        this.offset = 0;
+	        this.offsetStart = 0;
+	        this.offsetEnd = 0;
+	        this.errorTimeout = util_1.UInt64.toNumber64(-1);
+	    }
+	    Asyscall.prototype.nextId = function () {
+	        return (this.id + 1) % 0x7FFFFFFF;
+	    };
+	    Asyscall.prototype.nextOffset = function () {
+	        var offset = this.offset + this.queueBlockSize;
+	        if (offset > this.offsetEnd)
+	            return this.offsetStart;
+	        else
+	            return offset;
+	    };
+	    Asyscall.prototype.build = function () {
+	        var threads = 2;
+	        var queue = 3;
+	        this.threads = threads;
+	        this.stacksSize = this.threads * this.stackSize;
+	        this.queue = queue;
+	        this.queueSize = this.queue * this.queueBlockSize;
+	        var bin = __webpack_require__(20);
+	        this.sb = StaticBuffer.alloc(bin.length + this.queueSize, 'rwe');
+	        for (var i = 0; i < bin.length; i++)
+	            this.sb[i] = bin[i];
+	        for (i = bin.length; i < bin.length + this.queueSize; i++)
+	            this.sb[i] = 0;
+	        this.offsetStart = this.sb.length - this.queueSize;
+	        this.offset = this.offsetStart;
+	        this.offsetEnd = this.sb.length - this.queueBlockSize;
+	        this.sb.call();
+	    };
+	    Asyscall.prototype.exec = function () {
+	        var _this = this;
+	        var id = this.id = this.nextId();
+	        var offset = this.offset;
+	        var buf = this.sb;
+	        buf.writeInt32LE(0, this.nextOffset());
+	        buf.writeInt32LE(id, offset + 4);
+	        var offset_args = offset + 8;
+	        var callback;
+	        for (var j = 0; j < arguments.length; j++) {
+	            var arg = arguments[j];
+	            if (typeof arg === 'function') {
+	                callback = arg;
+	                break;
+	            }
+	            else {
+	                if (typeof arg === 'number') {
+	                    var _a = util_1.UInt64.toNumber64(arg), lo = _a[0], hi = _a[1];
+	                    buf.writeInt32LE(lo, offset_args + (j * 8));
+	                    buf.writeInt32LE(hi, offset_args + (j * 8) + 4);
+	                }
+	                else if (arg instanceof Array) {
+	                    buf.writeInt32LE(arg[0], offset_args + (j * 8));
+	                    buf.writeInt32LE(arg[1], offset_args + (j * 8) + 4);
+	                }
+	                else if (typeof arg === 'string') {
+	                }
+	            }
+	        }
+	        for (var j = arguments.length; j < 7; j++) {
+	            buf.writeInt32LE(0, offset_args + (j * 8));
+	            buf.writeInt32LE(0, offset_args + (j * 8) + 4);
+	        }
+	        buf.writeInt32LE(1, offset);
+	        this.offset = this.nextOffset();
+	        var poll = function () {
+	            setIOPoll(function () {
+	                var id_read = buf.readInt32LE(offset + 4);
+	                if (id_read !== id) {
+	                    callback(_this.errorTimeout);
+	                    return;
+	                }
+	                var lock = buf[offset];
+	                if (lock === 3) {
+	                    var result = [buf.readInt32LE(offset + (7 * 8)), buf.readInt32LE(offset + (7 * 8) + 4)];
+	                    callback(result);
+	                }
+	                else
+	                    poll();
+	            });
+	        };
+	        poll();
+	    };
+	    Asyscall.prototype.stop = function () {
+	        for (var offset = this.offsetStart; offset <= this.offsetEnd; offset += this.queueBlockSize) {
+	            this.sb.writeInt32LE(4, offset);
+	            this.id = this.nextId();
+	            this.sb.writeInt32LE(this.id, offset + 4);
+	        }
+	        this.sb.free();
+	    };
+	    return Asyscall;
+	}());
+	exports.Asyscall = Asyscall;
+
+
+/***/ },
+/* 19 */
+/***/ function(module, exports) {
+
+	"use strict";
+	function noop() { }
+	exports.noop = noop;
+	function extend(obj1, obj2) {
+	    var objs = [];
+	    for (var _i = 2; _i < arguments.length; _i++) {
+	        objs[_i - 2] = arguments[_i];
+	    }
+	    if (typeof obj2 === 'object')
+	        for (var i in obj2)
+	            obj1[i] = obj2[i];
+	    if (objs.length)
+	        return extend.apply(null, [obj1].concat(objs));
+	    else
+	        return obj1;
+	}
+	exports.extend = extend;
+	var UInt64 = (function () {
+	    function UInt64() {
+	    }
+	    UInt64.hi = function (a, lo) {
+	        if (lo === void 0) { lo = UInt64.lo(a); }
+	        var hi = a - lo;
+	        hi /= 4294967296;
+	        return hi;
+	    };
+	    UInt64.lo = function (a) {
+	        var lo = a | 0;
+	        if (lo < 0)
+	            lo += 4294967296;
+	        return lo;
+	    };
+	    UInt64.joinToNumber = function (hi, lo) {
+	        if (lo < 0)
+	            lo += 4294967296;
+	        return hi * 4294967296 + lo;
+	    };
+	    UInt64.toNumber = function (num64) {
+	        var lo = num64[0], hi = num64[1];
+	        if (lo < 0)
+	            lo += 4294967296;
+	        return hi * 4294967296 + lo;
+	    };
+	    UInt64.toNumber64 = function (num) {
+	        var lo = num | 0;
+	        if (lo < 0)
+	            lo += 4294967296;
+	        var hi = num - lo;
+	        hi /= 4294967296;
+	        return [lo, hi];
+	    };
+	    return UInt64;
+	}());
+	exports.UInt64 = UInt64;
+
+
+/***/ },
+/* 20 */
+/***/ function(module, exports) {
+
+	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,80,0,0,0,72,247,225,72,141,53,171,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,53,58,1,0,0,77,137,247,73,129,199,192,24,0,0,77,137,245,77,57,253,118,3,77,137,245,65,139,69,0,131,248,4,116,87,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,231,131,248,1,117,60,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,42,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,73,131,197,64,235,152,65,199,69,8,190,186,0,0,72,199,192,60,0,0,0,15,5,195,15,31,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0];
+
+/***/ },
+/* 21 */
+/***/ function(module, exports, __webpack_require__) {
+
 	'use strict';
 
-	const inspect = __webpack_require__(18).inspect;
+	const inspect = __webpack_require__(22).inspect;
 
 	function assertPath(path) {
 	    if (typeof path !== 'string') {
@@ -6396,7 +6637,7 @@ var global = this;
 
 
 /***/ },
-/* 18 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Buffer = __webpack_require__(2).Buffer;
@@ -6641,7 +6882,7 @@ var global = this;
 
 	function ensureDebugIsInitialized() {
 	    if (Debug === undefined) {
-	        const runInDebugContext = __webpack_require__(19).runInDebugContext;
+	        const runInDebugContext = __webpack_require__(23).runInDebugContext;
 	        Debug = runInDebugContext('Debug');
 	    }
 	}
@@ -7409,13 +7650,13 @@ var global = this;
 
 
 /***/ },
-/* 19 */
+/* 23 */
 /***/ function(module, exports) {
 
 	module.exports = require("vm");
 
 /***/ },
-/* 20 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -7431,14 +7672,14 @@ var global = this;
 	// though it might not be 100% compatible with Node.js.
 
 
-	var NativeModule = __webpack_require__(21).NativeModule;
-	var util = __webpack_require__(18);
-	var internalModule = __webpack_require__(37);
-	var internalUtil = __webpack_require__(27);
-	var vm = __webpack_require__(40);
-	var assert = __webpack_require__(32).ok;
-	var fs = __webpack_require__(34);
-	var path = __webpack_require__(17);
+	var NativeModule = __webpack_require__(25).NativeModule;
+	var util = __webpack_require__(22);
+	var internalModule = __webpack_require__(41);
+	var internalUtil = __webpack_require__(31);
+	var vm = __webpack_require__(45);
+	var assert = __webpack_require__(36).ok;
+	var fs = __webpack_require__(38);
+	var path = __webpack_require__(21);
 	var libjs = __webpack_require__(6);
 
 	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -8142,7 +8383,7 @@ var global = this;
 
 
 /***/ },
-/* 21 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function NativeModule(id) {
@@ -8255,7 +8496,7 @@ var global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(22)("./" + this.id);
+	        this.exports = __webpack_require__(26)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -8271,36 +8512,38 @@ var global = this;
 
 
 /***/ },
-/* 22 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./_stream_duplex": 23,
-		"./_stream_passthrough": 29,
-		"./_stream_readable": 24,
-		"./_stream_transform": 28,
-		"./_stream_writable": 26,
-		"./assert": 32,
+		"./_stream_duplex": 27,
+		"./_stream_passthrough": 33,
+		"./_stream_readable": 28,
+		"./_stream_transform": 32,
+		"./_stream_writable": 30,
+		"./assert": 36,
 		"./boot": 1,
 		"./buffer": 2,
-		"./console": 33,
+		"./console": 37,
 		"./eloop": 15,
 		"./events": 13,
-		"./fs": 34,
-		"./internal/module": 37,
-		"./internal/streams/BufferList": 30,
-		"./internal/streams/lazy_transform": 39,
-		"./internal/util": 27,
-		"./module": 20,
-		"./native_module": 21,
-		"./path": 17,
+		"./fs": 38,
+		"./internal/asyscall": 17,
+		"./internal/module": 41,
+		"./internal/streams/BufferList": 34,
+		"./internal/streams/lazy_transform": 43,
+		"./internal/util": 31,
+		"./module": 24,
+		"./native_module": 25,
+		"./path": 21,
 		"./process": 12,
+		"./punycode": 44,
 		"./static-arraybuffer": 5,
 		"./static-buffer": 11,
-		"./stream": 25,
+		"./stream": 29,
 		"./timers": 16,
-		"./util": 18,
-		"./vm": 40
+		"./util": 22,
+		"./vm": 45
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -8313,11 +8556,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 22;
+	webpackContext.id = 26;
 
 
 /***/ },
-/* 23 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a duplex stream is just a stream that is both readable and writable.
@@ -8329,9 +8572,9 @@ var global = this;
 
 	module.exports = Duplex;
 
-	const util = __webpack_require__(18);
-	const Readable = __webpack_require__(24);
-	const Writable = __webpack_require__(26);
+	const util = __webpack_require__(22);
+	const Readable = __webpack_require__(28);
+	const Writable = __webpack_require__(30);
 
 	util.inherits(Duplex, Readable);
 
@@ -8380,7 +8623,7 @@ var global = this;
 
 
 /***/ },
-/* 24 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -8389,11 +8632,11 @@ var global = this;
 	Readable.ReadableState = ReadableState;
 
 	const EE = __webpack_require__(13);
-	const Stream = __webpack_require__(25);
+	const Stream = __webpack_require__(29);
 	const Buffer = __webpack_require__(2).Buffer;
-	const util = __webpack_require__(18);
+	const util = __webpack_require__(22);
 	const debug = util.debuglog('stream');
-	const BufferList = __webpack_require__(30);
+	const BufferList = __webpack_require__(34);
 	var StringDecoder;
 
 	util.inherits(Readable, Stream);
@@ -8481,7 +8724,7 @@ var global = this;
 	    this.encoding = null;
 	    if (options.encoding) {
 	        if (!StringDecoder)
-	            StringDecoder = __webpack_require__(31).StringDecoder;
+	            StringDecoder = __webpack_require__(35).StringDecoder;
 	        this.decoder = new StringDecoder(options.encoding);
 	        this.encoding = options.encoding;
 	    }
@@ -8601,7 +8844,7 @@ var global = this;
 	// backwards compatibility.
 	Readable.prototype.setEncoding = function(enc) {
 	    if (!StringDecoder)
-	        StringDecoder = __webpack_require__(31).StringDecoder;
+	        StringDecoder = __webpack_require__(35).StringDecoder;
 	    this._readableState.decoder = new StringDecoder(enc);
 	    this._readableState.encoding = enc;
 	    return this;
@@ -9361,7 +9604,7 @@ var global = this;
 
 
 /***/ },
-/* 25 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -9369,14 +9612,14 @@ var global = this;
 	module.exports = Stream;
 
 	const EE = __webpack_require__(13);
-	const util = __webpack_require__(18);
+	const util = __webpack_require__(22);
 
 	util.inherits(Stream, EE);
-	Stream.Readable = __webpack_require__(24);
-	Stream.Writable = __webpack_require__(26);
-	Stream.Duplex = __webpack_require__(23);
-	Stream.Transform = __webpack_require__(28);
-	Stream.PassThrough = __webpack_require__(29);
+	Stream.Readable = __webpack_require__(28);
+	Stream.Writable = __webpack_require__(30);
+	Stream.Duplex = __webpack_require__(27);
+	Stream.Transform = __webpack_require__(32);
+	Stream.PassThrough = __webpack_require__(33);
 
 	// Backwards-compat with node 0.4.x
 	Stream.Stream = Stream;
@@ -9474,7 +9717,7 @@ var global = this;
 
 
 /***/ },
-/* 26 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// A bit simpler than readable streams.
@@ -9486,9 +9729,9 @@ var global = this;
 	module.exports = Writable;
 	Writable.WritableState = WritableState;
 
-	const util = __webpack_require__(18);
-	const internalUtil = __webpack_require__(27);
-	const Stream = __webpack_require__(25);
+	const util = __webpack_require__(22);
+	const internalUtil = __webpack_require__(31);
+	const Stream = __webpack_require__(29);
 	const Buffer = __webpack_require__(2).Buffer;
 
 	util.inherits(Writable, Stream);
@@ -10010,7 +10253,7 @@ var global = this;
 
 
 /***/ },
-/* 27 */
+/* 31 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -10111,7 +10354,7 @@ var global = this;
 
 
 /***/ },
-/* 28 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a transform stream is a readable/writable stream where you do
@@ -10160,8 +10403,8 @@ var global = this;
 
 	module.exports = Transform;
 
-	const Duplex = __webpack_require__(23);
-	const util = __webpack_require__(18);
+	const Duplex = __webpack_require__(27);
+	const util = __webpack_require__(22);
 	util.inherits(Transform, Duplex);
 
 
@@ -10312,7 +10555,7 @@ var global = this;
 
 
 /***/ },
-/* 29 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a passthrough stream.
@@ -10323,8 +10566,8 @@ var global = this;
 
 	module.exports = PassThrough;
 
-	const Transform = __webpack_require__(28);
-	const util = __webpack_require__(18);
+	const Transform = __webpack_require__(32);
+	const util = __webpack_require__(22);
 	util.inherits(PassThrough, Transform);
 
 	function PassThrough(options) {
@@ -10340,7 +10583,7 @@ var global = this;
 
 
 /***/ },
-/* 30 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -10418,13 +10661,13 @@ var global = this;
 
 
 /***/ },
-/* 31 */
+/* 35 */
 /***/ function(module, exports) {
 
 	module.exports = require("string_decoder");
 
 /***/ },
-/* 32 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
@@ -10455,7 +10698,7 @@ var global = this;
 
 	// UTILITY
 	// const compare = process.binding('buffer').compare;
-	const util = __webpack_require__(18);
+	const util = __webpack_require__(22);
 	const Buffer = __webpack_require__(2).Buffer;
 	const pToString = function(obj) { return Object.prototype.toString.call(obj); };
 
@@ -10799,10 +11042,10 @@ var global = this;
 
 
 /***/ },
-/* 33 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var util = __webpack_require__(18);
+	var util = __webpack_require__(22);
 
 
 	function Console(stdout, stderr) {
@@ -10901,7 +11144,7 @@ var global = this;
 
 	Console.prototype.assert = function(expression) {
 	    if (!expression) {
-	        __webpack_require__(32).ok(false, util.format.apply(null, arguments));
+	        __webpack_require__(36).ok(false, util.format.apply(null, arguments));
 	    }
 	};
 
@@ -10911,25 +11154,25 @@ var global = this;
 
 
 /***/ },
-/* 34 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var build = __webpack_require__(35).build;
+	var build = __webpack_require__(39).build;
 
 
 	var fs = module.exports = build({
-	    path: __webpack_require__(17),
+	    path: __webpack_require__(21),
 	    EventEmitter: __webpack_require__(13).EventEmitter,
 	    Buffer: __webpack_require__(2).Buffer,
-	    Readable: __webpack_require__(25).Readable,
-	    Writable: __webpack_require__(25).Writable
+	    Readable: __webpack_require__(29).Readable,
+	    Writable: __webpack_require__(29).Writable
 	});
 
 
 
 
 /***/ },
-/* 35 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -10939,7 +11182,7 @@ var global = this;
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var libjs = __webpack_require__(6);
-	var inotify_1 = __webpack_require__(36);
+	var inotify_1 = __webpack_require__(40);
 	if (true) {
 	    exports.isFullJS = true;
 	}
@@ -11609,7 +11852,7 @@ var global = this;
 
 
 /***/ },
-/* 36 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -11711,7 +11954,7 @@ var global = this;
 
 
 /***/ },
-/* 37 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var require;'use strict';
@@ -11791,7 +12034,7 @@ var global = this;
 	    Object.defineProperty(object, name, {
 	            get: function() {
 	                var r = require;
-	            var lib = __webpack_require__(38)(name);
+	            var lib = __webpack_require__(42)(name);
 
 	    // Disable the current getter/setter and set up a new
 	    // non-enumerable property.
@@ -11814,14 +12057,15 @@ var global = this;
 
 
 /***/ },
-/* 38 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./module": 37,
-		"./streams/BufferList": 30,
-		"./streams/lazy_transform": 39,
-		"./util": 27
+		"./asyscall": 17,
+		"./module": 41,
+		"./streams/BufferList": 34,
+		"./streams/lazy_transform": 43,
+		"./util": 31
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -11834,11 +12078,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 38;
+	webpackContext.id = 42;
 
 
 /***/ },
-/* 39 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// LazyTransform is a special type of Transform stream that is lazily loaded.
@@ -11846,8 +12090,8 @@ var global = this;
 	// for the stream, one conventional and one non-conventional.
 	'use strict';
 
-	const stream = __webpack_require__(25);
-	const util = __webpack_require__(18);
+	const stream = __webpack_require__(29);
+	const util = __webpack_require__(22);
 
 	module.exports = LazyTransform;
 
@@ -11883,7 +12127,524 @@ var global = this;
 
 
 /***/ },
-/* 40 */
+/* 44 */
+/***/ function(module, exports) {
+
+	'use strict';
+
+	/** Highest positive signed 32-bit float value */
+	var maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	var base = 36;
+	var tMin = 1;
+	var tMax = 26;
+	var skew = 38;
+	var damp = 700;
+	var initialBias = 72;
+	var initialN = 128; // 0x80
+	var delimiter = '-'; // '\x2D'
+
+	/** Regular expressions */
+	var regexPunycode = /^xn--/;
+	var regexNonASCII = /[^\x20-\x7E]/; // unprintable ASCII chars + non-ASCII chars
+	var regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
+
+	/** Error messages */
+	var errors = {
+	    'overflow': 'Overflow: input needs wider integers to process',
+	    'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+	    'invalid-input': 'Invalid input'
+	};
+
+	/** Convenience shortcuts */
+	var baseMinusTMin = base - tMin;
+	var floor = Math.floor;
+	var stringFromCharCode = String.fromCharCode;
+
+
+	// `.fromCodePoint` shim
+	if (!String.fromCodePoint) {
+	    (function() {
+	        var defineProperty = (function() {
+	            // IE 8 only supports `Object.defineProperty` on DOM elements
+	            try {
+	                var object = {};
+	                var $defineProperty = Object.defineProperty;
+	                var result = $defineProperty(object, object, object) && $defineProperty;
+	            } catch(error) {}
+	            return result;
+	        }());
+	        var stringFromCharCode = String.fromCharCode;
+	        var floor = Math.floor;
+	        var fromCodePoint = function() {
+	            var MAX_SIZE = 0x4000;
+	            var codeUnits = [];
+	            var highSurrogate;
+	            var lowSurrogate;
+	            var index = -1;
+	            var length = arguments.length;
+	            if (!length) {
+	                return '';
+	            }
+	            var result = '';
+	            while (++index < length) {
+	                var codePoint = Number(arguments[index]);
+	                if (
+	                    !isFinite(codePoint) ||       // `NaN`, `+Infinity`, or `-Infinity`
+	                    codePoint < 0 ||              // not a valid Unicode code point
+	                    codePoint > 0x10FFFF ||       // not a valid Unicode code point
+	                    floor(codePoint) != codePoint // not an integer
+	                ) {
+	                    throw RangeError('Invalid code point: ' + codePoint);
+	                }
+	                if (codePoint <= 0xFFFF) { // BMP code point
+	                    codeUnits.push(codePoint);
+	                } else { // Astral code point; split in surrogate halves
+	                    // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+	                    codePoint -= 0x10000;
+	                    highSurrogate = (codePoint >> 10) + 0xD800;
+	                    lowSurrogate = (codePoint % 0x400) + 0xDC00;
+	                    codeUnits.push(highSurrogate, lowSurrogate);
+	                }
+	                if (index + 1 == length || codeUnits.length > MAX_SIZE) {
+	                    result += stringFromCharCode.apply(null, codeUnits);
+	                    codeUnits.length = 0;
+	                }
+	            }
+	            return result;
+	        };
+	        if (defineProperty) {
+	            defineProperty(String, 'fromCodePoint', {
+	                'value': fromCodePoint,
+	                'configurable': true,
+	                'writable': true
+	            });
+	        } else {
+	            String.fromCodePoint = fromCodePoint;
+	        }
+	    }());
+	}
+
+
+
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+	    throw new RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+	    var result = [];
+	    var length = array.length;
+	    while (length--) {
+	        result[length] = fn(array[length]);
+	    }
+	    return result;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings or email
+	 * addresses.
+	 * @private
+	 * @param {String} domain The domain name or email address.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+	    var parts = string.split('@');
+	    var result = '';
+	    if (parts.length > 1) {
+	        // In email addresses, only the domain name should be punycoded. Leave
+	        // the local part (i.e. everything up to `@`) intact.
+	        result = parts[0] + '@';
+	        string = parts[1];
+	    }
+	    // Avoid `split(regex)` for IE8 compatibility. See #17.
+	    string = string.replace(regexSeparators, '\x2E');
+	    var labels = string.split('.');
+	    var encoded = map(labels, fn).join('.');
+	    return result + encoded;
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+	    var output = [];
+	    var counter = 0;
+	    var length = string.length;
+	    while (counter < length) {
+	        var value = string.charCodeAt(counter++);
+	        if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+	            // It's a high surrogate, and there is a next character.
+	            var extra = string.charCodeAt(counter++);
+	            if ((extra & 0xFC00) == 0xDC00) { // Low surrogate.
+	                output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+	            } else {
+	                // It's an unmatched surrogate; only append this code unit, in case the
+	                // next code unit is the high surrogate of a surrogate pair.
+	                output.push(value);
+	                counter--;
+	            }
+	        } else {
+	            output.push(value);
+	        }
+	    }
+	    return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	var ucs2encode = function(array) { String.fromCodePoint.apply(null, array); }
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	var basicToDigit = function(codePoint) {
+	    if (codePoint - 0x30 < 0x0A) {
+	        return codePoint - 0x16;
+	    }
+	    if (codePoint - 0x41 < 0x1A) {
+	        return codePoint - 0x41;
+	    }
+	    if (codePoint - 0x61 < 0x1A) {
+	        return codePoint - 0x61;
+	    }
+	    return base;
+	};
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	var digitToBasic = function(digit, flag) {
+	    //  0..25 map to ASCII a..z or A..Z
+	    // 26..35 map to ASCII 0..9
+	    return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	};
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * https://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	var adapt = function(delta, numPoints, firstTime) {
+	    var k = 0;
+	    delta = firstTime ? floor(delta / damp) : delta >> 1;
+	    delta += floor(delta / numPoints);
+	    for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+	        delta = floor(delta / baseMinusTMin);
+	    }
+	    return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	};
+
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	var decode = function(input) {
+	    // Don't use UCS-2.
+	    var output = [];
+	    var inputLength = input.length;
+	    var i = 0;
+	    var n = initialN;
+	    var bias = initialBias;
+
+	    // Handle the basic code points: var `basic` be the number of input code
+	    // points before the last delimiter, or `0` if there is none, then copy
+	    // the first basic code points to the output.
+
+	    var basic = input.lastIndexOf(delimiter);
+	    if (basic < 0) {
+	        basic = 0;
+	    }
+
+	    for (var j = 0; j < basic; ++j) {
+	        // if it's not a basic code point
+	        if (input.charCodeAt(j) >= 0x80) {
+	            error('not-basic');
+	        }
+	        output.push(input.charCodeAt(j));
+	    }
+
+	    // Main decoding loop: start just after the last delimiter if any basic code
+	    // points were copied; start at the beginning otherwise.
+
+	    for (var index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+	        // `index` is the index of the next character to be consumed.
+	        // Decode a generalized variable-length integer into `delta`,
+	        // which gets added to `i`. The overflow checking is easier
+	        // if we increase `i` as we go, then subtract off its starting
+	        // value at the end to obtain `delta`.
+	        var oldi = i;
+	        for (var w = 1, k = base; /* no condition */; k += base) {
+
+	            if (index >= inputLength) {
+	                error('invalid-input');
+	            }
+
+	            var digit = basicToDigit(input.charCodeAt(index++));
+
+	            if (digit >= base || digit > floor((maxInt - i) / w)) {
+	                error('overflow');
+	            }
+
+	            i += digit * w;
+	            var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+	            if (digit < t) {
+	                break;
+	            }
+
+	            var baseMinusT = base - t;
+	            if (w > floor(maxInt / baseMinusT)) {
+	                error('overflow');
+	            }
+
+	            w *= baseMinusT;
+
+	        }
+
+	        var out = output.length + 1;
+	        bias = adapt(i - oldi, out, oldi == 0);
+
+	        // `i` was supposed to wrap around from `out` to `0`,
+	        // incrementing `n` each time, so we'll fix that now:
+	        if (floor(i / out) > maxInt - n) {
+	            error('overflow');
+	        }
+
+	        n += floor(i / out);
+	        i %= out;
+
+	        // Insert `n` at position `i` of the output.
+	        output.splice(i++, 0, n);
+
+	    }
+
+	    return String.fromCodePoint.apply(null, output);
+	};
+
+	/**
+	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
+	 * Punycode string of ASCII-only symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	var encode = function(input) {
+	    var output = [];
+
+	    // Convert the input in UCS-2 to an array of Unicode code points.
+	    input = ucs2decode(input);
+
+	    // Cache the length.
+	    var inputLength = input.length;
+
+	    // Initialize the state.
+	    var n = initialN;
+	    var delta = 0;
+	    var bias = initialBias;
+
+	    // Handle the basic code points.
+	    for (var i = 0; i < input.length; i++) {
+	        var currentValue = input[i];
+	        if (currentValue < 0x80) {
+	            output.push(stringFromCharCode(currentValue));
+	        }
+	    }
+
+	    var basicLength = output.length;
+	    var handledCPCount = basicLength;
+
+	    // `handledCPCount` is the number of code points that have been handled;
+	    // `basicLength` is the number of basic code points.
+
+	    // Finish the basic string with a delimiter unless it's empty.
+	    if (basicLength) {
+	        output.push(delimiter);
+	    }
+
+	    // Main encoding loop:
+	    while (handledCPCount < inputLength) {
+
+	        // All non-basic code points < n have been handled already. Find the next
+	        // larger one:
+	        var m = maxInt;
+	        for (var i = 0; i < input.length; i++) {
+	            var currentValue = input[i];
+	            if (currentValue >= n && currentValue < m) {
+	                m = currentValue;
+	            }
+	        }
+
+	        // Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+	        // but guard against overflow.
+	        var handledCPCountPlusOne = handledCPCount + 1;
+	        if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+	            error('overflow');
+	        }
+
+	        delta += (m - n) * handledCPCountPlusOne;
+	        n = m;
+
+	        for (var i = 0; i < input.length; i++) {
+	            var currentValue = input[i];
+	            if (currentValue < n && ++delta > maxInt) {
+	                error('overflow');
+	            }
+	            if (currentValue == n) {
+	                // Represent delta as a generalized variable-length integer.
+	                var q = delta;
+	                for (var k = base; /* no condition */; k += base) {
+	                    var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+	                    if (q < t) {
+	                        break;
+	                    }
+	                    var qMinusT = q - t;
+	                    var baseMinusT = base - t;
+	                    output.push(
+	                        stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+	                    );
+	                    q = floor(qMinusT / baseMinusT);
+	                }
+
+	                output.push(stringFromCharCode(digitToBasic(q, 0)));
+	                bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+	                delta = 0;
+	                ++handledCPCount;
+	            }
+	        }
+
+	        ++delta;
+	        ++n;
+
+	    }
+	    return output.join('');
+	};
+
+	/**
+	 * Converts a Punycode string representing a domain name or an email address
+	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+	 * it doesn't matter if you call it on a string that has already been
+	 * converted to Unicode.
+	 * @memberOf punycode
+	 * @param {String} input The Punycoded domain name or email address to
+	 * convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	var toUnicode = function(input) {
+	    return mapDomain(input, function(string) {
+	        return regexPunycode.test(string)
+	            ? decode(string.slice(4).toLowerCase())
+	            : string;
+	    });
+	};
+
+	/**
+	 * Converts a Unicode string representing a domain name or an email address to
+	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
+	 * i.e. it doesn't matter if you call it with a domain that's already in
+	 * ASCII.
+	 * @memberOf punycode
+	 * @param {String} input The domain name or email address to convert, as a
+	 * Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name or
+	 * email address.
+	 */
+	var toASCII = function(input) {
+	    return mapDomain(input, function(string) {
+	        return regexNonASCII.test(string)
+	            ? 'xn--' + encode(string)
+	            : string;
+	    });
+	};
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	var punycode = {
+	    /**
+	     * A string representing the current Punycode.js version number.
+	     * @memberOf punycode
+	     * @type String
+	     */
+	    'version': '2.0.0',
+	    /**
+	     * An object of methods to convert from JavaScript's internal character
+	     * representation (UCS-2) to Unicode code points, and back.
+	     * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	     * @memberOf punycode
+	     * @type Object
+	     */
+	    'ucs2': {
+	        'decode': ucs2decode,
+	        'encode': ucs2encode
+	    },
+	    'decode': decode,
+	    'encode': encode,
+	    'toASCII': toASCII,
+	    'toUnicode': toUnicode
+	};
+
+	module.exports = punycode;
+
+
+/***/ },
+/* 45 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify

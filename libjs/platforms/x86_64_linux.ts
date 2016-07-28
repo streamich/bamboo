@@ -912,7 +912,7 @@ export var SYS = {
 
     lseek:          8,  // First version
 
-    mmap:           9,  // Does not work
+    mmap:           9,
     mprotect:       10,
     munmap:         11,
     brk:            12,

@@ -420,12 +420,49 @@ export class EventLoop {
             if(this.shouldStop()) break;
 
 
+            // ----------------------------------------------------------------------------------
+            // TODO:
+            // By here we finished executing all the macro and micro tasks of the current cycle.
+            // Now we need to decide if we have immediate tasks to execute in the next cycle,
+            // or (if don't) we can save CPU cycles by idling. We should use the `nanosleep`,
+            // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
+            //
+            // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
+            // we can use `sched_yield` here, if it is not available on some systems we just create a no-op
+            // shim for it.
+            //
+            // Now, `epoll` syscall is available only on Linux (other systems have different alternatives),
+            // so we don't use it here as-it-is but create an abstraction for it, so that a correct
+            // async mechanism can be used on each system.
+            //
+            // For timer tasks `setInterval` and `setTimeout` we know the exact time when we need
+            // to execute them, for `setImmediate` task we know as well that we have to execute it
+            // immediately. So, if there are only future timer tasks scheduled, we `nanosleep` just
+            // enough to wake up before the task has to be executed.
+            //
+            // The interesting part are async I/O tasks, which are of two types:
+            //
+            //  - Type 1: `process.asyscall` provided by thread pool
+            //  - Type 2: Async I/O provided by kernel using `epoll`
+            //
+            // If there are Type 1 tasks in queue (we should be able to detect that) then we cannot
+            // `nanosleep`, but if there are no immediate tasks to be executed we can `sched_yield`
+            // as it should be an order of magnitude faster than file I/O.
+            //
+            // If there are Type 2 tasks -- we can `epoll` in two ways: with or without a blocking timeout.
+            // We should detect if it is possible and use `epoll` with timeout which effectively
+            // idles the loop up until the timeout is reached or when new events are received.
+            // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
+
+
             // Below we sleep, if the next task to be executed is 10ms+ away in the future,
             // or we yield CPU time, if the next task is within 1-10ms.
             // TODO: what we also could do is if there are no DELAY.IMMEDIATE but there are I/O
             // TODO: requests we could wait on `epoll` syscall for some specified time.
             var ref_ms = this.refQueue.msNextTask();
             var unref_ms = this.unrefQueue.msNextTask();
+
+
             var ms = Math.min(ref_ms, unref_ms);
             if(ms > 10) {
                 if(ms > 10000) ms = 10000;

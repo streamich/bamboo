@@ -3,8 +3,12 @@
 RUNTIME = duktape
 TARGET = full-$(RUNTIME)
 CC = gcc
-CFLAGS = -std=c99
-#AR = ar
+
+# IMPORTANT: Do not enable `-std=c99` in that case system call is defined as
+# `int syscall()`, but we need `long syscall()`, everything will break if you
+# enable `std=c99`.
+#CFLAGS = -std=c99
+CFLAGS =
 
 
 $(TARGET): $(TARGET).c $(RUNTIME).o
@@ -17,4 +21,4 @@ try: try.c $(RUNTIME).o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.o *.a $(TARGET)
+	rm -f *.o *.a $(TARGET) try

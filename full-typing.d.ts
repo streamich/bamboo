@@ -1,6 +1,9 @@
 
 declare var __DEBUG__: boolean;
 
+declare function setIOPoll(callback: (...args: any[]) => void, ...args: any[]): any;
+declare function clearIOPoll(immediateId: any): void;
+
 
 interface StaticArrayBufferConstructor extends ArrayBufferConstructor {
 
@@ -146,6 +149,26 @@ interface IStaticBuffer {
 declare var StaticBuffer: IStaticBuffer;
 
 
+type number64 = [number, number];
+
+
 interface Process extends NodeJS.Process {
     loop: any; // Main event loop
+
+    asyscall(num: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, arg2: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, arg2: number, arg3: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, arg2: number, arg3: number, arg4: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, arg2: number, arg3: number, arg4: number, arg5: number, callback: (res: number) => void);
+    asyscall(num: number, arg1: number, arg2: number, arg3: number, arg4: number, arg5: number, arg6: number, callback: (res: number) => void);
+
+    asyscall64(num: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, arg2: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, arg2: number, arg3: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, arg2: number, arg3: number, arg4: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, arg2: number, arg3: number, arg4: number, arg5: number, callback: (res: number64) => void);
+    asyscall64(num: number, arg1: number, arg2: number, arg3: number, arg4: number, arg5: number, arg6: number, callback: (res: number64) => void);
+
 }

@@ -357,7 +357,7 @@ Other:
 
 *Depends on:* 
 
- - [ ] `Class: dgram.Socket
+ - [ ] `Class: dgram.Socket`
      - [ ] `Event: 'close'`
      - [ ] `Event: 'error'`
      - [ ] `Event: 'listening'`
@@ -377,6 +377,135 @@ Other:
      - [ ] `socket.unref()`
  - [ ] `dgram.createSocket(options[, callback])`
  - [ ] `dgram.createSocket(type[, callback])`
+
+
+### [`dns`](https://nodejs.org/api/dns.html)
+
+*Depends on:* `util`, `dgram`
+
+ - [ ] `dns.getServers()`
+ - [ ] `dns.lookup(hostname[, options], callback)`
+     - [ ] `Supported getaddrinfo flags`
+ - [ ] `dns.lookupService(address, port, callback)`
+ - [ ] `dns.resolve(hostname[, rrtype], callback)`
+ - [ ] `dns.resolve4(hostname, callback)`
+ - [ ] `dns.resolve6(hostname, callback)`
+ - [ ] `dns.resolveCname(hostname, callback)`
+ - [ ] `dns.resolveMx(hostname, callback)`
+ - [ ] `dns.resolveNaptr(hostname, callback)`
+ - [ ] `dns.resolveNs(hostname, callback)`
+ - [ ] `dns.resolveSoa(hostname, callback)`
+ - [ ] `dns.resolveSrv(hostname, callback)`
+ - [ ] `dns.resolvePtr(hostname, callback)`
+ - [ ] `dns.resolveTxt(hostname, callback)`
+ - [ ] `dns.reverse(ip, callback)`
+ - [ ] `dns.setServers(servers)`
+ - [ ] Error codes
+
+
+### [`net`](https://nodejs.org/api/net.html)
+
+*Depends on:* `dns`, `dgram`
+
+ - [ ] `Class: net.Server`
+     - [ ] `Event: 'close'`
+     - [ ] `Event: 'connection'`
+     - [ ] `Event: 'error'`
+     - [ ] `Event: 'listening'`
+     - [ ] `server.address()`
+     - [ ] `server.close([callback])`
+     - [ ] `server.connections`
+     - [ ] `server.getConnections(callback)`
+     - [ ] `server.listen(handle[, backlog][, callback])`
+     - [ ] `server.listen(options[, callback])`
+     - [ ] `server.listen(path[, backlog][, callback])`
+     - [ ] `server.listen(port[, hostname][, backlog][, callback])`
+     - [ ] `server.listening`
+     - [ ] `server.maxConnections`
+     - [ ] `server.ref()`
+     - [ ] `server.unref()`
+ - [ ] `Class: net.Socket`
+     - [ ] `new net.Socket([options])`
+     - [ ] `Event: 'close'`
+     - [ ] `Event: 'connect'`
+     - [ ] `Event: 'data'`
+     - [ ] `Event: 'drain'`
+     - [ ] `Event: 'end'`
+     - [ ] `Event: 'error'`
+     - [ ] `Event: 'lookup'`
+     - [ ] `Event: 'timeout'`
+     - [ ] `socket.address()`
+     - [ ] `socket.bufferSize`
+     - [ ] `socket.bytesRead`
+     - [ ] `socket.bytesWritten`
+     - [ ] `socket.connect(options[, connectListener])`
+     - [ ] `socket.connect(path[, connectListener])`
+     - [ ] `socket.connect(port[, host][, connectListener])`
+     - [ ] `socket.connecting`
+     - [ ] `socket.destroy([exception])`
+     - [ ] `socket.destroyed`
+     - [ ] `socket.end([data][, encoding])`
+     - [ ] `socket.localAddress`
+     - [ ] `socket.localPort`
+     - [ ] `socket.pause()`
+     - [ ] `socket.ref()`
+     - [ ] `socket.remoteAddress`
+     - [ ] `socket.remoteFamily`
+     - [ ] `socket.remotePort`
+     - [ ] `socket.resume()`
+     - [ ] `socket.setEncoding([encoding])`
+     - [ ] `socket.setKeepAlive([enable][, initialDelay])`
+     - [ ] `socket.setNoDelay([noDelay])`
+     - [ ] `socket.setTimeout(timeout[, callback])`
+     - [ ] `socket.unref()`
+     - [ ] `socket.write(data[, encoding][, callback])`
+ - [ ] `net.connect(options[, connectListener])`
+ - [ ] `net.connect(path[, connectListener])`
+ - [ ] `net.connect(port[, host][, connectListener])`
+ - [ ] `net.createConnection(options[, connectListener])`
+ - [ ] `net.createConnection(path[, connectListener])`
+ - [ ] `net.createConnection(port[, host][, connectListener])`
+ - [ ] `net.createServer([options][, connectionListener])`
+ - [ ] `net.isIP(input)`
+ - [ ] `net.isIPv4(input)`
+ - [ ] `net.isIPv6(input)`
+
+
+### [`punycode`](https://nodejs.org/api/punycode.html)
+
+*Depends on:* no dependencies.
+
+ - [X] `punycode.decode(string)`
+ - [X] `punycode.encode(string)`
+ - [X] `punycode.toASCII(domain)`
+ - [X] `punycode.toUnicode(domain)`
+ - [X] `punycode.ucs2`
+     - [X] `punycode.ucs2.decode(string)`
+     - [X] `punycode.ucs2.encode(codePoints)`
+ - [X] `punycode.version`
+
+### [Globals](https://nodejs.org/api/globals.html)
+
+ - [X] `Class: Buffer`
+ - [X] `__dirname`
+ - [X] `__filename`
+ - [X] `clearImmediate(immediateObject)`
+ - [X] `clearInterval(intervalObject)`
+ - [X] `clearTimeout(timeoutObject)`
+ - [ ] `console`
+ - [X] `exports`
+ - [X] `global`
+ - [X] `module`
+ - [X] `process`
+ - [X] `require()`
+ - [X] `require.cache`
+ - [X] `require.extensions`
+ - [X] `require.resolve()`
+ - [X] `setImmediate(callback[, arg][, ...])`
+ - [X] `setInterval(callback, delay[, arg][, ...])`
+ - [X] `setTimeout(callback, delay[, arg][, ...])`
+
+
 
 Below is list of already implemented API and roadmap on how the rest of the API will be implemented.
 

@@ -15,7 +15,7 @@ node_require = require;
 // global.process = process;
 
 
-// Remove first argument, to make compatible with Node.js.
+// Remove first argument
 process.argv = process.argv.splice(1);
 
 
@@ -29,12 +29,18 @@ process.syscall64 = libsys.syscall64;
 
 
 // Additional "nice-to-have" things for full.js, which are optional.
+process.call = libsys.call;
 process.frame = libsys.malloc;
 process.getAddress = libsys.addressArrayBuffer64;
 process.errno = libsys.errno;
 
 
 // Finally, just load `/dist/full.js` and `eval` it.
-var fs = require('fs');
-var full_js = fs.readFileSync(__dirname + '/../../dist/full.js', 'utf8');
-eval(full_js);
+// var full_js = fs.readFileSync(__dirname + '/../../dist/full.js', 'utf8');
+if(!process.argv[1]) {
+    console.log('Please provide path to full.js');
+} else {
+    var fs = require('fs');
+    var full_js = fs.readFileSync(process.argv[1], 'utf8');
+    eval(full_js);
+}
