@@ -12,5 +12,5 @@ setImmediate(print);
 
 
 fs.readFile(__dirname + '/data.txt', function(err, buf) {
-    console.log(err, buf);
+    console.log(buf.toString());
 });

@@ -11,7 +11,7 @@ import {Abi} from '../node_modules/ass-js/abi';
 //
 //      <---------- 32 bits ----------> <---------- 32 bits ----------->
 //     +================================================================+
-//     | Lock                          | Block ID                       |   Block 0
+//     | Lock                          | Threads left                   |
 //     +----------------------------------------------------------------+
 //     | Syscall number                                                 |
 //     +----------------------------------------------------------------+
@@ -57,18 +57,14 @@ const enum CLONE {
 
 export class AsyscallCompiler {
 
-    threads: number     = 0;
     queue: number       = 100;
-    intsize             = 8;
-    stackSize           = 5 * this.intsize;
+    stackSize           = 5 * CONF.INT;
     stacksSize          = 0;
-    blockSize           = 9 * this.intsize; // control INT + syscall num + 6 args + next block pointer
+    blockSize           = 9 * CONF.INT; // control INT + syscall num + 6 args + next block pointer
 
 
-    compile(threads = 2): number[] {
-        const INT = this.intsize;
-        this.threads = threads;
-        this.stacksSize = this.threads * this.stackSize;
+    compile(): number[] {
+        this.stacksSize = CONF.THREADS * this.stackSize;
 
         var _ = new Code;
         var abi = new Abi(_);
@@ -79,7 +75,7 @@ export class AsyscallCompiler {
         var lbl_first_block         = _.lbl('first_block');
 
         // main()
-        for(var j = 1; j <= this.threads; j++) {
+        for(var j = 1; j <= CONF.THREADS; j++) {
             abi.call(func_create_thread, [j], []);
         }
         _._('ret');
@@ -89,13 +85,13 @@ export class AsyscallCompiler {
             _._('mov', [rcx, this.stackSize]);                                  // Stack size
             _._('mul', rcx);                                                    // Stack offset
 
-            _._('lea', [rsi, rip.disp(lbl_stacks.rel(-INT * 2))]);              // Address of stack frame bottom + 1
+            _._('lea', [rsi, rip.disp(lbl_stacks.rel(-CONF.INT * 2))]);         // Address of stack frame bottom + 1
             _._('add', [rsi, rax]);                                             // Address of stack top for this thread, RSI second arg to syscall
 
             _._('lea', [rdx, rip.disp(func_thread.lbl)]);                       // Address of thread function code in top of stack
             _._('mov', [rsi.ref(), rdx]);                                       // Top of stack, RET address
 
-            _._('mov', [rsi.disp(INT), rdi]);                                   // Thread ID in bottom of stack
+            _._('mov', [rsi.disp(CONF.INT), rdi]);                              // Thread ID in bottom of stack
 
             // In C: long clone(unsigned long flags, void *child_stack);
             abi.syscall([SYS.clone, CLONE.THREAD_FLAGS]); // 2nd arg RSI, stack top address
@@ -110,12 +106,13 @@ export class AsyscallCompiler {
 
 
             _._('lea', [curr, rip.disp(lbl_first_block)]);              // R13 = Queue start address
-            _._('mov', [next, curr.disp(INT * 8)]);                     // R14 = Pointer to next block
+            _._('mov', [next, curr.disp(CONF.INT * 8)]);                // R14 = Pointer to next block
 
 
             var lbl_execute_block       = _.lbl('execute_block');
             var lbl_go_to_next_block    = _.lbl('go_to_next_block');
             var lbl_thread_stop         = _.lbl('thread_stop');
+
 
             var lbl_process_block = _.label('process_block');
             _._('mov', [eax, curr.ref()]);                              // Lock in RAX
@@ -144,7 +141,7 @@ export class AsyscallCompiler {
                 curr.disp(CONF.INT * 6),
                 curr.disp(CONF.INT * 7),
             ]);
-            _._('mov', [curr.disp(CONF.INT * 7), rax]);                 // Store syscall result in memory, in place of 6th argument
+            _._('mov', [curr.disp(CONF.INT * 7), rax]);                 // Store syscall result in memory, in place of the 6th argument
             _._('mov', [curr.ref(), LOCK.DONE], 32);                    // Mark block as DONE
 
 
@@ -155,27 +152,34 @@ export class AsyscallCompiler {
             }
 
             _.insert(lbl_go_to_next_block);
-            _._('mov', [curr, next]);
-            _._('mov', [next, curr.disp(CONF.INT * 8)]);
+            _._('add', [curr.disp(4), 1], 32).lock();                   // Mark that this thread left the block.
+            _._('mov', [curr, next]);                                   // Go to next block.
+            _._('mov', [next, curr.disp(CONF.INT * 8)]);                // Store the pointer to the next-next block in register.
             _._('jmp', lbl_process_block);
 
 
             // Stop this thread.
             _.insert(lbl_thread_stop);
             if(__DEBUG__) {
-                _._('mov', [r13.disp(CONF.INT), 0xBEBA]);
+                _._('mov', [r13.disp(CONF.INT), 0xBEBA]);               // Write "BABE" in place of syscall number.
             }
             abi.syscall([SYS.exit]);
         });
 
-        _.align(8);
-        _.db('stack');
+
+        if(__DEBUG__) { // Mark the beginning of stacks
+            _.align(8);
+            _.db('stack');
+        }
         _.align(8);
         _.insert(lbl_stacks);
         _.db(0, this.stacksSize);
 
-        _.align(8);
-        _.db('1 block');
+
+        if(__DEBUG__) { // Mark the beginning of the first block
+            _.align(8);
+            _.db('1 block');
+        }
         _.align(8);
         _.insert(lbl_first_block);
         _.db(0, this.blockSize);

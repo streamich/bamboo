@@ -1,5 +1,6 @@
 import * as libjs from '../libjs/index';
 import {Inotify, IInotifyEvent} from '../libaio/inotify';
+var extend = require('../lib/util').extend;
 
 
 if(__DEBUG__) {
@@ -20,15 +21,18 @@ import {EventEmitter} from 'events';
 //
 //      extend = Object.assign;
 
-function extend(a, b) {
-    for(var i in b) a[i] = b[i];
-    return a;
-}
+// function extend(a, b) {
+//     for(var i in b) a[i] = b[i];
+//     return a;
+// }
 
 function noop(...args: any[]);
 function noop() {}
 
-type Tcallback = (err?: Error, data?: any) => void;
+
+export type Tfile = number|string|Buffer|StaticBuffer;
+export type Tpath = string|Buffer|StaticBuffer;
+export type Tdata = string|Buffer|StaticBuffer;
 
 
 function formatError(errno, func = '', path = '', path2 = '') {
@@ -47,20 +51,20 @@ function throwError(errno, func = '', path = '', path2 = '') {
     throw Error(formatError(errno, func, path, path2));
 }
 
-function pathOrError(path: string|Buffer): string|TypeError {
+function pathOrError(path: Tpath): string|TypeError {
     if(path instanceof Buffer) path = path.toString();
-    if(typeof path !== 'string') return TypeError('path must be a string');
+    if(typeof path !== 'string') return TypeError(ERRSTR.PATH_STR);
     return path as string;
 }
 
-function validPathOrThrow(path: string|Buffer): string {
+function validPathOrThrow(path: Tpath): string {
     var p = pathOrError(path);
     if(p instanceof TypeError) throw p;
     else return p;
 }
 
 function validateFd(fd: number) {
-    if(typeof fd !== 'number') throw TypeError('fd must be a file descriptor');
+    if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
 }
 
 
@@ -92,8 +96,11 @@ export enum flags {
     'ax+'   = libjs.FLAG.O_RDWR | libjs.FLAG.O_APPEND | libjs.FLAG.O_CREAT | libjs.FLAG.O_EXCL,
 }
 
-
-const MODE_DEFAULT = 0o666;
+// Default mode for opening files.
+const enum MODE {
+    FILE = 0o666,
+    DIR = 0o777,
+}
 
 // Chunk size for reading files.
 const CHUNK = 4096;
@@ -113,9 +120,33 @@ export interface IFileOptions {
 
 var appendFileDefaults: IFileOptions = {
     encoding: 'utf8',
-    mode: MODE_DEFAULT,
+    mode: MODE.FILE,
     flag: 'a',
 };
+
+
+const ERRSTR = {
+    PATH_STR:       'path must be a string',
+    FD:             'fd must be a file descriptor',
+    MODE_INT:       'mode must be an integer',
+    CB:             'callback must be a function',
+    UID:            'uid must be an unsigned int',
+    GID:            'gid must be an unsigned int',
+    LEN:            'len must be an integer',
+    ATIME:          'atime must be an integer',
+    MTIME:          'mtime must be an integer',
+    PREFIX:         'filename prefix is required',
+};
+const ERRSTR_OPTS = tipeof => `Expected options to be either an object or a string, but got ${tipeof} instead`;
+
+
+function flagsToFlagsValue(f: string|number) {
+    if(typeof f === 'number') return flags;
+    if(typeof f !== 'string') throw TypeError(`flags must be string or number`);
+    var flagsval = flags[f];
+    if(typeof flagsval !== 'number') throw TypeError(`Invalid flags string value '${f}'`);
+    return flagsval;
+}
 
 
 export interface IReadStreamOptions {
@@ -128,9 +159,15 @@ export interface IReadStreamOptions {
     end: number;
 }
 
+
 export interface IOptions {
     encoding?: string;
 }
+
+const optionsDefaults: IOptions = {
+    encoding: 'utf8',
+};
+
 
 export interface IReadFileOptions extends IOptions {
     flag?: string;
@@ -197,95 +234,249 @@ export function build(deps) {
     var EE: typeof EventEmitter = _EE as typeof EventEmitter;
 
 
-    function accessSync(path: string|Buffer, mode: number = F_OK) {
+    function accessSync(path: Tpath, mode: number = F_OK): void {
         var vpath = validPathOrThrow(path);
         var res = libjs.access(vpath, mode);
         if(res < 0) throwError(res, 'access', vpath);
     }
+    function access(path: string|Buffer, callback: TcallbackData <void>);
+    function access(path: string|Buffer, mode: number, callback: TcallbackData <void>);
+    function access(path: string|Buffer, a: number|TcallbackData <void>, b?: TcallbackData <void>) {
+        var mode: number, callback: TcallbackData <void>;
 
-    function appendFile(file: string|number, data: string|Buffer, options: IFileOptions, callback: Tcallback) {
+        if(typeof a === 'function') {
+            callback = a as TcallbackData <void>;
+            mode = F_OK;
+        } else {
+            mode = a as number;
+            callback = b;
 
+            if(typeof callback !== 'function')
+                throw TypeError(ERRSTR.CB);
+        }
+
+        var vpath = pathOrError(path);
+        if(vpath instanceof TypeError)
+            return callback(vpath);
+
+        libjs.accessAsync(vpath as string, mode, function(res) {
+            if(res < 0) callback(Error(formatError(res, 'access', vpath as string)));
+            else callback(null);
+        });
     }
-    function appendFileSync(file: string|number, data: string|Buffer, options: IFileOptions = {}) {
-        options = extend(options, appendFileDefaults);
 
+
+    function appendFileSync(file: Tfile, data: Tdata, options?: IFileOptions) {
+        if(!options) options = appendFileDefaults;
+        else {
+            var tipof = typeof options;
+            switch(tipof) {
+                case 'object':
+                    options = extend({}, appendFileDefaults, options);
+                    break;
+                case 'string':
+                    options = extend({encoding: options as string}, appendFileDefaults);
+                    break;
+                default:
+                    throw TypeError(ERRSTR_OPTS(tipof));
+            }
+        }
+
+        var b: Buffer;
+        if(Buffer.isBuffer(data)) b = data as Buffer;
+        else b = new Buffer(String(data), options.encoding);
+        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+
+        var fd: number;
+        var is_fd = typeof file === 'number';
+        if(is_fd) {
+            // TODO: If user provides file descriptor that is read-only, what do we do?
+            fd = file as number;
+        } else {
+            var filename: string;
+            if(Buffer.isBuffer(file)) filename = file.toString();
+            else if(typeof file === 'string') filename = file as string;
+            else throw TypeError(ERRSTR.PATH_STR);
+
+            var flags = flagsToFlagsValue(options.flag);
+            if(typeof options.mode !== 'number')
+                throw TypeError(ERRSTR.MODE_INT);
+
+            fd = libjs.open(filename, flags, options.mode);
+            if(fd < 0) throwError(fd, 'appendFile', filename);
+        }
+
+        var res = libjs.write(fd, sb);
+        if(res < 0) throwError(res, 'appendFile', String(file));
+
+        // Close fd only if WE opened it.
+        if(!is_fd) libjs.close(fd);
+    }
+    function appendFile(file: Tfile, data: Tdata, callback: TcallbackData <void>);
+    function appendFile(file: Tfile, data: Tdata, options: IFileOptions, callback: TcallbackData <void>);
+    function appendFile(file: Tfile, data: Tdata, options: IFileOptions|TcallbackData <void>, callback?: TcallbackData <void>) {
+        var opts: IFileOptions;
+        if(typeof options === 'function') {
+            callback = options as any as TcallbackData <void>;
+            opts = appendFileDefaults;
+        } else {
+            var tipof = typeof options;
+            switch(tipof) {
+                case 'object':
+                    opts = extend({}, appendFileDefaults, options);
+                    break;
+                case 'string':
+                    opts = extend({encoding: options as string}, appendFileDefaults);
+                    break;
+                default:
+                    throw TypeError(ERRSTR_OPTS(tipof));
+            }
+
+            if(typeof callback !== 'function')
+                throw TypeError(ERRSTR.CB);
+        }
+
+        var b: Buffer;
+        if(Buffer.isBuffer(data)) b = data as Buffer;
+        else b = new Buffer(String(data), opts.encoding);
+        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+
+        function on_open(fd, is_fd) {
+            var res = libjs.write(fd, sb);
+            if(res < 0) throwError(res, 'appendFile', String(file));
+
+            // Close fd only if WE opened it.
+            if(!is_fd) libjs.closeAsync(fd, noop);
+        }
+
+        var fd: number;
+        var is_fd = typeof file === 'number';
+        if(is_fd) {
+            // TODO: If user provides file descriptor that is read-only, what do we do?
+            fd = file as number;
+            on_open(fd, is_fd);
+        } else {
+            var filename: string;
+            if(Buffer.isBuffer(file)) filename = file.toString();
+            else if(typeof file === 'string') filename = file as string;
+            else throw TypeError(ERRSTR.PATH_STR);
+
+            var flags = flagsToFlagsValue(opts.flag);
+            if(typeof opts.mode !== 'number')
+                throw TypeError(ERRSTR.MODE_INT);
+
+            libjs.openAsync(filename, flags, opts.mode, (fd) => {
+                if(fd < 0) return callback(Error(formatError(fd, 'appendFile', filename)));
+                on_open(fd, is_fd);
+            });
+        }
     }
 
-    function chmod(path: string|Buffer, mode: number, callback: Tcallback) {
 
-    }
-    function chmodSync(path: string|Buffer, mode: number) {
+    function chmodSync(path: Tpath, mode: number) {
         var vpath = validPathOrThrow(path);
-        if(typeof mode !== 'number') throw TypeError('mode must be an integer');
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
         var result = libjs.chmod(vpath, mode);
         if(result < 0) throwError(result, 'chmod', vpath);
     }
+    function chmod(path: Tpath, mode: number, callback: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
+        libjs.chmodAsync(vpath, mode, (result) => {
+            if(result < 0) callback(Error(formatError(result, 'chmod', vpath)));
+            else callback(null);
+        });
+    }
 
 
-    function fchmod(fd: number, mode: number, callback: Tcallback) {}
     function fchmodSync(fd: number, mode: number) {
         validateFd(fd);
-        if(typeof mode !== 'number') throw TypeError('mode must be an integer');
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
         var result = libjs.fchmod(fd, mode);
         if(result < 0) throwError(result, 'chmod');
     }
+    function fchmod(fd: number, mode: number, callback: TcallbackData <void>) {
+        validateFd(fd);
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
+        libjs.fchmodAsync(fd, mode, (result) => {
+            if(result < 0) callback(Error(formatError(result, 'chmod')));
+            else callback(null);
+        });
+    }
+
 
     // Mac OS only:
     //     function lchmodSync(path: string|Buffer, mode: number) {}
 
 
-    function chown(path: string|Buffer, uid: number, gid: number, callback: Tcallback) {}
-    function chownSync(path: string|Buffer, uid: number, gid: number) {
+    function chownSync(path: Tpath, uid: number, gid: number) {
         var vpath = validPathOrThrow(path);
-        if(typeof uid !== 'number') throw TypeError('uid must be an unsigned int');
-        if(typeof gid !== 'number') throw TypeError('gid must be an unsigned int');
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
         var result = libjs.chown(vpath, uid, gid);
         if(result < 0) throwError(result, 'chown', vpath);
     }
+    function chown(path: Tpath, uid: number, gid: number, callback: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
+        libjs.chownAsync(vpath, uid, gid, result => {
+            if(result < 0) callback(Error(formatError(result, 'chown', vpath)));
+            else callback(null);
+        });
+    }
 
-    function fchown(fd: number, uid: number, gid: number, callback: Tcallback) {}
     function fchownSync(fd: number, uid: number, gid: number) {
         validateFd(fd);
-        if(typeof uid !== 'number') throw TypeError('uid must be an unsigned int');
-        if(typeof gid !== 'number') throw TypeError('gid must be an unsigned int');
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
         var result = libjs.fchown(fd, uid, gid);
         if(result < 0) throwError(result, 'fchown');
     }
+    function fchown(fd: number, uid: number, gid: number, callback: TcallbackData <void>) {
+        validateFd(fd);
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
+        libjs.fchownAsync(fd, uid, gid, result => {
+            if(result < 0) callback(Error(formatError(result, 'fchown')));
+            else callback(null);
+        });
+    }
 
-    function lchown(path: string|Buffer, uid: number, gid: number, callback: Tcallback) {}
-    function lchownSync(path: string|Buffer, uid: number, gid: number) {
+    function lchownSync(path: Tpath, uid: number, gid: number) {
         var vpath = validPathOrThrow(path);
-        if(typeof uid !== 'number') throw TypeError('uid must be an unsigned int');
-        if(typeof gid !== 'number') throw TypeError('gid must be an unsigned int');
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
         var result = libjs.lchown(vpath, uid, gid);
         if(result < 0) throwError(result, 'lchown', vpath);
+    }
+    function lchown(path: Tpath, uid: number, gid: number, callback: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
+        if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
+        if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
+        libjs.lchownAsync(vpath, uid, gid, result => {
+            if(result < 0) callback(Error(formatError(result, 'lchown', vpath)));
+            else callback(null);
+        });
     }
 
 
     function closeSync(fd: number) {
-        if(typeof fd !== 'number') throw TypeError('fd must be a file descriptor');
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
         var result = libjs.close(fd);
         if(result < 0) throwError(result, 'close');
     }
-
-    // var readStreamOptionsDefaults: IReadStreamOptions = {
-    //     flags: 'r',
-    //     encoding: null,
-    //     fd: null,
-    //     mode: MODE_DEFAULT,
-    //     autoClose: true,
-    // };
-
-    // function createReadStream(path: string|Buffer, options: IReadStreamOptions|string = {}) {
-    //     options = extend(options, readStreamOptionsDefaults);
-    // }
+    function close(fd: number, callback: TcallbackData <void>) {
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
+        libjs.closeAsync(fd, result => {
+            if(result < 0) callback(Error(formatError(result, 'close')));
+            else callback(null);
+        });
+    }
 
 
-    function createWriteStream(path, options) {}
-
-
-    function existsSync(path: string|Buffer): boolean {
-        console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
+    function existsSync(path: Tpath): boolean {
+        // console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
         try {
             accessSync(path);
             return true;
@@ -293,19 +484,38 @@ export function build(deps) {
             return false;
         }
     }
+    function exists(path: Tpath, callback: (exists: boolean) => void) {
+        access(path, err => { callback(!err); });
+    }
 
 
     function fsyncSync(fd: number) {
-        if(typeof fd !== 'number') throw TypeError('fd must be a file descriptor');
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
         var result = libjs.fsync(fd);
         if(result < 0) throwError(result, 'fsync');
     }
+    function fsync(fd: number, callback: TcallbackData <void>) {
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
+        libjs.fsyncAsync(fd, result => {
+            if(result < 0) callback(Error(formatError(result, 'fsync')));
+            else callback(null);
+        });
+    }
+
 
     function fdatasyncSync(fd: number) {
-        if(typeof fd !== 'number') throw TypeError('fd must be a file descriptor');
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
         var result = libjs.fdatasync(fd);
         if(result < 0) throwError(result, 'fdatasync');
     }
+    function fdatasync(fd: number, callback: TcallbackData <void>) {
+        if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
+        libjs.fdatasyncAsync(fd, result => {
+            if(result < 0) callback(Error(formatError(result, 'fdatasync')));
+            else callback(null);
+        });
+    }
+
 
     function createStatsObject(res) {
         var stats = new Stats;
@@ -326,7 +536,8 @@ export function build(deps) {
         return stats;
     }
 
-    function statSync(path: string|Buffer): Stats {
+
+    function statSync(path: Tpath): Stats {
         var vpath = validPathOrThrow(path);
         try {
             var res = libjs.stat(vpath);
@@ -335,15 +546,11 @@ export function build(deps) {
             throwError(errno, 'stat', vpath);
         }
     }
-
-    function stat(path: string|Buffer, callback) {
-        var vpath = pathOrError(path);
-        if(vpath instanceof TypeError)
-            return callback(vpath);
-
-        libjs.statAsync(vpath as string, (err, res) => {
-            if(err) return callback(Error(formatError(err, 'stat', vpath as string)));
-            callback(null, createStatsObject(res));
+    function stat(path: string|Buffer, callback: TcallbackData <Stats>) {
+        var vpath = validPathOrThrow(path);
+        libjs.statAsync(vpath, (err, res) => {
+            if(err) callback(Error(formatError(err, 'stat', vpath)));
+            else callback(null, createStatsObject(res));
         });
     }
 
@@ -356,8 +563,15 @@ export function build(deps) {
             throwError(errno, 'fstat');
         }
     }
+    function fstat(fd: number, callback: TcallbackData <Stats>) {
+        validateFd(fd);
+        libjs.fstatAsync(fd, (err, res) => {
+            if(err) callback(Error(formatError(err, 'fstat')));
+            else callback(null, createStatsObject(res));
+        });
+    }
 
-    function lstatSync(path: string|Buffer): Stats {
+    function lstatSync(path: Tpath): Stats {
         var vpath = validPathOrThrow(path);
         try {
             var res = libjs.lstat(vpath);
@@ -366,31 +580,54 @@ export function build(deps) {
             throwError(errno, 'lstat', vpath);
         }
     }
-
-
-    function truncateSync(path: string, len: number) {
+    function lstat(path: Tpath, callback: TcallbackData <Stats>) {
         var vpath = validPathOrThrow(path);
-        if(typeof len !== 'number') throw TypeError('len must be an integer');
+        libjs.lstatAsync(vpath, (err, res) => {
+            if(err) callback(Error(formatError(err, 'lstat', vpath)));
+            else callback(null, createStatsObject(res));
+        });
+    }
+
+
+    function truncateSync(path: Tpath, len: number) {
+        var vpath = validPathOrThrow(path);
+        if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
         var res = libjs.truncate(vpath, len);
         if(res < 0) throwError(res, 'truncate', vpath);
+    }
+    function truncate(path: Tpath, len: number, callback: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
+        if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
+        libjs.truncateAsync(vpath, len, res => {
+            if(res < 0) callback(Error(formatError(res, 'truncate', vpath)));
+            else callback(null);
+        });
     }
 
     function ftruncateSync(fd: number, len: number) {
         validateFd(fd);
-        if(typeof len !== 'number') throw TypeError('len must be an integer');
+        if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
         var res = libjs.ftruncate(fd, len);
         if(res < 0) throwError(res, 'ftruncate');
+    }
+    function ftruncate(fd: number, len: number, callback: TcallbackData <void>) {
+        validateFd(fd);
+        if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
+        libjs.ftruncateAsync(fd, len, res => {
+            if(res < 0) callback(Error(formatError(res, 'ftruncate')));
+            else callback(null);
+        });
     }
 
 
     //     TODO: Make this work with `utimes` instead of `utime`, also figure out a way
     //     TODO: how to set time using file descriptor, possibly use `utimensat` system call.
-    function utimesSync(path: string, atime: number|string, mtime: number|string) {
-        path = validPathOrThrow(path);
-        if(typeof atime === 'string') atime = parseInt(atime as string);
-        if(typeof mtime === 'string') mtime = parseInt(mtime as string);
-        if(typeof atime !== 'number') throw TypeError('atime must be an integer');
-        if(typeof mtime !== 'number') throw TypeError('mtime must be an integer');
+    function utimesSync(path: Tpath, atime: number, mtime: number) {
+        var vpath = validPathOrThrow(path);
+        // if(typeof atime === 'string') atime = parseInt(atime as string);
+        // if(typeof mtime === 'string') mtime = parseInt(mtime as string);
+        if(typeof atime !== 'number') throw TypeError(ERRSTR.ATIME);
+        if(typeof mtime !== 'number') throw TypeError(ERRSTR.MTIME);
 
         var vatime = atime as number;
         var vmtime = mtime as number;
@@ -408,42 +645,94 @@ export function build(deps) {
             actime:     [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
             modtime:    [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)],
         };
-        var res = libjs.utime(path, times);
-        console.log(res);
-        if(res < 0) throwError(res, 'utimes', path);
+        var res = libjs.utime(vpath, times);
+        if(res < 0) throwError(res, 'utimes', vpath);
+    }
+    function utimes(path: Tpath, atime: number, mtime: number, callback: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
+        // if(typeof atime === 'string') atime = parseInt(atime as string);
+        // if(typeof mtime === 'string') mtime = parseInt(mtime as string);
+        if(typeof atime !== 'number') throw TypeError(ERRSTR.ATIME);
+        if(typeof mtime !== 'number') throw TypeError(ERRSTR.MTIME);
+
+        var vatime = atime as number;
+        var vmtime = mtime as number;
+
+        // if(!Number.isFinite(atime)) atime = Date.now();
+        // if(!Number.isFinite(mtime)) mtime = Date.now();
+        if(!isFinite(vatime)) vatime = Date.now();
+        if(!isFinite(vmtime)) vmtime = Date.now();
+
+        // `libjs.utime` works with 1 sec precision.
+        vatime = Math.round(vatime as number / 1000);
+        vmtime = Math.round(vmtime as number / 1000);
+
+        var times: libjs.utimbuf = {
+            actime:     [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+            modtime:    [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)],
+        };
+        libjs.utimeAsync(vpath, times, res => {
+            if(res < 0) callback(Error(formatError(res, 'utimes', vpath)));
+            else callback(null);
+        });
     }
 
 // function futimesSync(fd: number, atime: number|string, mtime: number|string) {}
 
 
-    function linkSync(srcpath: string|Buffer, dstpath: string|Buffer) {
+    function linkSync(srcpath: Tpath, dstpath: Tpath) {
         var vsrcpath = validPathOrThrow(srcpath);
         var vdstpath = validPathOrThrow(dstpath);
         var res = libjs.link(vsrcpath, vdstpath);
         if(res < 0) throwError(res, 'link', vsrcpath, vdstpath);
     }
+    function link(srcpath: Tpath, dstpath: Tpath, callback: TcallbackData <void>) {
+        var vsrcpath = validPathOrThrow(srcpath);
+        var vdstpath = validPathOrThrow(dstpath);
+        libjs.linkAsync(vsrcpath, vdstpath, res => {
+            if(res < 0) callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
+            else callback(null);
+        });
+    }
 
 
-    function mkdirSync(path: string|Buffer, mode: number = MODE_DEFAULT) {
+    function mkdirSync(path: Tpath, mode: number = MODE.DIR) {
         var vpath = validPathOrThrow(path);
-        if(typeof mode !== 'number') throw TypeError('mode must be an integer');
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
         var res = libjs.mkdir(vpath, mode);
         if(res < 0) throwError(res, 'mkdir', vpath);
     }
+    function mkdir(path: Tpath, mode: number = MODE.DIR, callback?: TcallbackData <void>) {
+        var vpath = validPathOrThrow(path);
 
-    function randomString6() {
+        if(typeof mode === 'function') {
+            callback = mode as any as TcallbackData <void>;
+            mode = MODE.DIR;
+        } else {
+            if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
+            if(typeof callback !== 'function') throw TypeError(ERRSTR.CB);
+        }
+
+        libjs.mkdirAsync(vpath, mode, res => {
+            if(res < 0) callback(Error(formatError(res, 'mkdir', vpath)));
+            else callback(null);
+        });
+    }
+
+
+    function rndStr6() {
         return (+new Date).toString(36).slice(-6);
     }
 
-    function mkdtempSync(prefix: string, options = {}) {
+    function mkdtempSync(prefix: string): string {
         if (!prefix || typeof prefix !== 'string')
-            throw new TypeError('filename prefix is required');
+            throw new TypeError(ERRSTR.PREFIX);
 
         var retries = 10;
         var fullname: string;
         var found_tmp_name = false;
         for(var i = 0; i < retries; i++) {
-            fullname = prefix + randomString6();
+            fullname = prefix + rndStr6();
             try {
                 accessSync(fullname);
             } catch(e) {
@@ -459,20 +748,43 @@ export function build(deps) {
             throw Error(`Could not find a new name, mkdtemp`);
         }
     }
+    function mkdtemp(prefix: string, callback: TcallbackData <string>) {
+        if (!prefix || typeof prefix !== 'string')
+            throw new TypeError(ERRSTR.PREFIX);
 
+        var retries = 10;
+        var fullname: string;
 
-    function flagsToFlagsValue(f: string|number) {
-        if(typeof f === 'number') return flags;
-        if(typeof f !== 'string') throw TypeError(`flags must be string or number`);
-        var flagsval = flags[f];
-        if(typeof flagsval !== 'number') throw TypeError(`Invalid flags string value '${f}'`);
-        return flagsval;
+        function mk_dir() {
+            mkdir(fullname, err => {
+                if(err) callback(err);
+                else callback(null, fullname);
+            });
+        }
+
+        function name_loop() {
+            if(retries < 1) {
+                callback(Error('Could not find a new name, mkdtemp'));
+                return;
+            }
+
+            retries--;
+            fullname = prefix + rndStr6();
+
+            access(fullname, err => {
+                if(err) name_loop();
+                else mk_dir();
+            });
+        }
+        name_loop();
     }
 
-    function openSync(path: string|Buffer, flags: string|number, mode: number = MODE_DEFAULT): number {
+
+
+    function openSync(path: string|Buffer, flags: string|number, mode: number = MODE.FILE): number {
         var vpath = validPathOrThrow(path);
         var flagsval = flagsToFlagsValue(flags);
-        if(typeof mode !== 'number') throw TypeError('mode must be an integer');
+        if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
         var res = libjs.open(vpath, flagsval, mode);
         if(res < 0) throwError(res, 'open', vpath);
         return res;
@@ -481,7 +793,7 @@ export function build(deps) {
     function open(path: string|Buffer, flags: string|number, mode: number, callback?: TcallbackData <number>) {
         if(typeof mode === 'function') {
             callback = mode as any as TcallbackData <number>;
-            mode = MODE_DEFAULT;
+            mode = MODE.FILE;
         }
 
         try {
@@ -493,7 +805,7 @@ export function build(deps) {
         }
 
         if(typeof mode !== 'number')
-            return callback(TypeError('mode must be an integer'));
+            return callback(TypeError(ERRSTR.MODE_INT));
 
         libjs.openAsync(vpath, flagsval, mode, function(res) {
             if(res < 0) callback(Error(formatError(res, 'open', vpath)));
@@ -502,7 +814,7 @@ export function build(deps) {
     }
 
 
-    function readSync(fd: number, buffer: Buffer, offset: number, length: number, position: number) {
+    function readSync(fd: number, buffer: Buffer|StaticBuffer, offset: number, length: number, position: number) {
         validateFd(fd);
         if(!(buffer instanceof Buffer)) throw TypeError('buffer must be an instance of Buffer');
         if(typeof offset !== 'number') throw TypeError('offset must be an integer');
@@ -519,11 +831,6 @@ export function build(deps) {
         if(res < 0) throwError(res, 'read');
         return res;
     }
-
-
-    var optionsDefaults: IOptions = {
-        encoding: 'utf8',
-    };
 
 
     function readdirSync(path: string|Buffer, options: IOptions = {}) {
@@ -550,7 +857,7 @@ export function build(deps) {
         else {
             var vfile = validPathOrThrow(file as string|Buffer);
             var flag = flags[opts.flag];
-            fd = libjs.open(vfile, flag, MODE_DEFAULT);
+            fd = libjs.open(vfile, flag, MODE.FILE);
             if(fd < 0) throwError(fd, 'readFile', vfile);
         }
 
@@ -621,7 +928,7 @@ export function build(deps) {
             if(vfile instanceof TypeError) return callback(vfile);
 
             var flag = flags[opts.flag];
-            libjs.openAsync(vfile as string, flag, MODE_DEFAULT, function(fd) {
+            libjs.openAsync(vfile as string, flag, MODE.FILE, function(fd) {
                 if(fd < 0) callback(Error(formatError(fd, 'readFile', vfile as string)));
                 else on_open(fd);
             });
@@ -679,6 +986,25 @@ export function build(deps) {
         var res = libjs.unlink(vpath);
         if(res < 0) throwError(res, 'unlink', vpath);
     }
+
+
+
+
+
+    // var readStreamOptionsDefaults: IReadStreamOptions = {
+    //     flags: 'r',
+    //     encoding: null,
+    //     fd: null,
+    //     mode: MODE.FILE,
+    //     autoClose: true,
+    // };
+
+    // function createReadStream(path: string|Buffer, options: IReadStreamOptions|string = {}) {
+    //     options = extend(options, readStreamOptionsDefaults);
+    // }
+
+
+    function createWriteStream(path, options) {}
 
 
     class FSWatcher extends EE {
@@ -907,6 +1233,7 @@ export function build(deps) {
         fstatSync,
         fsyncSync,
         ftruncateSync,
+        utimesSync,
         // futimesSync,
         // lchmodSync,
         lchownSync,
@@ -930,8 +1257,29 @@ export function build(deps) {
 
 
         // Asynchronous
-        open,
+        access,
+        appendFile,
+        chmod,
+        fchmod,
+        chown,
+        fchown,
+        lchown,
+        close,
+        exists,
+        fsync,
+        fdatasync,
         stat,
+        fstat,
+        lstat,
+        ftruncate,
+        truncate,
+        utimes,
+        link,
+        mkdtemp,
+        mkdir,
+
+        open,
+
         readFile,
 
     };

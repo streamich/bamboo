@@ -4,7 +4,7 @@ var fs = require('fs');
 
 
 // var buf = StaticBuffer(10);
-var file = '/proc/meminfo';
+var file = '/share/full-js/examples/data.txt';
 var fd = process.syscall(2, file, 0, 438);
 // var fd = libjs.open(file, 0, 438);
 console.log('fd', fd);

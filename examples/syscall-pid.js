@@ -8,6 +8,15 @@ process.asyscall(39, function(res) {
     console.log('Process ID is ' + res);
     process.asyscall(39, function(res) {
         console.log('Process ID is ' + res);
+        process.asyscall(39, function(res) {
+            console.log('Process ID is ' + res);
+            process.asyscall(39, function(res) {
+                console.log('Process ID is ' + res);
+                process.asyscall(39, function(res) {
+                    console.log('Process ID is ' + res);
+                });
+            });
+        });
     });
 });
 

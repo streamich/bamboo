@@ -1,11 +1,14 @@
-# full.js
+# FULL.js
 
 **TL;DR**: Node.js clone in pure JavaScript.
 
 `full.js` is Node.js without C++ parts. The goal is to implement **100%**
 of Node.js API without any dependencies on any C++ libraries.
 
-Requirements: it runs on Ubuntu 14.04 x86_64, not tested on other systems.
+`full.js` will be a drop-in replacement for Node.js and will be able to run
+on any JavaScript runtime.
+
+Requirements: it runs on x86_64 Ubuntu 14.04, not tested on other systems.
 
 ## API Status
 
@@ -26,10 +29,12 @@ Extra:
 
  - [X] `process.syscall(number, ...args): number`
  - [X] `process.syscall64(number, ...args): number`
- - [ ] `process.asyscall(number, ...args, callback)`
- - [ ] `process.asyscall64(number, ...args, callback)`
- - [ ] `process.malloc(address, size): Buffer`
-
+ - [X] `process.asyscall(number, ...args, callback)`
+ - [X] `process.asyscall64(number, ...args, callback)`
+ - [X] `process.frame(address: number|[number, number]|[number, number, number]|StaticArrayBuffer, size: number): StaticArrayBuffer`
+ - [X] `process.call(addr: any, offset?: number, args?: number[]): number`
+ - [X] `process.errno(): number`
+ 
 Standard:
 
  - [ ] `Event: 'beforeExit'`
@@ -88,6 +93,22 @@ Standard:
  - [ ] `Exit Codes`
 
 
+### [`ArrayBuffer`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer)
+
+full.js requires `ArrayBuffer` constructor, in future we may relax it, so that
+full.js would be able to run on runtimes that don't have `ArrayBuffer` implemented.
+
+
+### `StaticArrayBuffer`
+
+*Depends on:* `ArrayBuffer`, `process.frame`, `process.call`
+
+`StaticArrayBuffer` inherits from `ArrayBuffer` and has one important difference that
+garbage collector will not move it in memory.
+
+ - [X] `StaticArrayBuffer`
+
+
 ### [`Buffer`](https://nodejs.org/api/buffer.html)
 
 *Depends on:* `ArrayBuffer`
@@ -104,9 +125,12 @@ TODO: check all methods work correctly, including the `.slice()` method.
 
 ### `StaticBuffer`
 
-*Depends on:* `Buffer`, `process.syscall`, `process.malloc`
+*Depends on:* `StaticArrayBuffer`, `Buffer`
 
- - [ ] `StaticBuffer`
+`StaticBuffer` inherits from `Buffer` and uses `StaticArrayBuffer` as its backing store
+instead of `ArrayBuffer`.
+
+ - [X] `StaticBuffer`
  
 
 ### [`util`](https://nodejs.org/api/util.html)
@@ -212,36 +236,36 @@ Implements `fs.js` API as in the docs, with few minor differences, here are the 
  6. `realpath()` results may differ as libfs implements it itself instead of using `libc`'s C implementation.
  7. `fs.ReadStream` and `fs.WriteStream` are not implemented yet.
  
-- [ ] `persistent` option in watchFile() and watch() methods is always true, even if you set it to false.
+- [ ] `persistent` currently option in watchFile() and watch() methods is always true, even if you set it to false.
 
 Below synchronous methods are implements using `process.syscall`:
 
- - [ ] `fs.accessSync(path[, mode])`
- - [ ] `fs.appendFileSync(file, data[, options])`
- - [ ] `fs.chmodSync(path, mode)`
- - [ ] `fs.chownSync(path, uid, gid)`
+ - [X] `fs.accessSync(path[, mode])`
+ - [X] `fs.appendFileSync(file, data[, options])`
+ - [X] `fs.chmodSync(path, mode)`
+ - [X] `fs.chownSync(path, uid, gid)`
  - [X] `fs.closeSync(fd)`
- - [ ] `fs.existsSync(path)`
- - [ ] `fs.fchmodSync(fd, mode)`
- - [ ] `fs.fchownSync(fd, uid, gid)`
- - [ ] `fs.fdatasyncSync(fd)`
- - [ ] `fs.fstatSync(fd)`
- - [ ] `fs.fsyncSync(fd)`
- - [ ] `fs.ftruncateSync(fd, len)`
+ - [X] `fs.existsSync(path)`
+ - [X] `fs.fchmodSync(fd, mode)`
+ - [X] `fs.fchownSync(fd, uid, gid)`
+ - [X] `fs.fdatasyncSync(fd)`
+ - [X] `fs.fstatSync(fd)`
+ - [X] `fs.fsyncSync(fd)`
+ - [X] `fs.ftruncateSync(fd, len)`
  - [ ] `fs.futimesSync(fd, atime, mtime)`
  - [ ] `fs.lchmodSync(path, mode)`
- - [ ] `fs.lchownSync(path, uid, gid)`
- - [ ] `fs.linkSync(srcpath, dstpath)`
- - [ ] `fs.lstatSync(path)`
- - [ ] `fs.mkdtempSync(prefix)`
- - [ ] `fs.mkdirSync(path[, mode])`
+ - [X] `fs.lchownSync(path, uid, gid)`
+ - [X] `fs.linkSync(srcpath, dstpath)`
+ - [X] `fs.lstatSync(path)`
+ - [X] `fs.mkdtempSync(prefix)`
+ - [X] `fs.mkdirSync(path[, mode])`
  - [X] `fs.openSync(path, flags[, mode])`
  - [ ] `fs.realpathSync(path[, options])`
  - [X] `fs.readFileSync(file[, options])`
  - [ ] `fs.readlinkSync(path[, options])`
  - [ ] `fs.symlinkSync(target, path[, type])`
  - [X] `fs.statSync(path)`
- - [ ] `fs.truncateSync(path, len)`
+ - [X] `fs.truncateSync(path, len)`
  - [ ] `fs.renameSync(oldPath, newPath)`
  - [ ] `fs.readSync(fd, buffer, offset, length, position)`
  - [ ] `fs.writeSync(fd, buffer, offset, length[, position])`
@@ -252,35 +276,35 @@ Below synchronous methods are implements using `process.syscall`:
  
 Below asynchronous methods are implemented using `process.asyscall`:
  
- - [ ] `fs.access(path[, mode], callback)`
- - [ ] `fs.appendFile(file, data[, options], callback)`
- - [ ] `fs.chmod(path, mode, callback)`
- - [ ] `fs.chown(path, uid, gid, callback)`
- - [ ] `fs.close(fd, callback)`
- - [ ] `fs.exists(path, callback)`
- - [ ] `fs.fchmod(fd, mode, callback)`
- - [ ] `fs.fchown(fd, uid, gid, callback)`
- - [ ] `fs.fdatasync(fd, callback)`
- - [ ] `fs.fstat(fd, callback)`
- - [ ] `fs.fsync(fd, callback)`
- - [ ] `fs.ftruncate(fd, len, callback)`
+ - [X] `fs.access(path[, mode], callback)`
+ - [X] `fs.appendFile(file, data[, options], callback)`
+ - [X] `fs.chmod(path, mode, callback)`
+ - [X] `fs.chown(path, uid, gid, callback)`
+ - [X] `fs.close(fd, callback)`
+ - [X] `fs.exists(path, callback)`
+ - [X] `fs.fchmod(fd, mode, callback)`
+ - [X] `fs.fchown(fd, uid, gid, callback)`
+ - [X] `fs.fdatasync(fd, callback)`
+ - [X] `fs.fstat(fd, callback)`
+ - [X] `fs.fsync(fd, callback)`
+ - [X] `fs.ftruncate(fd, len, callback)`
  - [ ] `fs.futimes(fd, atime, mtime, callback)`
  - [ ] `fs.lchmod(path, mode, callback)`
- - [ ] `fs.lchown(path, uid, gid, callback)`
- - [ ] `fs.link(srcpath, dstpath, callback)`
- - [ ] `fs.lstat(path, callback)`
- - [ ] `fs.mkdir(path[, mode], callback)`
- - [ ] `fs.mkdtemp(prefix, callback)`
- - [ ] `fs.open(path, flags[, mode], callback)`
+ - [X] `fs.lchown(path, uid, gid, callback)`
+ - [X] `fs.link(srcpath, dstpath, callback)`
+ - [X] `fs.lstat(path, callback)`
+ - [X] `fs.mkdir(path[, mode], callback)`
+ - [X] `fs.mkdtemp(prefix, callback)`
+ - [X] `fs.open(path, flags[, mode], callback)`
  - [ ] `fs.read(fd, buffer, offset, length, position, callback)`
- - [ ] `fs.readFile(file[, options], callback)`
+ - [X] `fs.readFile(file[, options], callback)`
  - [ ] `fs.readlink(path[, options], callback)`
  - [ ] `fs.realpath(path[, options], callback)`
  - [ ] `fs.rename(oldPath, newPath, callback)`
  - [ ] `fs.rmdir(path, callback)`
- - [ ] `fs.stat(path, callback)`
+ - [X] `fs.stat(path, callback)`
  - [ ] `fs.symlink(target, path[, type], callback)`
- - [ ] `fs.truncate(path, len, callback)`
+ - [X] `fs.truncate(path, len, callback)`
  - [ ] `fs.unlink(path, callback)`
  - [ ] `fs.write(fd, buffer, offset, length[, position], callback)`
  - [ ] `fs.write(fd, data[, position[, encoding]], callback)`
@@ -293,12 +317,12 @@ might not be 100% compatible with Node.js:
  - [ ] `fs.readdirSync(path[, options])`
  - [ ] `fs.readdir(path[, options], callback)`
  
-Times are currently resolved to millisecond accuracy, you can still use
-`utimes` but if you specify time with microsecond accuracy it will be rounded
-to milliseconds:
+Currently `utime` system call is used instead of `utimes`, so timestamps resolved 
+to millisecond accuracy, you can still use `utimes` but if you specify time with 
+microsecond accuracy it will be rounded to milliseconds:
   
- - [ ] `fs.utimes(path, atime, mtime, callback)`
- - [ ] `fs.utimesSync(path, atime, mtime)`
+ - [X] `fs.utimes(path, atime, mtime, callback)`
+ - [X] `fs.utimesSync(path, atime, mtime)`
  
 We use `inotify` syscall interface (just like `libuv` in Node.js) from 
 [`libaio`](http://www.npmjs.com/package/libaio) package:   
@@ -587,3 +611,5 @@ Interpreter runtimes:
  ## TODOs
  
   - [ ] Use asynchronous Linux I/O for file systems on file systems that support that.
+  - [ ] Integrate `process.asyscall` with `epoll`.
+  

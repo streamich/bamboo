@@ -9,34 +9,45 @@ var Asyscall = (function () {
         this.code = null;
         this.curr = null;
         this.next = null;
-        this.recycled = null;
+        this.usedFirst = null;
+        this.usedLast = null;
     }
     Asyscall.prototype.build = function () {
         var bin = require('./bin');
         this.code = StaticBuffer.alloc(bin, 'rwe');
         this.curr = this.code.slice(this.code.length - 72);
-        this.curr[0] = 0;
-        this.next = new StaticBuffer(72);
-        this.next[0] = 0;
+        this.curr.writeInt32LE(0, 0);
+        this.curr.writeInt32LE(0, 4);
+        this.next = this.newBlock();
         link(this.curr, this.next);
         this.code.call();
     };
     Asyscall.prototype.recycleBlock = function (block) {
-        var first = this.recycled;
-        if (first)
-            block._next = first;
-        this.recycled = block;
-    };
-    Asyscall.prototype.newBlock = function () {
-        var block;
-        if (block = this.recycled) {
-            this.recycled = block._next;
-            block._next = null;
+        if (!this.usedFirst) {
+            this.usedFirst = this.usedLast = block;
         }
         else {
-            block = new StaticBuffer(72);
+            var last = this.usedLast;
+            last._next = block;
+            this.usedLast = block;
         }
-        block[0] = 0;
+    };
+    Asyscall.prototype.newBlock = function () {
+        var block = this.usedFirst;
+        if (block && (block.readInt32LE(4) === 2)) {
+            if (this.usedLast === block) {
+                this.usedFirst = this.usedLast = null;
+            }
+            else {
+                this.usedFirst = block._next;
+                block._next = null;
+            }
+        }
+        else {
+            block = StaticBuffer.alloc(72, 'rw');
+        }
+        block.writeInt32LE(0, 0);
+        block.writeInt32LE(0, 4);
         return block;
     };
     Asyscall.prototype.writeArg = function (arg, slot) {

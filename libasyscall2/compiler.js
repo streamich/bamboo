@@ -5,26 +5,21 @@ var abi_1 = require('../node_modules/ass-js/abi');
 var __DEBUG__ = true;
 var AsyscallCompiler = (function () {
     function AsyscallCompiler() {
-        this.threads = 0;
         this.queue = 100;
-        this.intsize = 8;
-        this.stackSize = 5 * this.intsize;
+        this.stackSize = 5 * 8;
         this.stacksSize = 0;
-        this.blockSize = 9 * this.intsize;
+        this.blockSize = 9 * 8;
     }
-    AsyscallCompiler.prototype.compile = function (threads) {
+    AsyscallCompiler.prototype.compile = function () {
         var _this = this;
-        if (threads === void 0) { threads = 2; }
-        var INT = this.intsize;
-        this.threads = threads;
-        this.stacksSize = this.threads * this.stackSize;
+        this.stacksSize = 2 * this.stackSize;
         var _ = new code_1.Code;
         var abi = new abi_1.Abi(_);
         var func_create_thread = abi.func('func_create_thread', false, [operand_1.rax, operand_1.rsi, operand_1.rcx, operand_1.rdx]);
         var func_thread = abi.func('func_thread');
         var lbl_stacks = _.lbl('stacks');
         var lbl_first_block = _.lbl('first_block');
-        for (var j = 1; j <= this.threads; j++) {
+        for (var j = 1; j <= 2; j++) {
             abi.call(func_create_thread, [j], []);
         }
         _._('ret');
@@ -32,18 +27,18 @@ var AsyscallCompiler = (function () {
             _._('mov', [operand_1.rax, operand_1.rdi]);
             _._('mov', [operand_1.rcx, _this.stackSize]);
             _._('mul', operand_1.rcx);
-            _._('lea', [operand_1.rsi, operand_1.rip.disp(lbl_stacks.rel(-INT * 2))]);
+            _._('lea', [operand_1.rsi, operand_1.rip.disp(lbl_stacks.rel(-8 * 2))]);
             _._('add', [operand_1.rsi, operand_1.rax]);
             _._('lea', [operand_1.rdx, operand_1.rip.disp(func_thread.lbl)]);
             _._('mov', [operand_1.rsi.ref(), operand_1.rdx]);
-            _._('mov', [operand_1.rsi.disp(INT), operand_1.rdi]);
+            _._('mov', [operand_1.rsi.disp(8), operand_1.rdi]);
             abi.syscall([56, -2147381504]);
         });
         func_thread._(function () {
             var curr = operand_1.r13;
             var next = operand_1.r14;
             _._('lea', [curr, operand_1.rip.disp(lbl_first_block)]);
-            _._('mov', [next, curr.disp(INT * 8)]);
+            _._('mov', [next, curr.disp(8 * 8)]);
             var lbl_execute_block = _.lbl('execute_block');
             var lbl_go_to_next_block = _.lbl('go_to_next_block');
             var lbl_thread_stop = _.lbl('thread_stop');
@@ -78,6 +73,7 @@ var AsyscallCompiler = (function () {
                 _._('mov', [curr.disp(8 * 6), operand_1.rax]);
             }
             _.insert(lbl_go_to_next_block);
+            _._('add', [curr.disp(4), 1], 32).lock();
             _._('mov', [curr, next]);
             _._('mov', [next, curr.disp(8 * 8)]);
             _._('jmp', lbl_process_block);
@@ -87,13 +83,17 @@ var AsyscallCompiler = (function () {
             }
             abi.syscall([60]);
         });
-        _.align(8);
-        _.db('stack');
+        if (__DEBUG__) {
+            _.align(8);
+            _.db('stack');
+        }
         _.align(8);
         _.insert(lbl_stacks);
         _.db(0, this.stacksSize);
-        _.align(8);
-        _.db('1 block');
+        if (__DEBUG__) {
+            _.align(8);
+            _.db('1 block');
+        }
         _.align(8);
         _.insert(lbl_first_block);
         _.db(0, this.blockSize);

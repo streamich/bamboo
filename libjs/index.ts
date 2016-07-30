@@ -94,12 +94,12 @@ function noop() {}
 // represents an error. If zero, represents *end-of-file*, but if `buf` is of length
 // zero than zero does not necessarily mean *end-of-file*.
 
-export function read(fd: number, buf: Buffer): number {
+export function read(fd: number, buf: StaticBuffer): number {
     // debug('read', fd, sys.addr64(buf), buf.length);
     return syscall(SYS.read, fd, buf, buf.length);
 }
 
-export function readAsync(fd: number, buf: Buffer, callback: Tcallback) {
+export function readAsync(fd: number, buf: StaticBuffer, callback: Tcallback) {
     p.asyscall(SYS.read, fd, buf, buf.length, callback);
 }
 
@@ -110,13 +110,13 @@ export function readAsync(fd: number, buf: Buffer, callback: Tcallback) {
 //
 // Write data to a file descriptor.
 
-export function write(fd: number, buf: string|Buffer): number {
+export function write(fd: number, buf: string|StaticBuffer): number {
     // debug('write', fd);
     if(!(buf instanceof Buffer)) buf = new Buffer((buf as string) + '\0');
     return syscall(SYS.write, fd, buf, buf.length);
 }
 
-export function writeAsync(fd: number, buf: string|Buffer, callback: Tcallback) {
+export function writeAsync(fd: number, buf: string|StaticBuffer, callback: Tcallback) {
     if(!(buf instanceof Buffer)) buf = new Buffer((buf as string) + '\0');
     return syscall(SYS.write, fd, buf, buf.length, callback);
 }
@@ -327,7 +327,7 @@ export function fdatasyncAsync(fd: number, callback: Tcallback) {
 
 export function stat(filepath: string): types.stat { // Throws number
     // debug('stat', filepath);
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new Buffer(types.stat.size + 200);
     var result = syscall(SYS.stat, filepath, buf);
     if(result == 0) return types.stat.unpack(buf);
     throw result;

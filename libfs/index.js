@@ -6,13 +6,9 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var libjs = require('../libjs/index');
 var inotify_1 = require('../libaio/inotify');
+var extend = require('../lib/util').extend;
 if (__DEBUG__) {
     exports.isFullJS = true;
-}
-function extend(a, b) {
-    for (var i in b)
-        a[i] = b[i];
-    return a;
 }
 function noop() { }
 function formatError(errno, func, path, path2) {
@@ -39,7 +35,7 @@ function pathOrError(path) {
     if (path instanceof Buffer)
         path = path.toString();
     if (typeof path !== 'string')
-        return TypeError('path must be a string');
+        return TypeError(ERRSTR.PATH_STR);
     return path;
 }
 function validPathOrThrow(path) {
@@ -51,7 +47,7 @@ function validPathOrThrow(path) {
 }
 function validateFd(fd) {
     if (typeof fd !== 'number')
-        throw TypeError('fd must be a file descriptor');
+        throw TypeError(ERRSTR.FD);
 }
 (function (flags) {
     flags[flags["r"] = 0] = "r";
@@ -68,7 +64,6 @@ function validateFd(fd) {
     flags[flags['ax+'] = 1218] = 'ax+';
 })(exports.flags || (exports.flags = {}));
 var flags = exports.flags;
-var MODE_DEFAULT = 438;
 var CHUNK = 4096;
 var F_OK = 0;
 var R_OK = 4;
@@ -76,8 +71,34 @@ var W_OK = 2;
 var X_OK = 1;
 var appendFileDefaults = {
     encoding: 'utf8',
-    mode: MODE_DEFAULT,
+    mode: 438,
     flag: 'a'
+};
+var ERRSTR = {
+    PATH_STR: 'path must be a string',
+    FD: 'fd must be a file descriptor',
+    MODE_INT: 'mode must be an integer',
+    CB: 'callback must be a function',
+    UID: 'uid must be an unsigned int',
+    GID: 'gid must be an unsigned int',
+    LEN: 'len must be an integer',
+    ATIME: 'atime must be an integer',
+    MTIME: 'mtime must be an integer',
+    PREFIX: 'filename prefix is required'
+};
+var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
+function flagsToFlagsValue(f) {
+    if (typeof f === 'number')
+        return flags;
+    if (typeof f !== 'string')
+        throw TypeError("flags must be string or number");
+    var flagsval = flags[f];
+    if (typeof flagsval !== 'number')
+        throw TypeError("Invalid flags string value '" + f + "'");
+    return flagsval;
+}
+var optionsDefaults = {
+    encoding: 'utf8'
 };
 var Stats = (function () {
     function Stats() {
@@ -116,74 +137,259 @@ function build(deps) {
         if (res < 0)
             throwError(res, 'access', vpath);
     }
-    function appendFile(file, data, options, callback) {
+    function access(path, a, b) {
+        var mode, callback;
+        if (typeof a === 'function') {
+            callback = a;
+            mode = F_OK;
+        }
+        else {
+            mode = a;
+            callback = b;
+            if (typeof callback !== 'function')
+                throw TypeError(ERRSTR.CB);
+        }
+        var vpath = pathOrError(path);
+        if (vpath instanceof TypeError)
+            return callback(vpath);
+        libjs.accessAsync(vpath, mode, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'access', vpath)));
+            else
+                callback(null);
+        });
     }
     function appendFileSync(file, data, options) {
-        if (options === void 0) { options = {}; }
-        options = extend(options, appendFileDefaults);
+        if (!options)
+            options = appendFileDefaults;
+        else {
+            var tipof = typeof options;
+            switch (tipof) {
+                case 'object':
+                    options = extend({}, appendFileDefaults, options);
+                    break;
+                case 'string':
+                    options = extend({ encoding: options }, appendFileDefaults);
+                    break;
+                default:
+                    throw TypeError(ERRSTR_OPTS(tipof));
+            }
+        }
+        var b;
+        if (Buffer.isBuffer(data))
+            b = data;
+        else
+            b = new Buffer(String(data), options.encoding);
+        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+        var fd;
+        var is_fd = typeof file === 'number';
+        if (is_fd) {
+            fd = file;
+        }
+        else {
+            var filename;
+            if (Buffer.isBuffer(file))
+                filename = file.toString();
+            else if (typeof file === 'string')
+                filename = file;
+            else
+                throw TypeError(ERRSTR.PATH_STR);
+            var flags = flagsToFlagsValue(options.flag);
+            if (typeof options.mode !== 'number')
+                throw TypeError(ERRSTR.MODE_INT);
+            fd = libjs.open(filename, flags, options.mode);
+            if (fd < 0)
+                throwError(fd, 'appendFile', filename);
+        }
+        var res = libjs.write(fd, sb);
+        if (res < 0)
+            throwError(res, 'appendFile', String(file));
+        if (!is_fd)
+            libjs.close(fd);
     }
-    function chmod(path, mode, callback) {
+    function appendFile(file, data, options, callback) {
+        var opts;
+        if (typeof options === 'function') {
+            callback = options;
+            opts = appendFileDefaults;
+        }
+        else {
+            var tipof = typeof options;
+            switch (tipof) {
+                case 'object':
+                    opts = extend({}, appendFileDefaults, options);
+                    break;
+                case 'string':
+                    opts = extend({ encoding: options }, appendFileDefaults);
+                    break;
+                default:
+                    throw TypeError(ERRSTR_OPTS(tipof));
+            }
+            if (typeof callback !== 'function')
+                throw TypeError(ERRSTR.CB);
+        }
+        var b;
+        if (Buffer.isBuffer(data))
+            b = data;
+        else
+            b = new Buffer(String(data), opts.encoding);
+        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+        function on_open(fd, is_fd) {
+            var res = libjs.write(fd, sb);
+            if (res < 0)
+                throwError(res, 'appendFile', String(file));
+            if (!is_fd)
+                libjs.closeAsync(fd, noop);
+        }
+        var fd;
+        var is_fd = typeof file === 'number';
+        if (is_fd) {
+            fd = file;
+            on_open(fd, is_fd);
+        }
+        else {
+            var filename;
+            if (Buffer.isBuffer(file))
+                filename = file.toString();
+            else if (typeof file === 'string')
+                filename = file;
+            else
+                throw TypeError(ERRSTR.PATH_STR);
+            var flags = flagsToFlagsValue(opts.flag);
+            if (typeof opts.mode !== 'number')
+                throw TypeError(ERRSTR.MODE_INT);
+            libjs.openAsync(filename, flags, opts.mode, function (fd) {
+                if (fd < 0)
+                    return callback(Error(formatError(fd, 'appendFile', filename)));
+                on_open(fd, is_fd);
+            });
+        }
     }
     function chmodSync(path, mode) {
         var vpath = validPathOrThrow(path);
         if (typeof mode !== 'number')
-            throw TypeError('mode must be an integer');
+            throw TypeError(ERRSTR.MODE_INT);
         var result = libjs.chmod(vpath, mode);
         if (result < 0)
             throwError(result, 'chmod', vpath);
     }
-    function fchmod(fd, mode, callback) { }
+    function chmod(path, mode, callback) {
+        var vpath = validPathOrThrow(path);
+        if (typeof mode !== 'number')
+            throw TypeError(ERRSTR.MODE_INT);
+        libjs.chmodAsync(vpath, mode, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'chmod', vpath)));
+            else
+                callback(null);
+        });
+    }
     function fchmodSync(fd, mode) {
         validateFd(fd);
         if (typeof mode !== 'number')
-            throw TypeError('mode must be an integer');
+            throw TypeError(ERRSTR.MODE_INT);
         var result = libjs.fchmod(fd, mode);
         if (result < 0)
             throwError(result, 'chmod');
     }
-    function chown(path, uid, gid, callback) { }
+    function fchmod(fd, mode, callback) {
+        validateFd(fd);
+        if (typeof mode !== 'number')
+            throw TypeError(ERRSTR.MODE_INT);
+        libjs.fchmodAsync(fd, mode, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'chmod')));
+            else
+                callback(null);
+        });
+    }
     function chownSync(path, uid, gid) {
         var vpath = validPathOrThrow(path);
         if (typeof uid !== 'number')
-            throw TypeError('uid must be an unsigned int');
+            throw TypeError(ERRSTR.UID);
         if (typeof gid !== 'number')
-            throw TypeError('gid must be an unsigned int');
+            throw TypeError(ERRSTR.GID);
         var result = libjs.chown(vpath, uid, gid);
         if (result < 0)
             throwError(result, 'chown', vpath);
     }
-    function fchown(fd, uid, gid, callback) { }
+    function chown(path, uid, gid, callback) {
+        var vpath = validPathOrThrow(path);
+        if (typeof uid !== 'number')
+            throw TypeError(ERRSTR.UID);
+        if (typeof gid !== 'number')
+            throw TypeError(ERRSTR.GID);
+        libjs.chownAsync(vpath, uid, gid, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'chown', vpath)));
+            else
+                callback(null);
+        });
+    }
     function fchownSync(fd, uid, gid) {
         validateFd(fd);
         if (typeof uid !== 'number')
-            throw TypeError('uid must be an unsigned int');
+            throw TypeError(ERRSTR.UID);
         if (typeof gid !== 'number')
-            throw TypeError('gid must be an unsigned int');
+            throw TypeError(ERRSTR.GID);
         var result = libjs.fchown(fd, uid, gid);
         if (result < 0)
             throwError(result, 'fchown');
     }
-    function lchown(path, uid, gid, callback) { }
+    function fchown(fd, uid, gid, callback) {
+        validateFd(fd);
+        if (typeof uid !== 'number')
+            throw TypeError(ERRSTR.UID);
+        if (typeof gid !== 'number')
+            throw TypeError(ERRSTR.GID);
+        libjs.fchownAsync(fd, uid, gid, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'fchown')));
+            else
+                callback(null);
+        });
+    }
     function lchownSync(path, uid, gid) {
         var vpath = validPathOrThrow(path);
         if (typeof uid !== 'number')
-            throw TypeError('uid must be an unsigned int');
+            throw TypeError(ERRSTR.UID);
         if (typeof gid !== 'number')
-            throw TypeError('gid must be an unsigned int');
+            throw TypeError(ERRSTR.GID);
         var result = libjs.lchown(vpath, uid, gid);
         if (result < 0)
             throwError(result, 'lchown', vpath);
     }
+    function lchown(path, uid, gid, callback) {
+        var vpath = validPathOrThrow(path);
+        if (typeof uid !== 'number')
+            throw TypeError(ERRSTR.UID);
+        if (typeof gid !== 'number')
+            throw TypeError(ERRSTR.GID);
+        libjs.lchownAsync(vpath, uid, gid, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'lchown', vpath)));
+            else
+                callback(null);
+        });
+    }
     function closeSync(fd) {
         if (typeof fd !== 'number')
-            throw TypeError('fd must be a file descriptor');
+            throw TypeError(ERRSTR.FD);
         var result = libjs.close(fd);
         if (result < 0)
             throwError(result, 'close');
     }
-    function createWriteStream(path, options) { }
+    function close(fd, callback) {
+        if (typeof fd !== 'number')
+            throw TypeError(ERRSTR.FD);
+        libjs.closeAsync(fd, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'close')));
+            else
+                callback(null);
+        });
+    }
     function existsSync(path) {
-        console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
         try {
             accessSync(path);
             return true;
@@ -192,19 +398,42 @@ function build(deps) {
             return false;
         }
     }
+    function exists(path, callback) {
+        access(path, function (err) { callback(!err); });
+    }
     function fsyncSync(fd) {
         if (typeof fd !== 'number')
-            throw TypeError('fd must be a file descriptor');
+            throw TypeError(ERRSTR.FD);
         var result = libjs.fsync(fd);
         if (result < 0)
             throwError(result, 'fsync');
     }
+    function fsync(fd, callback) {
+        if (typeof fd !== 'number')
+            throw TypeError(ERRSTR.FD);
+        libjs.fsyncAsync(fd, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'fsync')));
+            else
+                callback(null);
+        });
+    }
     function fdatasyncSync(fd) {
         if (typeof fd !== 'number')
-            throw TypeError('fd must be a file descriptor');
+            throw TypeError(ERRSTR.FD);
         var result = libjs.fdatasync(fd);
         if (result < 0)
             throwError(result, 'fdatasync');
+    }
+    function fdatasync(fd, callback) {
+        if (typeof fd !== 'number')
+            throw TypeError(ERRSTR.FD);
+        libjs.fdatasyncAsync(fd, function (result) {
+            if (result < 0)
+                callback(Error(formatError(result, 'fdatasync')));
+            else
+                callback(null);
+        });
     }
     function createStatsObject(res) {
         var stats = new Stats;
@@ -235,13 +464,12 @@ function build(deps) {
         }
     }
     function stat(path, callback) {
-        var vpath = pathOrError(path);
-        if (vpath instanceof TypeError)
-            return callback(vpath);
+        var vpath = validPathOrThrow(path);
         libjs.statAsync(vpath, function (err, res) {
             if (err)
-                return callback(Error(formatError(err, 'stat', vpath)));
-            callback(null, createStatsObject(res));
+                callback(Error(formatError(err, 'stat', vpath)));
+            else
+                callback(null, createStatsObject(res));
         });
     }
     function fstatSync(fd) {
@@ -254,6 +482,15 @@ function build(deps) {
             throwError(errno, 'fstat');
         }
     }
+    function fstat(fd, callback) {
+        validateFd(fd);
+        libjs.fstatAsync(fd, function (err, res) {
+            if (err)
+                callback(Error(formatError(err, 'fstat')));
+            else
+                callback(null, createStatsObject(res));
+        });
+    }
     function lstatSync(path) {
         var vpath = validPathOrThrow(path);
         try {
@@ -264,32 +501,59 @@ function build(deps) {
             throwError(errno, 'lstat', vpath);
         }
     }
+    function lstat(path, callback) {
+        var vpath = validPathOrThrow(path);
+        libjs.lstatAsync(vpath, function (err, res) {
+            if (err)
+                callback(Error(formatError(err, 'lstat', vpath)));
+            else
+                callback(null, createStatsObject(res));
+        });
+    }
     function truncateSync(path, len) {
         var vpath = validPathOrThrow(path);
         if (typeof len !== 'number')
-            throw TypeError('len must be an integer');
+            throw TypeError(ERRSTR.LEN);
         var res = libjs.truncate(vpath, len);
         if (res < 0)
             throwError(res, 'truncate', vpath);
     }
+    function truncate(path, len, callback) {
+        var vpath = validPathOrThrow(path);
+        if (typeof len !== 'number')
+            throw TypeError(ERRSTR.LEN);
+        libjs.truncateAsync(vpath, len, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'truncate', vpath)));
+            else
+                callback(null);
+        });
+    }
     function ftruncateSync(fd, len) {
         validateFd(fd);
         if (typeof len !== 'number')
-            throw TypeError('len must be an integer');
+            throw TypeError(ERRSTR.LEN);
         var res = libjs.ftruncate(fd, len);
         if (res < 0)
             throwError(res, 'ftruncate');
     }
+    function ftruncate(fd, len, callback) {
+        validateFd(fd);
+        if (typeof len !== 'number')
+            throw TypeError(ERRSTR.LEN);
+        libjs.ftruncateAsync(fd, len, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'ftruncate')));
+            else
+                callback(null);
+        });
+    }
     function utimesSync(path, atime, mtime) {
-        path = validPathOrThrow(path);
-        if (typeof atime === 'string')
-            atime = parseInt(atime);
-        if (typeof mtime === 'string')
-            mtime = parseInt(mtime);
+        var vpath = validPathOrThrow(path);
         if (typeof atime !== 'number')
-            throw TypeError('atime must be an integer');
+            throw TypeError(ERRSTR.ATIME);
         if (typeof mtime !== 'number')
-            throw TypeError('mtime must be an integer');
+            throw TypeError(ERRSTR.MTIME);
         var vatime = atime;
         var vmtime = mtime;
         if (!isFinite(vatime))
@@ -302,10 +566,34 @@ function build(deps) {
             actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
             modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
         };
-        var res = libjs.utime(path, times);
-        console.log(res);
+        var res = libjs.utime(vpath, times);
         if (res < 0)
-            throwError(res, 'utimes', path);
+            throwError(res, 'utimes', vpath);
+    }
+    function utimes(path, atime, mtime, callback) {
+        var vpath = validPathOrThrow(path);
+        if (typeof atime !== 'number')
+            throw TypeError(ERRSTR.ATIME);
+        if (typeof mtime !== 'number')
+            throw TypeError(ERRSTR.MTIME);
+        var vatime = atime;
+        var vmtime = mtime;
+        if (!isFinite(vatime))
+            vatime = Date.now();
+        if (!isFinite(vmtime))
+            vmtime = Date.now();
+        vatime = Math.round(vatime / 1000);
+        vmtime = Math.round(vmtime / 1000);
+        var times = {
+            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+        };
+        libjs.utimeAsync(vpath, times, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'utimes', vpath)));
+            else
+                callback(null);
+        });
     }
     function linkSync(srcpath, dstpath) {
         var vsrcpath = validPathOrThrow(srcpath);
@@ -314,27 +602,56 @@ function build(deps) {
         if (res < 0)
             throwError(res, 'link', vsrcpath, vdstpath);
     }
+    function link(srcpath, dstpath, callback) {
+        var vsrcpath = validPathOrThrow(srcpath);
+        var vdstpath = validPathOrThrow(dstpath);
+        libjs.linkAsync(vsrcpath, vdstpath, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
+            else
+                callback(null);
+        });
+    }
     function mkdirSync(path, mode) {
-        if (mode === void 0) { mode = MODE_DEFAULT; }
+        if (mode === void 0) { mode = 511; }
         var vpath = validPathOrThrow(path);
         if (typeof mode !== 'number')
-            throw TypeError('mode must be an integer');
+            throw TypeError(ERRSTR.MODE_INT);
         var res = libjs.mkdir(vpath, mode);
         if (res < 0)
             throwError(res, 'mkdir', vpath);
     }
-    function randomString6() {
+    function mkdir(path, mode, callback) {
+        if (mode === void 0) { mode = 511; }
+        var vpath = validPathOrThrow(path);
+        if (typeof mode === 'function') {
+            callback = mode;
+            mode = 511;
+        }
+        else {
+            if (typeof mode !== 'number')
+                throw TypeError(ERRSTR.MODE_INT);
+            if (typeof callback !== 'function')
+                throw TypeError(ERRSTR.CB);
+        }
+        libjs.mkdirAsync(vpath, mode, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'mkdir', vpath)));
+            else
+                callback(null);
+        });
+    }
+    function rndStr6() {
         return (+new Date).toString(36).slice(-6);
     }
-    function mkdtempSync(prefix, options) {
-        if (options === void 0) { options = {}; }
+    function mkdtempSync(prefix) {
         if (!prefix || typeof prefix !== 'string')
-            throw new TypeError('filename prefix is required');
+            throw new TypeError(ERRSTR.PREFIX);
         var retries = 10;
         var fullname;
         var found_tmp_name = false;
         for (var i = 0; i < retries; i++) {
-            fullname = prefix + randomString6();
+            fullname = prefix + rndStr6();
             try {
                 accessSync(fullname);
             }
@@ -351,22 +668,41 @@ function build(deps) {
             throw Error("Could not find a new name, mkdtemp");
         }
     }
-    function flagsToFlagsValue(f) {
-        if (typeof f === 'number')
-            return flags;
-        if (typeof f !== 'string')
-            throw TypeError("flags must be string or number");
-        var flagsval = flags[f];
-        if (typeof flagsval !== 'number')
-            throw TypeError("Invalid flags string value '" + f + "'");
-        return flagsval;
+    function mkdtemp(prefix, callback) {
+        if (!prefix || typeof prefix !== 'string')
+            throw new TypeError(ERRSTR.PREFIX);
+        var retries = 10;
+        var fullname;
+        function mk_dir() {
+            mkdir(fullname, function (err) {
+                if (err)
+                    callback(err);
+                else
+                    callback(null, fullname);
+            });
+        }
+        function name_loop() {
+            if (retries < 1) {
+                callback(Error('Could not find a new name, mkdtemp'));
+                return;
+            }
+            retries--;
+            fullname = prefix + rndStr6();
+            access(fullname, function (err) {
+                if (err)
+                    name_loop();
+                else
+                    mk_dir();
+            });
+        }
+        name_loop();
     }
     function openSync(path, flags, mode) {
-        if (mode === void 0) { mode = MODE_DEFAULT; }
+        if (mode === void 0) { mode = 438; }
         var vpath = validPathOrThrow(path);
         var flagsval = flagsToFlagsValue(flags);
         if (typeof mode !== 'number')
-            throw TypeError('mode must be an integer');
+            throw TypeError(ERRSTR.MODE_INT);
         var res = libjs.open(vpath, flagsval, mode);
         if (res < 0)
             throwError(res, 'open', vpath);
@@ -375,7 +711,7 @@ function build(deps) {
     function open(path, flags, mode, callback) {
         if (typeof mode === 'function') {
             callback = mode;
-            mode = MODE_DEFAULT;
+            mode = 438;
         }
         try {
             var vpath = validPathOrThrow(path);
@@ -386,7 +722,7 @@ function build(deps) {
             return;
         }
         if (typeof mode !== 'number')
-            return callback(TypeError('mode must be an integer'));
+            return callback(TypeError(ERRSTR.MODE_INT));
         libjs.openAsync(vpath, flagsval, mode, function (res) {
             if (res < 0)
                 callback(Error(formatError(res, 'open', vpath)));
@@ -414,9 +750,6 @@ function build(deps) {
             throwError(res, 'read');
         return res;
     }
-    var optionsDefaults = {
-        encoding: 'utf8'
-    };
     function readdirSync(path, options) {
         if (options === void 0) { options = {}; }
         var vpath = validPathOrThrow(path);
@@ -443,7 +776,7 @@ function build(deps) {
         else {
             var vfile = validPathOrThrow(file);
             var flag = flags[opts.flag];
-            fd = libjs.open(vfile, flag, MODE_DEFAULT);
+            fd = libjs.open(vfile, flag, 438);
             if (fd < 0)
                 throwError(fd, 'readFile', vfile);
         }
@@ -515,7 +848,7 @@ function build(deps) {
             if (vfile instanceof TypeError)
                 return callback(vfile);
             var flag = flags[opts.flag];
-            libjs.openAsync(vfile, flag, MODE_DEFAULT, function (fd) {
+            libjs.openAsync(vfile, flag, 438, function (fd) {
                 if (fd < 0)
                     callback(Error(formatError(fd, 'readFile', vfile)));
                 else
@@ -572,6 +905,7 @@ function build(deps) {
         if (res < 0)
             throwError(res, 'unlink', vpath);
     }
+    function createWriteStream(path, options) { }
     var FSWatcher = (function (_super) {
         __extends(FSWatcher, _super);
         function FSWatcher() {
@@ -742,6 +1076,7 @@ function build(deps) {
         fstatSync: fstatSync,
         fsyncSync: fsyncSync,
         ftruncateSync: ftruncateSync,
+        utimesSync: utimesSync,
         lchownSync: lchownSync,
         linkSync: linkSync,
         lstatSync: lstatSync,
@@ -758,8 +1093,27 @@ function build(deps) {
         writeSync: writeSync,
         unlinkSync: unlinkSync,
         rmdirSync: rmdirSync,
-        open: open,
+        access: access,
+        appendFile: appendFile,
+        chmod: chmod,
+        fchmod: fchmod,
+        chown: chown,
+        fchown: fchown,
+        lchown: lchown,
+        close: close,
+        exists: exists,
+        fsync: fsync,
+        fdatasync: fdatasync,
         stat: stat,
+        fstat: fstat,
+        lstat: lstat,
+        ftruncate: ftruncate,
+        truncate: truncate,
+        utimes: utimes,
+        link: link,
+        mkdtemp: mkdtemp,
+        mkdir: mkdir,
+        open: open,
         readFile: readFile
     };
 }

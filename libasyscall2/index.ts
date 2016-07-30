@@ -15,17 +15,25 @@ export class Asyscall {
     curr: StaticBuffer = null;  // Current block.
     next: StaticBuffer = null;  // Next block.
 
-    // TODO: Keep old used blocks for reuse.
-    recycled: StaticBuffer = null;
+    // Keep old used blocks for reuse in linked list.
+    // We keep them here not just for reuse, but because some sleeping
+    // threads may not have yet left them. References first block in "used" queue.
+    usedFirst: StaticBuffer = null;
+    usedLast:  StaticBuffer = null; // Last block in "used" queue.
 
     build() {
+        // var bin = require('./bin');
+        // var buf = new Buffer(bin);
+        // this.code = StaticBuffer.alloc(bin.length * 10, 'rwe');
+        // buf.copy(this.code);
+        // this.code = this.code.slice(0, bin.length);
         var bin = require('./bin');
         this.code = StaticBuffer.alloc(bin, 'rwe');
 
         this.curr = this.code.slice(this.code.length - CONF.BLOCK_SIZE);
-        this.curr[0] = LOCK.UNINITIALIZED;
-        this.next = new StaticBuffer(CONF.BLOCK_SIZE);
-        this.next[0] = LOCK.UNINITIALIZED;
+        this.curr.writeInt32LE(LOCK.UNINITIALIZED, 0);
+        this.curr.writeInt32LE(0, 4); // Number of threads left this block.
+        this.next = this.newBlock();
         link(this.curr, this.next);
 
         this.code.call();
@@ -35,22 +43,63 @@ export class Asyscall {
         // this.code = null;
     }
 
+    // This is a hack: we allocate a large chunk of memory so that
+    // V8 does not move it around, so we imitate `StaticBuffer`. When we
+    // have a proper `StaticBuffer` we don't need this function anymore.
+    // protected allocatePage() {
+    //     const BLOCKS = 200;
+    //     var page = StaticBuffer.alloc(BLOCKS * CONF.BLOCK_SIZE, 'rw');
+    //
+    //     Insert first block.
+        // var first = page.slice(0, CONF.BLOCK_SIZE);
+        // first.writeInt32LE(CONF.THREADS, 4);
+        // var prev = first;
+        //
+        // for(var i = 1; i < BLOCKS; i++) {
+        //     var curr = page.slice(i * CONF.BLOCK_SIZE, (i + 1) * CONF.BLOCK_SIZE);
+        //     curr.writeInt32LE(CONF.THREADS, 4);
+        //     prev._next = curr;
+        //     prev = curr;
+        // }
+        //
+        // if(!this.usedFirst) {
+        //     this.usedFirst = first;
+        //     this.usedLast = curr;
+        // } else {
+        //     curr._next = this.usedFirst;
+        //     this.usedFirst = first;
+        // }
+    // }
+
     protected recycleBlock(block) {
-        var first = this.recycled;
-        if(first) block._next = first;
-        this.recycled = block;
+        if(!this.usedFirst) {
+            this.usedFirst = this.usedLast = block;
+        } else {
+            var last = this.usedLast;
+            last._next = block;
+            this.usedLast = block;
+        }
     }
 
     protected newBlock() {
-        var block: StaticBuffer;
-        if(block = this.recycled) {
-            this.recycled = block._next;
-            block._next = null;
+        var block = this.usedFirst;
+        if(block && (block.readInt32LE(4) === CONF.THREADS)) { // Check if all threads already left this block
+            if(this.usedLast === block) {
+                this.usedFirst = this.usedLast = null;
+            } else {
+                this.usedFirst = block._next;
+                block._next = null;
+            }
         } else {
-            block = new StaticBuffer(CONF.BLOCK_SIZE);
+            // TODO: We should use `new StaticBuffer()` here, but we allocate
+            // using `mmap` instead because for now we don't have a proper `StaticBuffer`
+            // in V8.
+            block = StaticBuffer.alloc(CONF.BLOCK_SIZE, 'rw');
+            // block = new StaticBuffer(CONF.BLOCK_SIZE);
         }
 
-        block[0] = LOCK.UNINITIALIZED;
+        block.writeInt32LE(LOCK.UNINITIALIZED, 0);
+        block.writeInt32LE(0, 4); // Number of threads left this block.
         return block;
     }
 
@@ -112,7 +161,6 @@ export class Asyscall {
         // The last thing we do, is mark this block as available for threads.
         // curr.writeInt32LE(LOCK.FREE, 0);
         curr[0] = LOCK.FREE;
-        // curr.print();
         return callback;
     }
 
@@ -124,6 +172,8 @@ export class Asyscall {
             // Or then refactor thread pool to use 8-bit value.
             var lock = curr[0];
             if(lock === LOCK.DONE) {
+                // curr.print();
+                // console.log('---------');
                 if(is64) {
                     callback([
                         curr.readInt32LE(CONF.INT * 7),

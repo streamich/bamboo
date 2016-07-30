@@ -125,7 +125,7 @@ function fdatasyncAsync(fd, callback) {
 }
 exports.fdatasyncAsync = fdatasyncAsync;
 function stat(filepath) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new Buffer(types.stat.size + 200);
     var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
     if (result == 0)
         return types.stat.unpack(buf);

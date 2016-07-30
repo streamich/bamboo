@@ -649,7 +649,7 @@ export const enum FD {
 //
 // __syscall_ulong_t` is `unsigned long long int`
 
-export var ipc_perm = Struct.define(48, [ // It is 48 for some reason.
+export var ipc_perm = Struct.define(48, [ // It is 48 for some reason, auto-padding by GCC?
     [0, int32, '__key'],
     [4, uint32, 'uid'],
     [8, uint32, 'gid'],

@@ -160,7 +160,7 @@ var global = this;
 
 
 	    // Create `process.asyscall` and `process.asyscall64`
-	    __webpack_require__(21);
+	    __webpack_require__(17);
 
 	    
 	    try {
@@ -168,8 +168,8 @@ var global = this;
 	        // Eval the file specified in first argument `full app.js`
 	        // console.log(process.argv);
 	        if(process.argv[1]) {
-	            var path = __webpack_require__(24);
-	            var Module = __webpack_require__(27).Module;
+	            var path = __webpack_require__(20);
+	            var Module = __webpack_require__(23).Module;
 	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
 	            setImmediate(function() {
@@ -2461,7 +2461,7 @@ var global = this;
 	}
 	exports.fdatasyncAsync = fdatasyncAsync;
 	function stat(filepath) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new Buffer(types.stat.size + 200);
 	    var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
 	    if (result == 0)
 	        return types.stat.unpack(buf);
@@ -3546,6 +3546,7 @@ var global = this;
 	// StaticBuffer.from([1, 2, 3]);
 	// StaticBuffer.from(new StaticArrayBuffer(100));
 	// StaticBuffer.from(new ArrayBuffer(100));
+	// StaticBuffer.from(new Buffer(100));
 	StaticBuffer.from = function(obj, a, b) {
 	    if(obj instanceof Array) {
 	        var array = obj;
@@ -3559,6 +3560,27 @@ var global = this;
 	    } else if(obj instanceof ArrayBuffer) {
 	        var arrayBuffer = obj, byteOffset = a, length = b;
 	        return StaticBuffer.from(new StaticArrayBuffer(arrayBuffer), byteOffset, length);
+
+
+	    } else if(Buffer.isBuffer(obj) && !StaticBuffer.isStaticBuffer(obj)) {
+
+	        // Create a `StaticBuffer` from simple `Buffer`.
+	        // This is very ad-hoc currently and hacky currently.
+
+	        const MIN_SIZE = 200;
+	        const LEN = obj.length;
+	        if(LEN < MIN_SIZE) {
+	            var sab = new StaticArrayBuffer(MIN_SIZE);
+	            var sb = new StaticBuffer(sab, 0, LEN);
+	            obj.copy(sb);
+	            return sb;
+	        } else {
+	            // If buffer is already big we just wrap that memory contents into
+	            // StaticBuffer, btw could we use `process.frame()` here?
+	            var sab = new StaticArrayBuffer(obj.buffer);
+	            return new StaticBuffer(sab);
+	        }
+
 	    } else if(obj instanceof Uint8Array) {
 	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
 	        var sb = new StaticBuffer(obj.length);
@@ -4843,16 +4865,12 @@ var global = this;
 
 
 /***/ },
-/* 17 */,
-/* 18 */,
-/* 19 */,
-/* 20 */,
-/* 21 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
 	if (!process.asyscall) {
 	    if (process.hasBinaryUtils && (true)) {
-	        var Asyscall = __webpack_require__(22).Asyscall;
+	        var Asyscall = __webpack_require__(18).Asyscall;
 	        var asyscall = new Asyscall;
 	        asyscall.build();
 	        process.asyscall = asyscall.exec.bind(asyscall);
@@ -4880,7 +4898,7 @@ var global = this;
 
 
 /***/ },
-/* 22 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -4894,34 +4912,45 @@ var global = this;
 	        this.code = null;
 	        this.curr = null;
 	        this.next = null;
-	        this.recycled = null;
+	        this.usedFirst = null;
+	        this.usedLast = null;
 	    }
 	    Asyscall.prototype.build = function () {
-	        var bin = __webpack_require__(23);
+	        var bin = __webpack_require__(19);
 	        this.code = StaticBuffer.alloc(bin, 'rwe');
 	        this.curr = this.code.slice(this.code.length - 72);
-	        this.curr[0] = 0;
-	        this.next = new StaticBuffer(72);
-	        this.next[0] = 0;
+	        this.curr.writeInt32LE(0, 0);
+	        this.curr.writeInt32LE(0, 4);
+	        this.next = this.newBlock();
 	        link(this.curr, this.next);
 	        this.code.call();
 	    };
 	    Asyscall.prototype.recycleBlock = function (block) {
-	        var first = this.recycled;
-	        if (first)
-	            block._next = first;
-	        this.recycled = block;
-	    };
-	    Asyscall.prototype.newBlock = function () {
-	        var block;
-	        if (block = this.recycled) {
-	            this.recycled = block._next;
-	            block._next = null;
+	        if (!this.usedFirst) {
+	            this.usedFirst = this.usedLast = block;
 	        }
 	        else {
-	            block = new StaticBuffer(72);
+	            var last = this.usedLast;
+	            last._next = block;
+	            this.usedLast = block;
 	        }
-	        block[0] = 0;
+	    };
+	    Asyscall.prototype.newBlock = function () {
+	        var block = this.usedFirst;
+	        if (block && (block.readInt32LE(4) === 2)) {
+	            if (this.usedLast === block) {
+	                this.usedFirst = this.usedLast = null;
+	            }
+	            else {
+	                this.usedFirst = block._next;
+	                block._next = null;
+	            }
+	        }
+	        else {
+	            block = StaticBuffer.alloc(72, 'rw');
+	        }
+	        block.writeInt32LE(0, 0);
+	        block.writeInt32LE(0, 4);
 	        return block;
 	    };
 	    Asyscall.prototype.writeArg = function (arg, slot) {
@@ -5012,18 +5041,18 @@ var global = this;
 
 
 /***/ },
-/* 23 */
+/* 19 */
 /***/ function(module, exports) {
 
-	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,163,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,226,0,0,0,77,139,117,64,65,139,69,0,131,248,4,116,98,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,231,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,77,137,245,77,139,117,64,235,149,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,144,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,179,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,242,0,0,0,77,139,117,64,65,139,69,0,131,248,4,15,132,107,0,0,0,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,227,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,240,65,131,69,4,1,77,137,245,77,139,117,64,233,136,255,255,255,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,15,31,64,0,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
 /***/ },
-/* 24 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	const inspect = __webpack_require__(25).inspect;
+	const inspect = __webpack_require__(21).inspect;
 
 	function assertPath(path) {
 	    if (typeof path !== 'string') {
@@ -6624,7 +6653,7 @@ var global = this;
 
 
 /***/ },
-/* 25 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Buffer = __webpack_require__(2).Buffer;
@@ -6869,7 +6898,7 @@ var global = this;
 
 	function ensureDebugIsInitialized() {
 	    if (Debug === undefined) {
-	        const runInDebugContext = __webpack_require__(26).runInDebugContext;
+	        const runInDebugContext = __webpack_require__(22).runInDebugContext;
 	        Debug = runInDebugContext('Debug');
 	    }
 	}
@@ -7637,13 +7666,13 @@ var global = this;
 
 
 /***/ },
-/* 26 */
+/* 22 */
 /***/ function(module, exports) {
 
 	module.exports = require("vm");
 
 /***/ },
-/* 27 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -7659,14 +7688,14 @@ var global = this;
 	// though it might not be 100% compatible with Node.js.
 
 
-	var NativeModule = __webpack_require__(28).NativeModule;
-	var util = __webpack_require__(25);
-	var internalModule = __webpack_require__(44);
-	var internalUtil = __webpack_require__(34);
-	var vm = __webpack_require__(48);
-	var assert = __webpack_require__(39).ok;
-	var fs = __webpack_require__(41);
-	var path = __webpack_require__(24);
+	var NativeModule = __webpack_require__(24).NativeModule;
+	var util = __webpack_require__(21);
+	var internalModule = __webpack_require__(40);
+	var internalUtil = __webpack_require__(30);
+	var vm = __webpack_require__(44);
+	var assert = __webpack_require__(35).ok;
+	var fs = __webpack_require__(37);
+	var path = __webpack_require__(20);
 	var libjs = __webpack_require__(6);
 
 	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -8370,7 +8399,7 @@ var global = this;
 
 
 /***/ },
-/* 28 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function NativeModule(id) {
@@ -8483,7 +8512,7 @@ var global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(29)("./" + this.id);
+	        this.exports = __webpack_require__(25)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -8499,37 +8528,37 @@ var global = this;
 
 
 /***/ },
-/* 29 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./_stream_duplex": 30,
-		"./_stream_passthrough": 36,
-		"./_stream_readable": 31,
-		"./_stream_transform": 35,
-		"./_stream_writable": 33,
-		"./assert": 39,
+		"./_stream_duplex": 26,
+		"./_stream_passthrough": 32,
+		"./_stream_readable": 27,
+		"./_stream_transform": 31,
+		"./_stream_writable": 29,
+		"./assert": 35,
 		"./boot": 1,
 		"./buffer": 2,
-		"./console": 40,
+		"./console": 36,
 		"./eloop": 15,
 		"./events": 13,
-		"./fs": 41,
-		"./internal/module": 44,
-		"./internal/streams/BufferList": 37,
-		"./internal/streams/lazy_transform": 46,
-		"./internal/util": 34,
-		"./module": 27,
-		"./native_module": 28,
-		"./path": 24,
+		"./fs": 37,
+		"./internal/module": 40,
+		"./internal/streams/BufferList": 33,
+		"./internal/streams/lazy_transform": 42,
+		"./internal/util": 30,
+		"./module": 23,
+		"./native_module": 24,
+		"./path": 20,
 		"./process": 12,
-		"./punycode": 47,
+		"./punycode": 43,
 		"./static-arraybuffer": 5,
 		"./static-buffer": 11,
-		"./stream": 32,
+		"./stream": 28,
 		"./timers": 16,
-		"./util": 25,
-		"./vm": 48
+		"./util": 21,
+		"./vm": 44
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -8542,11 +8571,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 29;
+	webpackContext.id = 25;
 
 
 /***/ },
-/* 30 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a duplex stream is just a stream that is both readable and writable.
@@ -8558,9 +8587,9 @@ var global = this;
 
 	module.exports = Duplex;
 
-	const util = __webpack_require__(25);
-	const Readable = __webpack_require__(31);
-	const Writable = __webpack_require__(33);
+	const util = __webpack_require__(21);
+	const Readable = __webpack_require__(27);
+	const Writable = __webpack_require__(29);
 
 	util.inherits(Duplex, Readable);
 
@@ -8609,7 +8638,7 @@ var global = this;
 
 
 /***/ },
-/* 31 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -8618,11 +8647,11 @@ var global = this;
 	Readable.ReadableState = ReadableState;
 
 	const EE = __webpack_require__(13);
-	const Stream = __webpack_require__(32);
+	const Stream = __webpack_require__(28);
 	const Buffer = __webpack_require__(2).Buffer;
-	const util = __webpack_require__(25);
+	const util = __webpack_require__(21);
 	const debug = util.debuglog('stream');
-	const BufferList = __webpack_require__(37);
+	const BufferList = __webpack_require__(33);
 	var StringDecoder;
 
 	util.inherits(Readable, Stream);
@@ -8710,7 +8739,7 @@ var global = this;
 	    this.encoding = null;
 	    if (options.encoding) {
 	        if (!StringDecoder)
-	            StringDecoder = __webpack_require__(38).StringDecoder;
+	            StringDecoder = __webpack_require__(34).StringDecoder;
 	        this.decoder = new StringDecoder(options.encoding);
 	        this.encoding = options.encoding;
 	    }
@@ -8830,7 +8859,7 @@ var global = this;
 	// backwards compatibility.
 	Readable.prototype.setEncoding = function(enc) {
 	    if (!StringDecoder)
-	        StringDecoder = __webpack_require__(38).StringDecoder;
+	        StringDecoder = __webpack_require__(34).StringDecoder;
 	    this._readableState.decoder = new StringDecoder(enc);
 	    this._readableState.encoding = enc;
 	    return this;
@@ -9590,7 +9619,7 @@ var global = this;
 
 
 /***/ },
-/* 32 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -9598,14 +9627,14 @@ var global = this;
 	module.exports = Stream;
 
 	const EE = __webpack_require__(13);
-	const util = __webpack_require__(25);
+	const util = __webpack_require__(21);
 
 	util.inherits(Stream, EE);
-	Stream.Readable = __webpack_require__(31);
-	Stream.Writable = __webpack_require__(33);
-	Stream.Duplex = __webpack_require__(30);
-	Stream.Transform = __webpack_require__(35);
-	Stream.PassThrough = __webpack_require__(36);
+	Stream.Readable = __webpack_require__(27);
+	Stream.Writable = __webpack_require__(29);
+	Stream.Duplex = __webpack_require__(26);
+	Stream.Transform = __webpack_require__(31);
+	Stream.PassThrough = __webpack_require__(32);
 
 	// Backwards-compat with node 0.4.x
 	Stream.Stream = Stream;
@@ -9703,7 +9732,7 @@ var global = this;
 
 
 /***/ },
-/* 33 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// A bit simpler than readable streams.
@@ -9715,9 +9744,9 @@ var global = this;
 	module.exports = Writable;
 	Writable.WritableState = WritableState;
 
-	const util = __webpack_require__(25);
-	const internalUtil = __webpack_require__(34);
-	const Stream = __webpack_require__(32);
+	const util = __webpack_require__(21);
+	const internalUtil = __webpack_require__(30);
+	const Stream = __webpack_require__(28);
 	const Buffer = __webpack_require__(2).Buffer;
 
 	util.inherits(Writable, Stream);
@@ -10239,7 +10268,7 @@ var global = this;
 
 
 /***/ },
-/* 34 */
+/* 30 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -10340,7 +10369,7 @@ var global = this;
 
 
 /***/ },
-/* 35 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a transform stream is a readable/writable stream where you do
@@ -10389,8 +10418,8 @@ var global = this;
 
 	module.exports = Transform;
 
-	const Duplex = __webpack_require__(30);
-	const util = __webpack_require__(25);
+	const Duplex = __webpack_require__(26);
+	const util = __webpack_require__(21);
 	util.inherits(Transform, Duplex);
 
 
@@ -10541,7 +10570,7 @@ var global = this;
 
 
 /***/ },
-/* 36 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a passthrough stream.
@@ -10552,8 +10581,8 @@ var global = this;
 
 	module.exports = PassThrough;
 
-	const Transform = __webpack_require__(35);
-	const util = __webpack_require__(25);
+	const Transform = __webpack_require__(31);
+	const util = __webpack_require__(21);
 	util.inherits(PassThrough, Transform);
 
 	function PassThrough(options) {
@@ -10569,7 +10598,7 @@ var global = this;
 
 
 /***/ },
-/* 37 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -10647,13 +10676,13 @@ var global = this;
 
 
 /***/ },
-/* 38 */
+/* 34 */
 /***/ function(module, exports) {
 
 	module.exports = require("string_decoder");
 
 /***/ },
-/* 39 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
@@ -10684,7 +10713,7 @@ var global = this;
 
 	// UTILITY
 	// const compare = process.binding('buffer').compare;
-	const util = __webpack_require__(25);
+	const util = __webpack_require__(21);
 	const Buffer = __webpack_require__(2).Buffer;
 	const pToString = function(obj) { return Object.prototype.toString.call(obj); };
 
@@ -11028,10 +11057,10 @@ var global = this;
 
 
 /***/ },
-/* 40 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var util = __webpack_require__(25);
+	var util = __webpack_require__(21);
 
 
 	function Console(stdout, stderr) {
@@ -11130,7 +11159,7 @@ var global = this;
 
 	Console.prototype.assert = function(expression) {
 	    if (!expression) {
-	        __webpack_require__(39).ok(false, util.format.apply(null, arguments));
+	        __webpack_require__(35).ok(false, util.format.apply(null, arguments));
 	    }
 	};
 
@@ -11140,25 +11169,25 @@ var global = this;
 
 
 /***/ },
-/* 41 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var build = __webpack_require__(42).build;
+	var build = __webpack_require__(38).build;
 
 
 	module.exports = build({
-	    path: __webpack_require__(24),
+	    path: __webpack_require__(20),
 	    EventEmitter: __webpack_require__(13).EventEmitter,
 	    Buffer: __webpack_require__(2).Buffer,
 	    StaticBuffer: __webpack_require__(11).StaticBuffer,
-	    Readable: __webpack_require__(32).Readable,
-	    Writable: __webpack_require__(32).Writable
+	    Readable: __webpack_require__(28).Readable,
+	    Writable: __webpack_require__(28).Writable
 	});
 
 
 
 /***/ },
-/* 42 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -11168,14 +11197,10 @@ var global = this;
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var libjs = __webpack_require__(6);
-	var inotify_1 = __webpack_require__(43);
+	var inotify_1 = __webpack_require__(39);
+	var extend = __webpack_require__(21).extend;
 	if (true) {
 	    exports.isFullJS = true;
-	}
-	function extend(a, b) {
-	    for (var i in b)
-	        a[i] = b[i];
-	    return a;
 	}
 	function noop() { }
 	function formatError(errno, func, path, path2) {
@@ -11202,7 +11227,7 @@ var global = this;
 	    if (path instanceof Buffer)
 	        path = path.toString();
 	    if (typeof path !== 'string')
-	        return TypeError('path must be a string');
+	        return TypeError(ERRSTR.PATH_STR);
 	    return path;
 	}
 	function validPathOrThrow(path) {
@@ -11214,7 +11239,7 @@ var global = this;
 	}
 	function validateFd(fd) {
 	    if (typeof fd !== 'number')
-	        throw TypeError('fd must be a file descriptor');
+	        throw TypeError(ERRSTR.FD);
 	}
 	(function (flags) {
 	    flags[flags["r"] = 0] = "r";
@@ -11231,7 +11256,6 @@ var global = this;
 	    flags[flags['ax+'] = 1218] = 'ax+';
 	})(exports.flags || (exports.flags = {}));
 	var flags = exports.flags;
-	var MODE_DEFAULT = 438;
 	var CHUNK = 4096;
 	var F_OK = 0;
 	var R_OK = 4;
@@ -11239,8 +11263,34 @@ var global = this;
 	var X_OK = 1;
 	var appendFileDefaults = {
 	    encoding: 'utf8',
-	    mode: MODE_DEFAULT,
+	    mode: 438,
 	    flag: 'a'
+	};
+	var ERRSTR = {
+	    PATH_STR: 'path must be a string',
+	    FD: 'fd must be a file descriptor',
+	    MODE_INT: 'mode must be an integer',
+	    CB: 'callback must be a function',
+	    UID: 'uid must be an unsigned int',
+	    GID: 'gid must be an unsigned int',
+	    LEN: 'len must be an integer',
+	    ATIME: 'atime must be an integer',
+	    MTIME: 'mtime must be an integer',
+	    PREFIX: 'filename prefix is required'
+	};
+	var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
+	function flagsToFlagsValue(f) {
+	    if (typeof f === 'number')
+	        return flags;
+	    if (typeof f !== 'string')
+	        throw TypeError("flags must be string or number");
+	    var flagsval = flags[f];
+	    if (typeof flagsval !== 'number')
+	        throw TypeError("Invalid flags string value '" + f + "'");
+	    return flagsval;
+	}
+	var optionsDefaults = {
+	    encoding: 'utf8'
 	};
 	var Stats = (function () {
 	    function Stats() {
@@ -11279,74 +11329,259 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'access', vpath);
 	    }
-	    function appendFile(file, data, options, callback) {
+	    function access(path, a, b) {
+	        var mode, callback;
+	        if (typeof a === 'function') {
+	            callback = a;
+	            mode = F_OK;
+	        }
+	        else {
+	            mode = a;
+	            callback = b;
+	            if (typeof callback !== 'function')
+	                throw TypeError(ERRSTR.CB);
+	        }
+	        var vpath = pathOrError(path);
+	        if (vpath instanceof TypeError)
+	            return callback(vpath);
+	        libjs.accessAsync(vpath, mode, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'access', vpath)));
+	            else
+	                callback(null);
+	        });
 	    }
 	    function appendFileSync(file, data, options) {
-	        if (options === void 0) { options = {}; }
-	        options = extend(options, appendFileDefaults);
+	        if (!options)
+	            options = appendFileDefaults;
+	        else {
+	            var tipof = typeof options;
+	            switch (tipof) {
+	                case 'object':
+	                    options = extend({}, appendFileDefaults, options);
+	                    break;
+	                case 'string':
+	                    options = extend({ encoding: options }, appendFileDefaults);
+	                    break;
+	                default:
+	                    throw TypeError(ERRSTR_OPTS(tipof));
+	            }
+	        }
+	        var b;
+	        if (Buffer.isBuffer(data))
+	            b = data;
+	        else
+	            b = new Buffer(String(data), options.encoding);
+	        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+	        var fd;
+	        var is_fd = typeof file === 'number';
+	        if (is_fd) {
+	            fd = file;
+	        }
+	        else {
+	            var filename;
+	            if (Buffer.isBuffer(file))
+	                filename = file.toString();
+	            else if (typeof file === 'string')
+	                filename = file;
+	            else
+	                throw TypeError(ERRSTR.PATH_STR);
+	            var flags = flagsToFlagsValue(options.flag);
+	            if (typeof options.mode !== 'number')
+	                throw TypeError(ERRSTR.MODE_INT);
+	            fd = libjs.open(filename, flags, options.mode);
+	            if (fd < 0)
+	                throwError(fd, 'appendFile', filename);
+	        }
+	        var res = libjs.write(fd, sb);
+	        if (res < 0)
+	            throwError(res, 'appendFile', String(file));
+	        if (!is_fd)
+	            libjs.close(fd);
 	    }
-	    function chmod(path, mode, callback) {
+	    function appendFile(file, data, options, callback) {
+	        var opts;
+	        if (typeof options === 'function') {
+	            callback = options;
+	            opts = appendFileDefaults;
+	        }
+	        else {
+	            var tipof = typeof options;
+	            switch (tipof) {
+	                case 'object':
+	                    opts = extend({}, appendFileDefaults, options);
+	                    break;
+	                case 'string':
+	                    opts = extend({ encoding: options }, appendFileDefaults);
+	                    break;
+	                default:
+	                    throw TypeError(ERRSTR_OPTS(tipof));
+	            }
+	            if (typeof callback !== 'function')
+	                throw TypeError(ERRSTR.CB);
+	        }
+	        var b;
+	        if (Buffer.isBuffer(data))
+	            b = data;
+	        else
+	            b = new Buffer(String(data), opts.encoding);
+	        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+	        function on_open(fd, is_fd) {
+	            var res = libjs.write(fd, sb);
+	            if (res < 0)
+	                throwError(res, 'appendFile', String(file));
+	            if (!is_fd)
+	                libjs.closeAsync(fd, noop);
+	        }
+	        var fd;
+	        var is_fd = typeof file === 'number';
+	        if (is_fd) {
+	            fd = file;
+	            on_open(fd, is_fd);
+	        }
+	        else {
+	            var filename;
+	            if (Buffer.isBuffer(file))
+	                filename = file.toString();
+	            else if (typeof file === 'string')
+	                filename = file;
+	            else
+	                throw TypeError(ERRSTR.PATH_STR);
+	            var flags = flagsToFlagsValue(opts.flag);
+	            if (typeof opts.mode !== 'number')
+	                throw TypeError(ERRSTR.MODE_INT);
+	            libjs.openAsync(filename, flags, opts.mode, function (fd) {
+	                if (fd < 0)
+	                    return callback(Error(formatError(fd, 'appendFile', filename)));
+	                on_open(fd, is_fd);
+	            });
+	        }
 	    }
 	    function chmodSync(path, mode) {
 	        var vpath = validPathOrThrow(path);
 	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
+	            throw TypeError(ERRSTR.MODE_INT);
 	        var result = libjs.chmod(vpath, mode);
 	        if (result < 0)
 	            throwError(result, 'chmod', vpath);
 	    }
-	    function fchmod(fd, mode, callback) { }
+	    function chmod(path, mode, callback) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        libjs.chmodAsync(vpath, mode, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'chmod', vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function fchmodSync(fd, mode) {
 	        validateFd(fd);
 	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
+	            throw TypeError(ERRSTR.MODE_INT);
 	        var result = libjs.fchmod(fd, mode);
 	        if (result < 0)
 	            throwError(result, 'chmod');
 	    }
-	    function chown(path, uid, gid, callback) { }
+	    function fchmod(fd, mode, callback) {
+	        validateFd(fd);
+	        if (typeof mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        libjs.fchmodAsync(fd, mode, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'chmod')));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function chownSync(path, uid, gid) {
 	        var vpath = validPathOrThrow(path);
 	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
+	            throw TypeError(ERRSTR.UID);
 	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
+	            throw TypeError(ERRSTR.GID);
 	        var result = libjs.chown(vpath, uid, gid);
 	        if (result < 0)
 	            throwError(result, 'chown', vpath);
 	    }
-	    function fchown(fd, uid, gid, callback) { }
+	    function chown(path, uid, gid, callback) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof uid !== 'number')
+	            throw TypeError(ERRSTR.UID);
+	        if (typeof gid !== 'number')
+	            throw TypeError(ERRSTR.GID);
+	        libjs.chownAsync(vpath, uid, gid, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'chown', vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function fchownSync(fd, uid, gid) {
 	        validateFd(fd);
 	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
+	            throw TypeError(ERRSTR.UID);
 	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
+	            throw TypeError(ERRSTR.GID);
 	        var result = libjs.fchown(fd, uid, gid);
 	        if (result < 0)
 	            throwError(result, 'fchown');
 	    }
-	    function lchown(path, uid, gid, callback) { }
+	    function fchown(fd, uid, gid, callback) {
+	        validateFd(fd);
+	        if (typeof uid !== 'number')
+	            throw TypeError(ERRSTR.UID);
+	        if (typeof gid !== 'number')
+	            throw TypeError(ERRSTR.GID);
+	        libjs.fchownAsync(fd, uid, gid, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'fchown')));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function lchownSync(path, uid, gid) {
 	        var vpath = validPathOrThrow(path);
 	        if (typeof uid !== 'number')
-	            throw TypeError('uid must be an unsigned int');
+	            throw TypeError(ERRSTR.UID);
 	        if (typeof gid !== 'number')
-	            throw TypeError('gid must be an unsigned int');
+	            throw TypeError(ERRSTR.GID);
 	        var result = libjs.lchown(vpath, uid, gid);
 	        if (result < 0)
 	            throwError(result, 'lchown', vpath);
 	    }
+	    function lchown(path, uid, gid, callback) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof uid !== 'number')
+	            throw TypeError(ERRSTR.UID);
+	        if (typeof gid !== 'number')
+	            throw TypeError(ERRSTR.GID);
+	        libjs.lchownAsync(vpath, uid, gid, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'lchown', vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function closeSync(fd) {
 	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
+	            throw TypeError(ERRSTR.FD);
 	        var result = libjs.close(fd);
 	        if (result < 0)
 	            throwError(result, 'close');
 	    }
-	    function createWriteStream(path, options) { }
+	    function close(fd, callback) {
+	        if (typeof fd !== 'number')
+	            throw TypeError(ERRSTR.FD);
+	        libjs.closeAsync(fd, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'close')));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function existsSync(path) {
-	        console.log('Deprecated fs.existsSync(): Use fs.statSync() or fs.accessSync() instead.');
 	        try {
 	            accessSync(path);
 	            return true;
@@ -11355,19 +11590,42 @@ var global = this;
 	            return false;
 	        }
 	    }
+	    function exists(path, callback) {
+	        access(path, function (err) { callback(!err); });
+	    }
 	    function fsyncSync(fd) {
 	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
+	            throw TypeError(ERRSTR.FD);
 	        var result = libjs.fsync(fd);
 	        if (result < 0)
 	            throwError(result, 'fsync');
 	    }
+	    function fsync(fd, callback) {
+	        if (typeof fd !== 'number')
+	            throw TypeError(ERRSTR.FD);
+	        libjs.fsyncAsync(fd, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'fsync')));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function fdatasyncSync(fd) {
 	        if (typeof fd !== 'number')
-	            throw TypeError('fd must be a file descriptor');
+	            throw TypeError(ERRSTR.FD);
 	        var result = libjs.fdatasync(fd);
 	        if (result < 0)
 	            throwError(result, 'fdatasync');
+	    }
+	    function fdatasync(fd, callback) {
+	        if (typeof fd !== 'number')
+	            throw TypeError(ERRSTR.FD);
+	        libjs.fdatasyncAsync(fd, function (result) {
+	            if (result < 0)
+	                callback(Error(formatError(result, 'fdatasync')));
+	            else
+	                callback(null);
+	        });
 	    }
 	    function createStatsObject(res) {
 	        var stats = new Stats;
@@ -11398,13 +11656,12 @@ var global = this;
 	        }
 	    }
 	    function stat(path, callback) {
-	        var vpath = pathOrError(path);
-	        if (vpath instanceof TypeError)
-	            return callback(vpath);
+	        var vpath = validPathOrThrow(path);
 	        libjs.statAsync(vpath, function (err, res) {
 	            if (err)
-	                return callback(Error(formatError(err, 'stat', vpath)));
-	            callback(null, createStatsObject(res));
+	                callback(Error(formatError(err, 'stat', vpath)));
+	            else
+	                callback(null, createStatsObject(res));
 	        });
 	    }
 	    function fstatSync(fd) {
@@ -11417,6 +11674,15 @@ var global = this;
 	            throwError(errno, 'fstat');
 	        }
 	    }
+	    function fstat(fd, callback) {
+	        validateFd(fd);
+	        libjs.fstatAsync(fd, function (err, res) {
+	            if (err)
+	                callback(Error(formatError(err, 'fstat')));
+	            else
+	                callback(null, createStatsObject(res));
+	        });
+	    }
 	    function lstatSync(path) {
 	        var vpath = validPathOrThrow(path);
 	        try {
@@ -11427,32 +11693,59 @@ var global = this;
 	            throwError(errno, 'lstat', vpath);
 	        }
 	    }
+	    function lstat(path, callback) {
+	        var vpath = validPathOrThrow(path);
+	        libjs.lstatAsync(vpath, function (err, res) {
+	            if (err)
+	                callback(Error(formatError(err, 'lstat', vpath)));
+	            else
+	                callback(null, createStatsObject(res));
+	        });
+	    }
 	    function truncateSync(path, len) {
 	        var vpath = validPathOrThrow(path);
 	        if (typeof len !== 'number')
-	            throw TypeError('len must be an integer');
+	            throw TypeError(ERRSTR.LEN);
 	        var res = libjs.truncate(vpath, len);
 	        if (res < 0)
 	            throwError(res, 'truncate', vpath);
 	    }
+	    function truncate(path, len, callback) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof len !== 'number')
+	            throw TypeError(ERRSTR.LEN);
+	        libjs.truncateAsync(vpath, len, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'truncate', vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function ftruncateSync(fd, len) {
 	        validateFd(fd);
 	        if (typeof len !== 'number')
-	            throw TypeError('len must be an integer');
+	            throw TypeError(ERRSTR.LEN);
 	        var res = libjs.ftruncate(fd, len);
 	        if (res < 0)
 	            throwError(res, 'ftruncate');
 	    }
+	    function ftruncate(fd, len, callback) {
+	        validateFd(fd);
+	        if (typeof len !== 'number')
+	            throw TypeError(ERRSTR.LEN);
+	        libjs.ftruncateAsync(fd, len, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'ftruncate')));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function utimesSync(path, atime, mtime) {
-	        path = validPathOrThrow(path);
-	        if (typeof atime === 'string')
-	            atime = parseInt(atime);
-	        if (typeof mtime === 'string')
-	            mtime = parseInt(mtime);
+	        var vpath = validPathOrThrow(path);
 	        if (typeof atime !== 'number')
-	            throw TypeError('atime must be an integer');
+	            throw TypeError(ERRSTR.ATIME);
 	        if (typeof mtime !== 'number')
-	            throw TypeError('mtime must be an integer');
+	            throw TypeError(ERRSTR.MTIME);
 	        var vatime = atime;
 	        var vmtime = mtime;
 	        if (!isFinite(vatime))
@@ -11465,10 +11758,34 @@ var global = this;
 	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
 	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
 	        };
-	        var res = libjs.utime(path, times);
-	        console.log(res);
+	        var res = libjs.utime(vpath, times);
 	        if (res < 0)
-	            throwError(res, 'utimes', path);
+	            throwError(res, 'utimes', vpath);
+	    }
+	    function utimes(path, atime, mtime, callback) {
+	        var vpath = validPathOrThrow(path);
+	        if (typeof atime !== 'number')
+	            throw TypeError(ERRSTR.ATIME);
+	        if (typeof mtime !== 'number')
+	            throw TypeError(ERRSTR.MTIME);
+	        var vatime = atime;
+	        var vmtime = mtime;
+	        if (!isFinite(vatime))
+	            vatime = Date.now();
+	        if (!isFinite(vmtime))
+	            vmtime = Date.now();
+	        vatime = Math.round(vatime / 1000);
+	        vmtime = Math.round(vmtime / 1000);
+	        var times = {
+	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	        };
+	        libjs.utimeAsync(vpath, times, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'utimes', vpath)));
+	            else
+	                callback(null);
+	        });
 	    }
 	    function linkSync(srcpath, dstpath) {
 	        var vsrcpath = validPathOrThrow(srcpath);
@@ -11477,27 +11794,56 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'link', vsrcpath, vdstpath);
 	    }
+	    function link(srcpath, dstpath, callback) {
+	        var vsrcpath = validPathOrThrow(srcpath);
+	        var vdstpath = validPathOrThrow(dstpath);
+	        libjs.linkAsync(vsrcpath, vdstpath, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function mkdirSync(path, mode) {
-	        if (mode === void 0) { mode = MODE_DEFAULT; }
+	        if (mode === void 0) { mode = 511; }
 	        var vpath = validPathOrThrow(path);
 	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
+	            throw TypeError(ERRSTR.MODE_INT);
 	        var res = libjs.mkdir(vpath, mode);
 	        if (res < 0)
 	            throwError(res, 'mkdir', vpath);
 	    }
-	    function randomString6() {
+	    function mkdir(path, mode, callback) {
+	        if (mode === void 0) { mode = 511; }
+	        var vpath = validPathOrThrow(path);
+	        if (typeof mode === 'function') {
+	            callback = mode;
+	            mode = 511;
+	        }
+	        else {
+	            if (typeof mode !== 'number')
+	                throw TypeError(ERRSTR.MODE_INT);
+	            if (typeof callback !== 'function')
+	                throw TypeError(ERRSTR.CB);
+	        }
+	        libjs.mkdirAsync(vpath, mode, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'mkdir', vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
+	    function rndStr6() {
 	        return (+new Date).toString(36).slice(-6);
 	    }
-	    function mkdtempSync(prefix, options) {
-	        if (options === void 0) { options = {}; }
+	    function mkdtempSync(prefix) {
 	        if (!prefix || typeof prefix !== 'string')
-	            throw new TypeError('filename prefix is required');
+	            throw new TypeError(ERRSTR.PREFIX);
 	        var retries = 10;
 	        var fullname;
 	        var found_tmp_name = false;
 	        for (var i = 0; i < retries; i++) {
-	            fullname = prefix + randomString6();
+	            fullname = prefix + rndStr6();
 	            try {
 	                accessSync(fullname);
 	            }
@@ -11514,22 +11860,41 @@ var global = this;
 	            throw Error("Could not find a new name, mkdtemp");
 	        }
 	    }
-	    function flagsToFlagsValue(f) {
-	        if (typeof f === 'number')
-	            return flags;
-	        if (typeof f !== 'string')
-	            throw TypeError("flags must be string or number");
-	        var flagsval = flags[f];
-	        if (typeof flagsval !== 'number')
-	            throw TypeError("Invalid flags string value '" + f + "'");
-	        return flagsval;
+	    function mkdtemp(prefix, callback) {
+	        if (!prefix || typeof prefix !== 'string')
+	            throw new TypeError(ERRSTR.PREFIX);
+	        var retries = 10;
+	        var fullname;
+	        function mk_dir() {
+	            mkdir(fullname, function (err) {
+	                if (err)
+	                    callback(err);
+	                else
+	                    callback(null, fullname);
+	            });
+	        }
+	        function name_loop() {
+	            if (retries < 1) {
+	                callback(Error('Could not find a new name, mkdtemp'));
+	                return;
+	            }
+	            retries--;
+	            fullname = prefix + rndStr6();
+	            access(fullname, function (err) {
+	                if (err)
+	                    name_loop();
+	                else
+	                    mk_dir();
+	            });
+	        }
+	        name_loop();
 	    }
 	    function openSync(path, flags, mode) {
-	        if (mode === void 0) { mode = MODE_DEFAULT; }
+	        if (mode === void 0) { mode = 438; }
 	        var vpath = validPathOrThrow(path);
 	        var flagsval = flagsToFlagsValue(flags);
 	        if (typeof mode !== 'number')
-	            throw TypeError('mode must be an integer');
+	            throw TypeError(ERRSTR.MODE_INT);
 	        var res = libjs.open(vpath, flagsval, mode);
 	        if (res < 0)
 	            throwError(res, 'open', vpath);
@@ -11538,7 +11903,7 @@ var global = this;
 	    function open(path, flags, mode, callback) {
 	        if (typeof mode === 'function') {
 	            callback = mode;
-	            mode = MODE_DEFAULT;
+	            mode = 438;
 	        }
 	        try {
 	            var vpath = validPathOrThrow(path);
@@ -11549,7 +11914,7 @@ var global = this;
 	            return;
 	        }
 	        if (typeof mode !== 'number')
-	            return callback(TypeError('mode must be an integer'));
+	            return callback(TypeError(ERRSTR.MODE_INT));
 	        libjs.openAsync(vpath, flagsval, mode, function (res) {
 	            if (res < 0)
 	                callback(Error(formatError(res, 'open', vpath)));
@@ -11577,9 +11942,6 @@ var global = this;
 	            throwError(res, 'read');
 	        return res;
 	    }
-	    var optionsDefaults = {
-	        encoding: 'utf8'
-	    };
 	    function readdirSync(path, options) {
 	        if (options === void 0) { options = {}; }
 	        var vpath = validPathOrThrow(path);
@@ -11606,7 +11968,7 @@ var global = this;
 	        else {
 	            var vfile = validPathOrThrow(file);
 	            var flag = flags[opts.flag];
-	            fd = libjs.open(vfile, flag, MODE_DEFAULT);
+	            fd = libjs.open(vfile, flag, 438);
 	            if (fd < 0)
 	                throwError(fd, 'readFile', vfile);
 	        }
@@ -11678,7 +12040,7 @@ var global = this;
 	            if (vfile instanceof TypeError)
 	                return callback(vfile);
 	            var flag = flags[opts.flag];
-	            libjs.openAsync(vfile, flag, MODE_DEFAULT, function (fd) {
+	            libjs.openAsync(vfile, flag, 438, function (fd) {
 	                if (fd < 0)
 	                    callback(Error(formatError(fd, 'readFile', vfile)));
 	                else
@@ -11735,6 +12097,7 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'unlink', vpath);
 	    }
+	    function createWriteStream(path, options) { }
 	    var FSWatcher = (function (_super) {
 	        __extends(FSWatcher, _super);
 	        function FSWatcher() {
@@ -11905,6 +12268,7 @@ var global = this;
 	        fstatSync: fstatSync,
 	        fsyncSync: fsyncSync,
 	        ftruncateSync: ftruncateSync,
+	        utimesSync: utimesSync,
 	        lchownSync: lchownSync,
 	        linkSync: linkSync,
 	        lstatSync: lstatSync,
@@ -11921,8 +12285,27 @@ var global = this;
 	        writeSync: writeSync,
 	        unlinkSync: unlinkSync,
 	        rmdirSync: rmdirSync,
-	        open: open,
+	        access: access,
+	        appendFile: appendFile,
+	        chmod: chmod,
+	        fchmod: fchmod,
+	        chown: chown,
+	        fchown: fchown,
+	        lchown: lchown,
+	        close: close,
+	        exists: exists,
+	        fsync: fsync,
+	        fdatasync: fdatasync,
 	        stat: stat,
+	        fstat: fstat,
+	        lstat: lstat,
+	        ftruncate: ftruncate,
+	        truncate: truncate,
+	        utimes: utimes,
+	        link: link,
+	        mkdtemp: mkdtemp,
+	        mkdir: mkdir,
+	        open: open,
 	        readFile: readFile
 	    };
 	}
@@ -11930,7 +12313,7 @@ var global = this;
 
 
 /***/ },
-/* 43 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -12032,7 +12415,7 @@ var global = this;
 
 
 /***/ },
-/* 44 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var require;'use strict';
@@ -12112,7 +12495,7 @@ var global = this;
 	    Object.defineProperty(object, name, {
 	            get: function() {
 	                var r = require;
-	            var lib = __webpack_require__(45)(name);
+	            var lib = __webpack_require__(41)(name);
 
 	    // Disable the current getter/setter and set up a new
 	    // non-enumerable property.
@@ -12135,14 +12518,14 @@ var global = this;
 
 
 /***/ },
-/* 45 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./module": 44,
-		"./streams/BufferList": 37,
-		"./streams/lazy_transform": 46,
-		"./util": 34
+		"./module": 40,
+		"./streams/BufferList": 33,
+		"./streams/lazy_transform": 42,
+		"./util": 30
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -12155,11 +12538,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 45;
+	webpackContext.id = 41;
 
 
 /***/ },
-/* 46 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// LazyTransform is a special type of Transform stream that is lazily loaded.
@@ -12167,8 +12550,8 @@ var global = this;
 	// for the stream, one conventional and one non-conventional.
 	'use strict';
 
-	const stream = __webpack_require__(32);
-	const util = __webpack_require__(25);
+	const stream = __webpack_require__(28);
+	const util = __webpack_require__(21);
 
 	module.exports = LazyTransform;
 
@@ -12204,7 +12587,7 @@ var global = this;
 
 
 /***/ },
-/* 47 */
+/* 43 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -12721,7 +13104,7 @@ var global = this;
 
 
 /***/ },
-/* 48 */
+/* 44 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify

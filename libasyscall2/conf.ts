@@ -3,7 +3,7 @@ export const enum CONF {
     INT = 8,
     BLOCK_FIELDS = 9,
     BLOCK_SIZE = CONF.BLOCK_FIELDS * CONF.INT,
-
+    THREADS = 2,
 }
 
 

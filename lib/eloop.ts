@@ -1,9 +1,11 @@
 import {sched_yield, nanosleep} from '../libjs/index';
 
 
-// TODO: Bugs:
+// TODO: Bugs and TODOs:
 // TODO:
-// TODO:  - Sometimes `setIOPoll` executes faster than `setImmediate`
+// TODO:  - Sometimes `setIOPoll` executes faster than `setImmediate`, or does it?
+// TODO:  - Cache `Date.now()` once at the beginning of each loop, or it will not boost performance?
+
 
 
 export const enum DELAY {
