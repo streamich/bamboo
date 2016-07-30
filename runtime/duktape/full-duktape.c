@@ -1,4 +1,3 @@
-// make --trace && ./full-duktape
 #include "duktape.h"
 #include <sys/types.h>
 #include <unistd.h>
@@ -353,7 +352,7 @@ int main(int argc, char *argv[]) {
 
     if (ctx) {
         duk_eval_string(ctx,
-            "process = {title: 'full.js'};"
+            "process = {runtime: 'Duktape'};"
             "global = Duktape;"
             "global.process = process;"
             "Duktape.global = global;"

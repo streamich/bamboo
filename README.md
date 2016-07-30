@@ -546,3 +546,44 @@ Below is list of already implemented API and roadmap on how the rest of the API 
     - `child_process.js`
     - `cluster.js`
 
+## JavaScript Runtimes
+
+Currently `full.js` runs on Node.js and Duktape, but we should be able to
+port it to all runtimes that run on Linux
+
+ - [X] Node.js
+ 
+JIT compiling runtimes:
+
+ - [ ] Carakan
+ - [ ] Chakra -- currently Chakra runs only on Windows
+ - [ ] SpiderMonkey
+ - [ ] JavaScriptCore
+ - [ ] V8
+ - [ ] Nashorn
+
+Interpreter runtimes:
+
+ - [ ] Continuum
+ - [ ] Futhark
+ - [ ] InScript
+ - [ ] JScript
+ - [ ] KJS
+ - [ ] Linear B
+ - [ ] Narcissus
+ - [ ] JS-Interpreter
+ - [ ] Rhino
+ - [ ] YAJI
+ - [X] Duktape
+ - [ ] Jsish
+ - [ ] Websocket.js
+ - [ ] Espruino
+ - [ ] MuJS
+ - [ ] V7
+ - [ ] Tiny-JS
+ - [ ] JerryScript
+ 
+ 
+ ## TODOs
+ 
+  - [ ] Use asynchronous Linux I/O for file systems on file systems that support that.

@@ -310,7 +310,6 @@ declare namespace NodeJS {
         argv: string[];
         execArgv: string[];
         execPath: string;
-        loop: any;
         abort(): void;
         chdir(directory: string): void;
         cwd(): string;

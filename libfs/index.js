@@ -35,12 +35,19 @@ function throwError(errno, func, path, path2) {
     if (path2 === void 0) { path2 = ''; }
     throw Error(formatError(errno, func, path, path2));
 }
-function validPathOrThrow(path) {
+function pathOrError(path) {
     if (path instanceof Buffer)
         path = path.toString();
     if (typeof path !== 'string')
-        throw TypeError('path must be a string');
+        return TypeError('path must be a string');
     return path;
+}
+function validPathOrThrow(path) {
+    var p = pathOrError(path);
+    if (p instanceof TypeError)
+        throw p;
+    else
+        return p;
 }
 function validateFd(fd) {
     if (typeof fd !== 'number')
@@ -62,6 +69,7 @@ function validateFd(fd) {
 })(exports.flags || (exports.flags = {}));
 var flags = exports.flags;
 var MODE_DEFAULT = 438;
+var CHUNK = 4096;
 var F_OK = 0;
 var R_OK = 4;
 var W_OK = 2;
@@ -99,7 +107,7 @@ var Stats = (function () {
 }());
 exports.Stats = Stats;
 function build(deps) {
-    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
+    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, StaticBuffer = deps.StaticBuffer, Readable = deps.Readable, Writable = deps.Writable;
     var EE = _EE;
     function accessSync(path, mode) {
         if (mode === void 0) { mode = F_OK; }
@@ -227,7 +235,9 @@ function build(deps) {
         }
     }
     function stat(path, callback) {
-        var vpath = validPathOrThrow(path);
+        var vpath = pathOrError(path);
+        if (vpath instanceof TypeError)
+            return callback(vpath);
         libjs.statAsync(vpath, function (err, res) {
             if (err)
                 return callback(Error(formatError(err, 'stat', vpath)));
@@ -362,6 +372,27 @@ function build(deps) {
             throwError(res, 'open', vpath);
         return res;
     }
+    function open(path, flags, mode, callback) {
+        if (typeof mode === 'function') {
+            callback = mode;
+            mode = MODE_DEFAULT;
+        }
+        try {
+            var vpath = validPathOrThrow(path);
+            var flagsval = flagsToFlagsValue(flags);
+        }
+        catch (error) {
+            callback(error);
+            return;
+        }
+        if (typeof mode !== 'number')
+            return callback(TypeError('mode must be an integer'));
+        libjs.openAsync(vpath, flagsval, mode, function (res) {
+            if (res < 0)
+                callback(Error(formatError(res, 'open', vpath)));
+            return callback(null, res);
+        });
+    }
     function readSync(fd, buffer, offset, length, position) {
         validateFd(fd);
         if (!(buffer instanceof Buffer))
@@ -416,16 +447,15 @@ function build(deps) {
             if (fd < 0)
                 throwError(fd, 'readFile', vfile);
         }
-        var CHUNK = 4096;
         var list = [];
         do {
             var buf = new Buffer(CHUNK);
             var res = libjs.read(fd, buf);
+            if (res < 0)
+                throwError(res, 'readFile');
             if (res < CHUNK)
                 buf = buf.slice(0, res);
             list.push(buf);
-            if (res < 0)
-                throwError(res, 'readFile');
         } while (res > 0);
         libjs.close(fd);
         var buffer = Buffer.concat(list);
@@ -433,6 +463,65 @@ function build(deps) {
             return buffer.toString(opts.encoding);
         else
             return buffer;
+    }
+    function readFile(file, options, callback) {
+        if (options === void 0) { options = {}; }
+        var opts;
+        if (typeof options === 'function') {
+            callback = options;
+            opts = readFileOptionsDefaults;
+        }
+        else {
+            if (typeof options === 'string')
+                opts = extend({ encoding: options }, readFileOptionsDefaults);
+            else if (typeof options !== 'object')
+                return callback(TypeError('Invalid options'));
+            else
+                opts = extend(options, readFileOptionsDefaults);
+            if (opts.encoding && (typeof opts.encoding != 'string'))
+                return callback(TypeError('Invalid encoding'));
+        }
+        function on_open(fd) {
+            var list = [];
+            function done() {
+                libjs.closeAsync(fd, function () {
+                    var buffer = Buffer.concat(list);
+                    if (opts.encoding)
+                        callback(null, buffer.toString(opts.encoding));
+                    else
+                        callback(null, buffer);
+                });
+            }
+            function loop() {
+                var buf = new StaticBuffer(CHUNK);
+                libjs.readAsync(fd, buf, function (res) {
+                    if (res < 0)
+                        return callback(Error(formatError(res, 'readFile')));
+                    if (res < CHUNK)
+                        buf = buf.slice(0, res);
+                    list.push(buf);
+                    if (res > 0)
+                        loop();
+                    else
+                        done();
+                });
+            }
+            loop();
+        }
+        if (typeof file === 'number')
+            on_open(file);
+        else {
+            var vfile = pathOrError(file);
+            if (vfile instanceof TypeError)
+                return callback(vfile);
+            var flag = flags[opts.flag];
+            libjs.openAsync(vfile, flag, MODE_DEFAULT, function (fd) {
+                if (fd < 0)
+                    callback(Error(formatError(fd, 'readFile', vfile)));
+                else
+                    on_open(fd);
+            });
+        }
     }
     function readlinkSync(path, options) {
         if (options === void 0) { options = null; }
@@ -668,7 +757,10 @@ function build(deps) {
         readSync: readSync,
         writeSync: writeSync,
         unlinkSync: unlinkSync,
-        rmdirSync: rmdirSync
+        rmdirSync: rmdirSync,
+        open: open,
+        stat: stat,
+        readFile: readFile
     };
 }
 exports.build = build;

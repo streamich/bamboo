@@ -86,12 +86,28 @@ export class Asyscall {
         // Write arguments to block and find callback function.
         var offset_args = offset + 8;
         var callback;
+
         for(var j = 0; j < arguments.length; j++) {
             var arg = arguments[j];
             if(typeof arg === 'function') {
                 callback = arg;
                 break;
             } else {
+                // console.log(arg);
+                if(typeof arg === 'string') {
+                    var str = arg + '\0';
+                    arg = StaticBuffer.alloc(arg.length, 'rwe');
+                    // arg = new StaticBuffer(arg + '\0');
+
+                    // arg = new StaticBuffer(arg.length + 1);
+                    for(var l = 0; l < str.length; l++) arg[l] = str.charCodeAt(l);
+                }
+
+                if(arg instanceof Buffer) {
+                    arg = arg.getAddress();
+                    // console.log('addr', arg);
+                }
+
                 if(typeof arg === 'number') {
                     var [lo, hi] = UInt64.toNumber64(arg);
                     buf.writeInt32LE(lo, offset_args + (j * 8));
@@ -99,8 +115,6 @@ export class Asyscall {
                 } else if(arg instanceof Array) {
                     buf.writeInt32LE(arg[0], offset_args + (j * 8));
                     buf.writeInt32LE(arg[1], offset_args + (j * 8) + 4);
-                } else if(typeof arg === 'string') {
-                    // ...
                 }
             }
         }

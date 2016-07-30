@@ -47,10 +47,16 @@ function throwError(errno, func = '', path = '', path2 = '') {
     throw Error(formatError(errno, func, path, path2));
 }
 
-function validPathOrThrow(path: string|Buffer): string {
+function pathOrError(path: string|Buffer): string|TypeError {
     if(path instanceof Buffer) path = path.toString();
-    if(typeof path !== 'string') throw TypeError('path must be a string');
+    if(typeof path !== 'string') return TypeError('path must be a string');
     return path as string;
+}
+
+function validPathOrThrow(path: string|Buffer): string {
+    var p = pathOrError(path);
+    if(p instanceof TypeError) throw p;
+    else return p;
 }
 
 function validateFd(fd: number) {
@@ -86,7 +92,12 @@ export enum flags {
     'ax+'   = libjs.FLAG.O_RDWR | libjs.FLAG.O_APPEND | libjs.FLAG.O_CREAT | libjs.FLAG.O_EXCL,
 }
 
+
 const MODE_DEFAULT = 0o666;
+
+// Chunk size for reading files.
+const CHUNK = 4096;
+
 
 const F_OK = libjs.AMODE.F_OK;
 const R_OK = libjs.AMODE.R_OK;
@@ -182,7 +193,7 @@ export class Stats {
 
 
 export function build(deps) {
-    var {path: pathModule, EventEmitter: _EE, Buffer, Readable, Writable} = deps;
+    var {path: pathModule, EventEmitter: _EE, Buffer, StaticBuffer, Readable, Writable} = deps;
     var EE: typeof EventEmitter = _EE as typeof EventEmitter;
 
 
@@ -326,9 +337,12 @@ export function build(deps) {
     }
 
     function stat(path: string|Buffer, callback) {
-        var vpath = validPathOrThrow(path);
-        libjs.statAsync(vpath, (err, res) => {
-            if(err) return callback(Error(formatError(err, 'stat', vpath)));
+        var vpath = pathOrError(path);
+        if(vpath instanceof TypeError)
+            return callback(vpath);
+
+        libjs.statAsync(vpath as string, (err, res) => {
+            if(err) return callback(Error(formatError(err, 'stat', vpath as string)));
             callback(null, createStatsObject(res));
         });
     }
@@ -464,6 +478,29 @@ export function build(deps) {
         return res;
     }
 
+    function open(path: string|Buffer, flags: string|number, mode: number, callback?: TcallbackData <number>) {
+        if(typeof mode === 'function') {
+            callback = mode as any as TcallbackData <number>;
+            mode = MODE_DEFAULT;
+        }
+
+        try {
+            var vpath = validPathOrThrow(path);
+            var flagsval = flagsToFlagsValue(flags);
+        } catch(error) {
+            callback(error);
+            return;
+        }
+
+        if(typeof mode !== 'number')
+            return callback(TypeError('mode must be an integer'));
+
+        libjs.openAsync(vpath, flagsval, mode, function(res) {
+            if(res < 0) callback(Error(formatError(res, 'open', vpath)));
+            return callback(null, res);
+        });
+    }
+
 
     function readSync(fd: number, buffer: Buffer, offset: number, length: number, position: number) {
         validateFd(fd);
@@ -517,15 +554,15 @@ export function build(deps) {
             if(fd < 0) throwError(fd, 'readFile', vfile);
         }
 
-        var CHUNK = 4096;
         var list: Buffer[] = [];
 
         do {
             var buf = new Buffer(CHUNK);
             var res = libjs.read(fd, buf);
+            if (res < 0) throwError(res, 'readFile');
+
             if(res < CHUNK) buf = buf.slice(0, res);
             list.push(buf);
-            if (res < 0) throwError(res, 'readFile');
         } while(res > 0);
 
         libjs.close(fd);
@@ -533,6 +570,62 @@ export function build(deps) {
         var buffer = Buffer.concat(list);
         if(opts.encoding) return buffer.toString(opts.encoding);
         else return buffer;
+    }
+
+    function readFile(file: string|Buffer|number, options: IReadFileOptions|string = {}, callback?: TcallbackData <string|Buffer>) {
+        var opts: IReadFileOptions;
+
+        if(typeof options === 'function') {
+            callback = options as any as TcallbackData <string|Buffer>;
+            opts = readFileOptionsDefaults;
+        } else {
+            if(typeof options === 'string') opts = extend({encoding: options}, readFileOptionsDefaults);
+            else if(typeof options !== 'object')
+                return callback(TypeError('Invalid options'));
+            else opts = extend(options, readFileOptionsDefaults);
+
+            if(opts.encoding && (typeof opts.encoding != 'string'))
+                return callback(TypeError('Invalid encoding'));
+        }
+
+        function on_open(fd: number) {
+            var list: Buffer[] = [];
+
+            function done() {
+                libjs.closeAsync(fd,  function() {
+                    var buffer = Buffer.concat(list);
+                    if(opts.encoding) callback(null, buffer.toString(opts.encoding));
+                    else callback(null, buffer);
+                });
+            }
+
+            function loop() {
+                var buf = new StaticBuffer(CHUNK);
+                libjs.readAsync(fd, buf, function(res) {
+                    if(res < 0) return callback(Error(formatError(res, 'readFile')));
+
+                    if(res < CHUNK) buf = buf.slice(0, res);
+                    list.push(buf);
+
+                    if(res > 0) loop();
+                    else done();
+                });
+            }
+            loop();
+        }
+
+        // Here we open file.
+        if(typeof file === 'number') on_open(file as number);
+        else {
+            var vfile = pathOrError(file as string|Buffer);
+            if(vfile instanceof TypeError) return callback(vfile);
+
+            var flag = flags[opts.flag];
+            libjs.openAsync(vfile as string, flag, MODE_DEFAULT, function(fd) {
+                if(fd < 0) callback(Error(formatError(fd, 'readFile', vfile as string)));
+                else on_open(fd);
+            });
+        }
     }
 
 
@@ -800,6 +893,8 @@ export function build(deps) {
         W_OK,
         X_OK,
 
+
+        // Synchronous = blocking
         accessSync,
         appendFileSync,
         chmodSync,
@@ -832,6 +927,12 @@ export function build(deps) {
         // writeFileSync,
         unlinkSync,
         rmdirSync,
+
+
+        // Asynchronous
+        open,
+        stat,
+        readFile,
 
     };
 }

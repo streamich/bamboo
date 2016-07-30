@@ -15,6 +15,9 @@ node_require = require;
 // global.process = process;
 
 
+process.runtime = 'node.js';
+
+
 // Remove first argument
 process.argv = process.argv.splice(1);
 

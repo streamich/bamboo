@@ -1,6 +1,11 @@
 import {sched_yield, nanosleep} from '../libjs/index';
 
 
+// TODO: Bugs:
+// TODO:
+// TODO:  - Sometimes `setIOPoll` executes faster than `setImmediate`
+
+
 export const enum DELAY {
     IMMEDIATE = -2,     // In Node.js `setImmediate` is executed before I/O polling events.
     IO = -1,
@@ -123,6 +128,7 @@ export class EventQueue {
     start: Task = null;         // Macro-task queue: `setImmediate`, `I/O`, `setTimeout`, `setInterval`.
     active: Task = null;        // Slice of `macroQueue` that is being executed in current event loop cycle.
 
+
     // Deep pointers into `macroQueue` by the `delay` of the last task inserted in
     // the queue with that delay or lesser, these give us the guidance where in the
     // queue we should start looking for to insert a new task.
@@ -136,6 +142,7 @@ export class EventQueue {
         // .
         // Infinity:  Last `setTimeout(..., 2147483649..Infinity) in the queue
     ];
+
 
     protected setPointer(pointer_index: number, task: Task) {
         var pointers = this.pointers;

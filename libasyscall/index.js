@@ -61,6 +61,15 @@ var Asyscall = (function () {
                 break;
             }
             else {
+                if (typeof arg === 'string') {
+                    var str = arg + '\0';
+                    arg = StaticBuffer.alloc(arg.length, 'rwe');
+                    for (var l = 0; l < str.length; l++)
+                        arg[l] = str.charCodeAt(l);
+                }
+                if (arg instanceof Buffer) {
+                    arg = arg.getAddress();
+                }
                 if (typeof arg === 'number') {
                     var _a = util_1.UInt64.toNumber64(arg), lo = _a[0], hi = _a[1];
                     buf.writeInt32LE(lo, offset_args + (j * 8));
@@ -69,8 +78,6 @@ var Asyscall = (function () {
                 else if (arg instanceof Array) {
                     buf.writeInt32LE(arg[0], offset_args + (j * 8));
                     buf.writeInt32LE(arg[1], offset_args + (j * 8) + 4);
-                }
-                else if (typeof arg === 'string') {
                 }
             }
         }

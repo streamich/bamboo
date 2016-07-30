@@ -23,7 +23,7 @@ export class Immediate extends Task {
 }
 
 
-export function setTimeout(callback, after) {
+export function setTimeout(callback, after, arg1, arg2, arg3) {
     if (typeof callback !== 'function') {
         throw new TypeError('"callback" argument must be a function');
     }
@@ -81,7 +81,7 @@ export function clearInterval(timer) {
 }
 
 
-export function setImmediate(callback, arg1, arg2, arg3) {
+function createImm(callback, arg1, arg2, arg3) {
     if (typeof callback !== 'function') {
         throw new TypeError('"callback" argument must be a function');
     }
@@ -112,6 +112,12 @@ export function setImmediate(callback, arg1, arg2, arg3) {
     timer.callback = callback;
     timer.args = args;
 
+    return timer;
+}
+
+
+export function setImmediate(callback, arg1, arg2, arg3) {
+    var timer = createImm(callback, arg1, arg2, arg3);
     process.loop.insert(timer);
     return timer;
 }
@@ -126,9 +132,10 @@ export function clearImmediate(immediate) {
 // Same as `setImmediate` we just make sure I/O requests are polled
 // after `setImmediate` callbacks are processed just to be compatible with Node.js,
 // otherwise we don't need this.
-export function setIOPoll() {
-    const timer = setImmediate.apply(null, arguments);
+export function setIOPoll(callback, arg1, arg2, arg3) {
+    var timer = createImm(callback, arg1, arg2, arg3);
     timer.delay = DELAY.IO;
+    process.loop.insert(timer);
     return timer;
 }
 

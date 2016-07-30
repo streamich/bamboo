@@ -106,14 +106,24 @@ var global = this;
 	// Export `Buffer` as global. Other things use `Buffer`, so we export Buffer first.
 	Buffer = global.Buffer = __webpack_require__(2).Buffer;
 
-	var haveBinaryTools = process.call && process.frame;
 
-	if(haveBinaryTools) {
-	    // Export `StaticArrayBuffer`, required by `StaticBuffer`.
-	    StaticArrayBuffer = global.StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
+	// Check if we have more tools than just `process.syscall`.
+	process.hasBinaryUtils = process.call && process.frame;
 
-	    // Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
-	    StaticBuffer = global.StaticBuffer = __webpack_require__(11).StaticBuffer;
+
+	// Export `StaticArrayBuffer`, required by `StaticBuffer`.
+	if(typeof StaticArrayBuffer === 'undefined') {
+	    StaticArrayBuffer = global.StaticArrayBuffer = process.hasBinaryUtils
+	            ? __webpack_require__(5).StaticArrayBuffer
+	            : ArrayBuffer;
+	}
+
+
+	// Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
+	if(typeof StaticBuffer === 'undefined') {
+	    StaticBuffer = global.StaticBuffer= process.hasBinaryUtils
+	            ? __webpack_require__(11).StaticBuffer
+	            : Buffer;
 	}
 
 
@@ -150,16 +160,16 @@ var global = this;
 
 
 	    // Create `process.asyscall` and `process.asyscall64`
-	    if(haveBinaryTools && (true))
-	        __webpack_require__(17);
+	    __webpack_require__(21);
 
-
+	    
 	    try {
 
 	        // Eval the file specified in first argument `full app.js`
+	        // console.log(process.argv);
 	        if(process.argv[1]) {
-	            var path = __webpack_require__(21);
-	            var Module = __webpack_require__(24).Module;
+	            var path = __webpack_require__(24);
+	            var Module = __webpack_require__(27).Module;
 	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
 	            setImmediate(function() {
@@ -182,8 +192,14 @@ var global = this;
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	// require does not work:
-	// exports.Buffer = require('../node_modules/buffer/index').Buffer;
+	
+
+
+	// DEPRECATED: this should be removed, use `StaticArrayBuffer` instead.
+	ArrayBuffer.prototype.getAddress = function(offset) {
+	    return process.getAddress(this, offset);
+	};
+
 
 
 	/*!
@@ -2071,6 +2087,14 @@ var global = this;
 	    printBuffer(this);
 	};
 
+	// DEPRECATED: this should be removed, use `StaticBuffer` instead.
+	Buffer.prototype.getAddress = function(offset) {
+	    if(!offset) offset = 0;
+	    offset += this.byteOffset;
+	    return this.buffer.getAddress(offset);
+	};
+
+
 
 /***/ },
 /* 3 */
@@ -2317,26 +2341,6 @@ var global = this;
 	var p = process;
 	var syscall = p.syscall;
 	var syscall64 = p.syscall64;
-	var asyscall = p.asyscall || (function asyscall() {
-	    var args = [];
-	    for (var _i = 0; _i < arguments.length; _i++) {
-	        args[_i - 0] = arguments[_i];
-	    }
-	    var callback = args[args.length - 1];
-	    var params = args.splice(0, args.length - 1);
-	    var res = syscall.apply(null, params);
-	    callback(res);
-	});
-	var asyscall64 = p.asyscall64 || (function asyscall64() {
-	    var args = [];
-	    for (var _i = 0; _i < arguments.length; _i++) {
-	        args[_i - 0] = arguments[_i];
-	    }
-	    var callback = args[args.length - 1];
-	    var params = args.splice(0, args.length - 1);
-	    var res = syscall64.apply(null, params);
-	    callback(res);
-	});
 	function malloc(size) {
 	    return new Buffer(size);
 	}
@@ -2358,7 +2362,7 @@ var global = this;
 	}
 	exports.read = read;
 	function readAsync(fd, buf, callback) {
-	    asyscall(x86_64_linux_1.SYS.read, fd, buf, buf.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.read, fd, buf, buf.length, callback);
 	}
 	exports.readAsync = readAsync;
 	function write(fd, buf) {
@@ -2381,11 +2385,7 @@ var global = this;
 	}
 	exports.open = open;
 	function openAsync(pathname, flags, mode, callback) {
-	    var args = [x86_64_linux_1.SYS.open, pathname, flags];
-	    if (typeof mode === 'number')
-	        args.push(mode);
-	    args.push(callback);
-	    asyscall.apply(null, args);
+	    p.asyscall(x86_64_linux_1.SYS.open, pathname, flags, mode, callback);
 	}
 	exports.openAsync = openAsync;
 	function close(fd) {
@@ -2393,7 +2393,7 @@ var global = this;
 	}
 	exports.close = close;
 	function closeAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.close, fd, callback);
+	    p.asyscall(x86_64_linux_1.SYS.close, fd, callback);
 	}
 	exports.closeAsync = closeAsync;
 	function access(pathname, mode) {
@@ -2401,7 +2401,7 @@ var global = this;
 	}
 	exports.access = access;
 	function accessAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.access, pathname, mode, callback);
+	    p.asyscall(x86_64_linux_1.SYS.access, pathname, mode, callback);
 	}
 	exports.accessAsync = accessAsync;
 	function chmod(pathname, mode) {
@@ -2409,7 +2409,7 @@ var global = this;
 	}
 	exports.chmod = chmod;
 	function chmodAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.chmod, pathname, mode, callback);
+	    p.asyscall(x86_64_linux_1.SYS.chmod, pathname, mode, callback);
 	}
 	exports.chmodAsync = chmodAsync;
 	function fchmod(fd, mode) {
@@ -2417,7 +2417,7 @@ var global = this;
 	}
 	exports.fchmod = fchmod;
 	function fchmodAsync(fd, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.chmod, fd, mode, callback);
+	    p.asyscall(x86_64_linux_1.SYS.chmod, fd, mode, callback);
 	}
 	exports.fchmodAsync = fchmodAsync;
 	function chown(pathname, owner, group) {
@@ -2425,7 +2425,7 @@ var global = this;
 	}
 	exports.chown = chown;
 	function chownAsync(pathname, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.chown, pathname, owner, group, callback);
+	    p.asyscall(x86_64_linux_1.SYS.chown, pathname, owner, group, callback);
 	}
 	exports.chownAsync = chownAsync;
 	function fchown(fd, owner, group) {
@@ -2433,7 +2433,7 @@ var global = this;
 	}
 	exports.fchown = fchown;
 	function fchownAsync(fd, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.fchown, fd, owner, group, callback);
+	    p.asyscall(x86_64_linux_1.SYS.fchown, fd, owner, group, callback);
 	}
 	exports.fchownAsync = fchownAsync;
 	function lchown(pathname, owner, group) {
@@ -2441,7 +2441,7 @@ var global = this;
 	}
 	exports.lchown = lchown;
 	function lchownAsync(pathname, owner, group, callback) {
-	    asyscall(x86_64_linux_1.SYS.lchown, pathname, owner, group, callback);
+	    p.asyscall(x86_64_linux_1.SYS.lchown, pathname, owner, group, callback);
 	}
 	exports.lchownAsync = lchownAsync;
 	function fsync(fd) {
@@ -2449,7 +2449,7 @@ var global = this;
 	}
 	exports.fsync = fsync;
 	function fsyncAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.fsync, fd, callback);
+	    p.asyscall(x86_64_linux_1.SYS.fsync, fd, callback);
 	}
 	exports.fsyncAsync = fsyncAsync;
 	function fdatasync(fd) {
@@ -2457,7 +2457,7 @@ var global = this;
 	}
 	exports.fdatasync = fdatasync;
 	function fdatasyncAsync(fd, callback) {
-	    asyscall(x86_64_linux_1.SYS.fdatasync, fd, callback);
+	    p.asyscall(x86_64_linux_1.SYS.fdatasync, fd, callback);
 	}
 	exports.fdatasyncAsync = fdatasyncAsync;
 	function stat(filepath) {
@@ -2482,7 +2482,7 @@ var global = this;
 	}
 	function statAsync(filepath, callback) {
 	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
+	    p.asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.statAsync = statAsync;
 	function lstat(linkpath) {
@@ -2495,7 +2495,7 @@ var global = this;
 	exports.lstat = lstat;
 	function lstatAsync(linkpath, callback) {
 	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
+	    p.asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.lstatAsync = lstatAsync;
 	function fstat(fd) {
@@ -2508,7 +2508,7 @@ var global = this;
 	exports.fstat = fstat;
 	function fstatAsync(fd, callback) {
 	    var buf = new Buffer(types.stat.size + 100);
-	    asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
+	    p.asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.fstatAsync = fstatAsync;
 	function truncate(path, length) {
@@ -2516,7 +2516,7 @@ var global = this;
 	}
 	exports.truncate = truncate;
 	function truncateAsync(path, length, callback) {
-	    asyscall(x86_64_linux_1.SYS.truncate, path, length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.truncate, path, length, callback);
 	}
 	exports.truncateAsync = truncateAsync;
 	function ftruncate(fd, length) {
@@ -2524,7 +2524,7 @@ var global = this;
 	}
 	exports.ftruncate = ftruncate;
 	function ftruncateAsync(fd, length, callback) {
-	    asyscall(x86_64_linux_1.SYS.ftruncate, fd, length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.ftruncate, fd, length, callback);
 	}
 	exports.ftruncateAsync = ftruncateAsync;
 	function lseek(fd, offset, whence) {
@@ -2532,7 +2532,7 @@ var global = this;
 	}
 	exports.lseek = lseek;
 	function lseekAsync(fd, offset, whence, callback) {
-	    asyscall(x86_64_linux_1.SYS.lseek, fd, offset, whence, callback);
+	    p.asyscall(x86_64_linux_1.SYS.lseek, fd, offset, whence, callback);
 	}
 	exports.lseekAsync = lseekAsync;
 	function rename(oldpath, newpath) {
@@ -2540,7 +2540,7 @@ var global = this;
 	}
 	exports.rename = rename;
 	function renameAsync(oldpath, newpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.rename, oldpath, newpath, callback);
+	    p.asyscall(x86_64_linux_1.SYS.rename, oldpath, newpath, callback);
 	}
 	exports.renameAsync = renameAsync;
 	function mkdir(pathname, mode) {
@@ -2548,7 +2548,7 @@ var global = this;
 	}
 	exports.mkdir = mkdir;
 	function mkdirAsync(pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.mkdir, pathname, mode, callback);
+	    p.asyscall(x86_64_linux_1.SYS.mkdir, pathname, mode, callback);
 	}
 	exports.mkdirAsync = mkdirAsync;
 	function mkdirat(dirfd, pathname, mode) {
@@ -2556,7 +2556,7 @@ var global = this;
 	}
 	exports.mkdirat = mkdirat;
 	function mkdiratAsync(dirfd, pathname, mode, callback) {
-	    asyscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode, callback);
+	    p.asyscall(x86_64_linux_1.SYS.mkdirat, dirfd, pathname, mode, callback);
 	}
 	exports.mkdiratAsync = mkdiratAsync;
 	function rmdir(pathname) {
@@ -2564,7 +2564,7 @@ var global = this;
 	}
 	exports.rmdir = rmdir;
 	function rmdirAsync(pathname, callback) {
-	    asyscall(x86_64_linux_1.SYS.rmdir, pathname, callback);
+	    p.asyscall(x86_64_linux_1.SYS.rmdir, pathname, callback);
 	}
 	exports.rmdirAsync = rmdirAsync;
 	function getcwd() {
@@ -2585,11 +2585,11 @@ var global = this;
 	exports.getcwd = getcwd;
 	function getcwdAsync(callback) {
 	    var buf = new Buffer(264);
-	    asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
+	    p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
 	        if (res < 0) {
 	            if (res === -34) {
 	                buf = new Buffer(4096);
-	                asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
+	                p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
 	                    if (res < 0)
 	                        callback(res);
 	                    else
@@ -2608,7 +2608,7 @@ var global = this;
 	}
 	exports.getdents64 = getdents64;
 	function getdents64Async(fd, dirp, callback) {
-	    asyscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.getdents64, fd, dirp, dirp.length, callback);
 	}
 	exports.getdents64Async = getdents64Async;
 	function readdir(path, encoding) {
@@ -2712,7 +2712,7 @@ var global = this;
 	}
 	exports.symlink = symlink;
 	function symlinkAsync(target, linkpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.symlink, target, linkpath, callback);
+	    p.asyscall(x86_64_linux_1.SYS.symlink, target, linkpath, callback);
 	}
 	exports.symlinkAsync = symlinkAsync;
 	function unlink(pathname) {
@@ -2720,7 +2720,7 @@ var global = this;
 	}
 	exports.unlink = unlink;
 	function unlinkAsync(pathname, callback) {
-	    asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
+	    p.asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
 	}
 	exports.unlinkAsync = unlinkAsync;
 	function readlink(pathname, buf) {
@@ -2728,7 +2728,7 @@ var global = this;
 	}
 	exports.readlink = readlink;
 	function readlinkAsync(pathname, buf, callback) {
-	    asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
 	}
 	exports.readlinkAsync = readlinkAsync;
 	function link(oldpath, newpath) {
@@ -2736,7 +2736,7 @@ var global = this;
 	}
 	exports.link = link;
 	function linkAsync(oldpath, newpath, callback) {
-	    asyscall(x86_64_linux_1.SYS.link, oldpath, newpath, callback);
+	    p.asyscall(x86_64_linux_1.SYS.link, oldpath, newpath, callback);
 	}
 	exports.linkAsync = linkAsync;
 	function utime(filename, times) {
@@ -2746,7 +2746,7 @@ var global = this;
 	exports.utime = utime;
 	function utimeAsync(filename, times, callback) {
 	    var buf = types.utimbuf.pack(times);
-	    asyscall(x86_64_linux_1.SYS.utime, filename, buf, callback);
+	    p.asyscall(x86_64_linux_1.SYS.utime, filename, buf, callback);
 	}
 	exports.utimeAsync = utimeAsync;
 	function utimes(filename, times) {
@@ -2756,7 +2756,7 @@ var global = this;
 	exports.utimes = utimes;
 	function utimesAsync(filename, times, callback) {
 	    var buf = types.timevalarr.pack(times);
-	    asyscall(x86_64_linux_1.SYS.utimes, buf, callback);
+	    p.asyscall(x86_64_linux_1.SYS.utimes, buf, callback);
 	}
 	exports.utimesAsync = utimesAsync;
 	function socket(domain, type, protocol) {
@@ -2764,7 +2764,7 @@ var global = this;
 	}
 	exports.socket = socket;
 	function socketAsync(domain, type, protocol, callback) {
-	    asyscall(x86_64_linux_1.SYS.socket, domain, type, protocol, callback);
+	    p.asyscall(x86_64_linux_1.SYS.socket, domain, type, protocol, callback);
 	}
 	exports.socketAsync = socketAsync;
 	function connect(fd, sockaddr) {
@@ -2774,7 +2774,7 @@ var global = this;
 	exports.connect = connect;
 	function connectAsync(fd, sockaddr, callback) {
 	    var buf = types.sockaddr_in.pack(sockaddr);
-	    asyscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.connect, fd, buf, buf.length, callback);
 	}
 	exports.connectAsync = connectAsync;
 	function bind(fd, sockaddr, addr_type) {
@@ -2784,7 +2784,7 @@ var global = this;
 	exports.bind = bind;
 	function bindAsync(fd, sockaddr, addr_type, callback) {
 	    var buf = addr_type.pack(sockaddr);
-	    asyscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.bind, fd, buf, buf.length, callback);
 	}
 	exports.bindAsync = bindAsync;
 	function listen(fd, backlog) {
@@ -2792,7 +2792,7 @@ var global = this;
 	}
 	exports.listen = listen;
 	function listenAsync(fd, backlog, callback) {
-	    asyscall(x86_64_linux_1.SYS.listen, fd, backlog, callback);
+	    p.asyscall(x86_64_linux_1.SYS.listen, fd, backlog, callback);
 	}
 	exports.listenAsync = listenAsync;
 	function accept(fd, buf) {
@@ -2802,7 +2802,7 @@ var global = this;
 	exports.accept = accept;
 	function acceptAsync(fd, buf, callback) {
 	    var buflen = types.int32.pack(buf.length);
-	    asyscall(x86_64_linux_1.SYS.accept, fd, buf, buflen, callback);
+	    p.asyscall(x86_64_linux_1.SYS.accept, fd, buf, buflen, callback);
 	}
 	exports.acceptAsync = acceptAsync;
 	function accept4(fd, buf, flags) {
@@ -2812,7 +2812,7 @@ var global = this;
 	exports.accept4 = accept4;
 	function accept4Async(fd, buf, flags, callback) {
 	    var buflen = types.int32.pack(buf.length);
-	    asyscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags, callback);
+	    p.asyscall(x86_64_linux_1.SYS.accept4, fd, buf, buflen, flags, callback);
 	}
 	exports.accept4Async = accept4Async;
 	function shutdown(fd, how) {
@@ -2820,7 +2820,7 @@ var global = this;
 	}
 	exports.shutdown = shutdown;
 	function shutdownAsync(fd, how, callback) {
-	    asyscall(x86_64_linux_1.SYS.shutdown, fd, how, callback);
+	    p.asyscall(x86_64_linux_1.SYS.shutdown, fd, how, callback);
 	}
 	exports.shutdownAsync = shutdownAsync;
 	function send(fd, buf, flags) {
@@ -2882,7 +2882,7 @@ var global = this;
 	        args[5] = addrbuf;
 	        args[6] = addrbuf.length;
 	    }
-	    asyscall.apply(null, args);
+	    p.asyscall.apply(null, args);
 	}
 	exports.recvfromAsync = recvfromAsync;
 	function setsockopt(sockfd, level, optname, optval) {
@@ -2898,7 +2898,7 @@ var global = this;
 	}
 	exports.getppid = getppid;
 	function getppidAsync(callback) {
-	    asyscall(x86_64_linux_1.SYS.getppid, callback);
+	    p.asyscall(x86_64_linux_1.SYS.getppid, callback);
 	}
 	exports.getppidAsync = getppidAsync;
 	function getuid() {
@@ -3483,6 +3483,8 @@ var global = this;
 	// new StaticBuffer(size);
 	// new StaticBuffer(staticArrayBuffer, byteOffset, length);
 	function StaticBuffer(a, b, c) {
+	    this._next = null; // Used in thread pool
+
 	    var buf;
 	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
 	        var staticArrayBuffer = a, byteOffset = b, length = c;
@@ -3496,6 +3498,12 @@ var global = this;
 	        var size = a;
 	        var sab = new StaticArrayBuffer(size);
 	        buf = bufferFrom(sab);
+	    } else if(typeof a === 'string') {
+	        var str = a;
+	        var size = str.length;
+	        var sab = new StaticArrayBuffer(size);
+	        buf = bufferFrom(sab);
+	        for(var i = 0; i < size; i++) buf[i] = str.charCodeAt(i);
 	    } else
 	        throw TypeError('Invalid StaticBuffer constructor arguments.');
 
@@ -3620,6 +3628,10 @@ var global = this;
 
 	if(!process)
 	    throw Error('`process` global not defined by JS runtime.');
+
+
+	// The most important method Kappa
+	process.noop = function() {};
 
 
 	process.on = EventEmitter.prototype.on.bind(process);
@@ -4725,7 +4737,7 @@ var global = this;
 	    return Immediate;
 	}(eloop_1.Task));
 	exports.Immediate = Immediate;
-	function setTimeout(callback, after) {
+	function setTimeout(callback, after, arg1, arg2, arg3) {
 	    if (typeof callback !== 'function') {
 	        throw new TypeError('"callback" argument must be a function');
 	    }
@@ -4775,7 +4787,7 @@ var global = this;
 	    timer.task.cancel();
 	}
 	exports.clearInterval = clearInterval;
-	function setImmediate(callback, arg1, arg2, arg3) {
+	function createImm(callback, arg1, arg2, arg3) {
 	    if (typeof callback !== 'function') {
 	        throw new TypeError('"callback" argument must be a function');
 	    }
@@ -4802,6 +4814,10 @@ var global = this;
 	    var timer = new Immediate;
 	    timer.callback = callback;
 	    timer.args = args;
+	    return timer;
+	}
+	function setImmediate(callback, arg1, arg2, arg3) {
+	    var timer = createImm(callback, arg1, arg2, arg3);
 	    process.loop.insert(timer);
 	    return timer;
 	}
@@ -4812,9 +4828,10 @@ var global = this;
 	    immediate.cancel();
 	}
 	exports.clearImmediate = clearImmediate;
-	function setIOPoll() {
-	    var timer = setImmediate.apply(null, arguments);
+	function setIOPoll(callback, arg1, arg2, arg3) {
+	    var timer = createImm(callback, arg1, arg2, arg3);
 	    timer.delay = -1;
+	    process.loop.insert(timer);
 	    return timer;
 	}
 	exports.setIOPoll = setIOPoll;
@@ -4826,86 +4843,109 @@ var global = this;
 
 
 /***/ },
-/* 17 */
+/* 17 */,
+/* 18 */,
+/* 19 */,
+/* 20 */,
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
-	"use strict";
-	var index_1 = __webpack_require__(18);
-	var ctypes_1 = __webpack_require__(10);
-	var asyscall = new index_1.Asyscall;
-	asyscall.build();
-	process.asyscall64 = asyscall.exec.bind(asyscall);
-	process.asyscall = function () {
-	    var callback = arguments[arguments.length - 1];
-	    arguments[arguments.length - 1] = function (num64) {
-	        if (num64[1] === 0)
-	            callback(num64[0]);
-	        else
-	            callback(ctypes_1.UInt64.joinToNumber(num64[1], num64[0]));
-	    };
-	    process.asyscall64.apply(null, arguments);
-	};
+	if (!process.asyscall) {
+	    if (process.hasBinaryUtils && (true)) {
+	        var Asyscall = __webpack_require__(22).Asyscall;
+	        var asyscall = new Asyscall;
+	        asyscall.build();
+	        process.asyscall = asyscall.exec.bind(asyscall);
+	        process.asyscall64 = asyscall.exec64.bind(asyscall);
+	    }
+	    else {
+	        process.asyscall = function () {
+	            var len = arguments.length - 1;
+	            var args = new Array(len);
+	            for (var i = 0; i < len; i++)
+	                args[i] = arguments[i];
+	            var res = process.syscall.apply(null, args);
+	            arguments[len](res);
+	        };
+	        process.asyscall64 = function () {
+	            var len = arguments.length - 1;
+	            var args = new Array(len);
+	            for (var i = 0; i < len; i++)
+	                args[i] = arguments[i];
+	            var res = process.syscall64.apply(null, args);
+	            arguments[len](res);
+	        };
+	    }
+	}
 
 
 /***/ },
-/* 18 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var util_1 = __webpack_require__(19);
+	function link(curr, next) {
+	    var _a = next.getAddress(), lo = _a[0], hi = _a[1];
+	    curr.writeInt32LE(lo, 72 - 8);
+	    curr.writeInt32LE(hi, 72 - 8 + 4);
+	}
 	var Asyscall = (function () {
 	    function Asyscall() {
-	        this.sb = null;
-	        this.threads = 0;
-	        this.queue = 100;
-	        this.intsize = 8;
-	        this.stackSize = 10 * this.intsize;
-	        this.stacksSize = 0;
-	        this.queueBlockSize = 8 * this.intsize;
-	        this.queueLength = 0;
-	        this.queueSize = 0;
-	        this.id = 0;
-	        this.offset = 0;
-	        this.offsetStart = 0;
-	        this.offsetEnd = 0;
-	        this.errorTimeout = util_1.UInt64.toNumber64(-1);
+	        this.code = null;
+	        this.curr = null;
+	        this.next = null;
+	        this.recycled = null;
 	    }
-	    Asyscall.prototype.nextId = function () {
-	        return (this.id + 1) % 0x7FFFFFFF;
-	    };
-	    Asyscall.prototype.nextOffset = function () {
-	        var offset = this.offset + this.queueBlockSize;
-	        if (offset > this.offsetEnd)
-	            return this.offsetStart;
-	        else
-	            return offset;
-	    };
 	    Asyscall.prototype.build = function () {
-	        var threads = 2;
-	        var queue = 3;
-	        this.threads = threads;
-	        this.stacksSize = this.threads * this.stackSize;
-	        this.queue = queue;
-	        this.queueSize = this.queue * this.queueBlockSize;
-	        var bin = __webpack_require__(20);
-	        this.sb = StaticBuffer.alloc(bin.length + this.queueSize, 'rwe');
-	        for (var i = 0; i < bin.length; i++)
-	            this.sb[i] = bin[i];
-	        for (i = bin.length; i < bin.length + this.queueSize; i++)
-	            this.sb[i] = 0;
-	        this.offsetStart = this.sb.length - this.queueSize;
-	        this.offset = this.offsetStart;
-	        this.offsetEnd = this.sb.length - this.queueBlockSize;
-	        this.sb.call();
+	        var bin = __webpack_require__(23);
+	        this.code = StaticBuffer.alloc(bin, 'rwe');
+	        this.curr = this.code.slice(this.code.length - 72);
+	        this.curr[0] = 0;
+	        this.next = new StaticBuffer(72);
+	        this.next[0] = 0;
+	        link(this.curr, this.next);
+	        this.code.call();
 	    };
-	    Asyscall.prototype.exec = function () {
-	        var _this = this;
-	        var id = this.id = this.nextId();
-	        var offset = this.offset;
-	        var buf = this.sb;
-	        buf.writeInt32LE(0, this.nextOffset());
-	        buf.writeInt32LE(id, offset + 4);
-	        var offset_args = offset + 8;
+	    Asyscall.prototype.recycleBlock = function (block) {
+	        var first = this.recycled;
+	        if (first)
+	            block._next = first;
+	        this.recycled = block;
+	    };
+	    Asyscall.prototype.newBlock = function () {
+	        var block;
+	        if (block = this.recycled) {
+	            this.recycled = block._next;
+	            block._next = null;
+	        }
+	        else {
+	            block = new StaticBuffer(72);
+	        }
+	        block[0] = 0;
+	        return block;
+	    };
+	    Asyscall.prototype.writeArg = function (arg, slot) {
+	        var curr = this.curr;
+	        if (typeof arg === 'string') {
+	            var str = arg + '\0';
+	            arg = new StaticBuffer(str.length);
+	            for (var l = 0; l < str.length; l++)
+	                arg[l] = str.charCodeAt(l);
+	        }
+	        if (arg instanceof Buffer) {
+	            arg = arg.getAddress();
+	        }
+	        if (typeof arg === 'number') {
+	            curr.writeInt32LE(arg, slot * 8);
+	            curr.writeInt32LE(0, slot * 8 + 4);
+	        }
+	        else if (arg instanceof Array) {
+	            curr.writeInt32LE(arg[0], slot * 8);
+	            curr.writeInt32LE(arg[1], slot * 8 + 4);
+	        }
+	    };
+	    Asyscall.prototype.fillBlock = function () {
+	        var _a = this, curr = _a.curr, next = _a.next;
 	        var callback;
 	        for (var j = 0; j < arguments.length; j++) {
 	            var arg = arguments[j];
@@ -4914,50 +4954,57 @@ var global = this;
 	                break;
 	            }
 	            else {
-	                if (typeof arg === 'number') {
-	                    var _a = util_1.UInt64.toNumber64(arg), lo = _a[0], hi = _a[1];
-	                    buf.writeInt32LE(lo, offset_args + (j * 8));
-	                    buf.writeInt32LE(hi, offset_args + (j * 8) + 4);
-	                }
-	                else if (arg instanceof Array) {
-	                    buf.writeInt32LE(arg[0], offset_args + (j * 8));
-	                    buf.writeInt32LE(arg[1], offset_args + (j * 8) + 4);
-	                }
-	                else if (typeof arg === 'string') {
-	                }
+	                this.writeArg(arg, j + 1);
 	            }
 	        }
 	        for (var j = arguments.length; j < 7; j++) {
-	            buf.writeInt32LE(0, offset_args + (j * 8));
-	            buf.writeInt32LE(0, offset_args + (j * 8) + 4);
+	            curr.writeInt32LE(0, (j + 1) * 8);
+	            curr.writeInt32LE(0, (j + 1) * 8 + 4);
 	        }
-	        buf.writeInt32LE(1, offset);
-	        this.offset = this.nextOffset();
+	        curr[0] = 1;
+	        return callback;
+	    };
+	    Asyscall.prototype.pollBlock = function (callback, is64) {
+	        var _this = this;
+	        var curr = this.curr;
 	        var poll = function () {
-	            setIOPoll(function () {
-	                var id_read = buf.readInt32LE(offset + 4);
-	                if (id_read !== id) {
-	                    callback(_this.errorTimeout);
-	                    return;
+	            var lock = curr[0];
+	            if (lock === 3) {
+	                if (is64) {
+	                    callback([
+	                        curr.readInt32LE(8 * 7),
+	                        curr.readInt32LE(8 * 7 + 4)]);
 	                }
-	                var lock = buf[offset];
-	                if (lock === 3) {
-	                    var result = [buf.readInt32LE(offset + (7 * 8)), buf.readInt32LE(offset + (7 * 8) + 4)];
-	                    callback(result);
+	                else {
+	                    callback(curr.readInt32LE(8 * 7));
 	                }
-	                else
-	                    poll();
-	            });
+	                _this.recycleBlock(curr);
+	            }
+	            else
+	                setIOPoll(poll);
 	        };
-	        poll();
+	        setIOPoll(poll);
+	    };
+	    Asyscall.prototype.exec = function () {
+	        var block = this.newBlock();
+	        link(this.next, block);
+	        var callback = this.fillBlock.apply(this, arguments);
+	        this.pollBlock(callback, false);
+	        this.curr = this.next;
+	        this.next = block;
+	    };
+	    Asyscall.prototype.exec64 = function () {
+	        var block = this.newBlock();
+	        link(this.next, block);
+	        var callback = this.fillBlock.apply(this, arguments);
+	        this.pollBlock(callback, true);
+	        this.curr = this.next;
+	        this.next = block;
 	    };
 	    Asyscall.prototype.stop = function () {
-	        for (var offset = this.offsetStart; offset <= this.offsetEnd; offset += this.queueBlockSize) {
-	            this.sb.writeInt32LE(4, offset);
-	            this.id = this.nextId();
-	            this.sb.writeInt32LE(this.id, offset + 4);
-	        }
-	        this.sb.free();
+	        this.curr.writeInt32LE(4, 0);
+	        this.next.writeInt32LE(4, 0);
+	        this.code.free();
 	    };
 	    return Asyscall;
 	}());
@@ -4965,78 +5012,18 @@ var global = this;
 
 
 /***/ },
-/* 19 */
+/* 23 */
 /***/ function(module, exports) {
 
-	"use strict";
-	function noop() { }
-	exports.noop = noop;
-	function extend(obj1, obj2) {
-	    var objs = [];
-	    for (var _i = 2; _i < arguments.length; _i++) {
-	        objs[_i - 2] = arguments[_i];
-	    }
-	    if (typeof obj2 === 'object')
-	        for (var i in obj2)
-	            obj1[i] = obj2[i];
-	    if (objs.length)
-	        return extend.apply(null, [obj1].concat(objs));
-	    else
-	        return obj1;
-	}
-	exports.extend = extend;
-	var UInt64 = (function () {
-	    function UInt64() {
-	    }
-	    UInt64.hi = function (a, lo) {
-	        if (lo === void 0) { lo = UInt64.lo(a); }
-	        var hi = a - lo;
-	        hi /= 4294967296;
-	        return hi;
-	    };
-	    UInt64.lo = function (a) {
-	        var lo = a | 0;
-	        if (lo < 0)
-	            lo += 4294967296;
-	        return lo;
-	    };
-	    UInt64.joinToNumber = function (hi, lo) {
-	        if (lo < 0)
-	            lo += 4294967296;
-	        return hi * 4294967296 + lo;
-	    };
-	    UInt64.toNumber = function (num64) {
-	        var lo = num64[0], hi = num64[1];
-	        if (lo < 0)
-	            lo += 4294967296;
-	        return hi * 4294967296 + lo;
-	    };
-	    UInt64.toNumber64 = function (num) {
-	        var lo = num | 0;
-	        if (lo < 0)
-	            lo += 4294967296;
-	        var hi = num - lo;
-	        hi /= 4294967296;
-	        return [lo, hi];
-	    };
-	    return UInt64;
-	}());
-	exports.UInt64 = UInt64;
-
+	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,163,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,226,0,0,0,77,139,117,64,65,139,69,0,131,248,4,116,98,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,231,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,77,137,245,77,139,117,64,235,149,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,144,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
 /***/ },
-/* 20 */
-/***/ function(module, exports) {
-
-	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,80,0,0,0,72,247,225,72,141,53,171,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,53,58,1,0,0,77,137,247,73,129,199,192,24,0,0,77,137,245,77,57,253,118,3,77,137,245,65,139,69,0,131,248,4,116,87,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,231,131,248,1,117,60,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,42,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,73,131,197,64,235,152,65,199,69,8,190,186,0,0,72,199,192,60,0,0,0,15,5,195,15,31,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0];
-
-/***/ },
-/* 21 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	const inspect = __webpack_require__(22).inspect;
+	const inspect = __webpack_require__(25).inspect;
 
 	function assertPath(path) {
 	    if (typeof path !== 'string') {
@@ -6637,7 +6624,7 @@ var global = this;
 
 
 /***/ },
-/* 22 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Buffer = __webpack_require__(2).Buffer;
@@ -6882,7 +6869,7 @@ var global = this;
 
 	function ensureDebugIsInitialized() {
 	    if (Debug === undefined) {
-	        const runInDebugContext = __webpack_require__(23).runInDebugContext;
+	        const runInDebugContext = __webpack_require__(26).runInDebugContext;
 	        Debug = runInDebugContext('Debug');
 	    }
 	}
@@ -7650,13 +7637,13 @@ var global = this;
 
 
 /***/ },
-/* 23 */
+/* 26 */
 /***/ function(module, exports) {
 
 	module.exports = require("vm");
 
 /***/ },
-/* 24 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -7672,14 +7659,14 @@ var global = this;
 	// though it might not be 100% compatible with Node.js.
 
 
-	var NativeModule = __webpack_require__(25).NativeModule;
-	var util = __webpack_require__(22);
-	var internalModule = __webpack_require__(41);
-	var internalUtil = __webpack_require__(31);
-	var vm = __webpack_require__(45);
-	var assert = __webpack_require__(36).ok;
-	var fs = __webpack_require__(38);
-	var path = __webpack_require__(21);
+	var NativeModule = __webpack_require__(28).NativeModule;
+	var util = __webpack_require__(25);
+	var internalModule = __webpack_require__(44);
+	var internalUtil = __webpack_require__(34);
+	var vm = __webpack_require__(48);
+	var assert = __webpack_require__(39).ok;
+	var fs = __webpack_require__(41);
+	var path = __webpack_require__(24);
 	var libjs = __webpack_require__(6);
 
 	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -8383,7 +8370,7 @@ var global = this;
 
 
 /***/ },
-/* 25 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function NativeModule(id) {
@@ -8496,7 +8483,7 @@ var global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(26)("./" + this.id);
+	        this.exports = __webpack_require__(29)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -8512,38 +8499,37 @@ var global = this;
 
 
 /***/ },
-/* 26 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./_stream_duplex": 27,
-		"./_stream_passthrough": 33,
-		"./_stream_readable": 28,
-		"./_stream_transform": 32,
-		"./_stream_writable": 30,
-		"./assert": 36,
+		"./_stream_duplex": 30,
+		"./_stream_passthrough": 36,
+		"./_stream_readable": 31,
+		"./_stream_transform": 35,
+		"./_stream_writable": 33,
+		"./assert": 39,
 		"./boot": 1,
 		"./buffer": 2,
-		"./console": 37,
+		"./console": 40,
 		"./eloop": 15,
 		"./events": 13,
-		"./fs": 38,
-		"./internal/asyscall": 17,
-		"./internal/module": 41,
-		"./internal/streams/BufferList": 34,
-		"./internal/streams/lazy_transform": 43,
-		"./internal/util": 31,
-		"./module": 24,
-		"./native_module": 25,
-		"./path": 21,
+		"./fs": 41,
+		"./internal/module": 44,
+		"./internal/streams/BufferList": 37,
+		"./internal/streams/lazy_transform": 46,
+		"./internal/util": 34,
+		"./module": 27,
+		"./native_module": 28,
+		"./path": 24,
 		"./process": 12,
-		"./punycode": 44,
+		"./punycode": 47,
 		"./static-arraybuffer": 5,
 		"./static-buffer": 11,
-		"./stream": 29,
+		"./stream": 32,
 		"./timers": 16,
-		"./util": 22,
-		"./vm": 45
+		"./util": 25,
+		"./vm": 48
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -8556,11 +8542,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 26;
+	webpackContext.id = 29;
 
 
 /***/ },
-/* 27 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a duplex stream is just a stream that is both readable and writable.
@@ -8572,9 +8558,9 @@ var global = this;
 
 	module.exports = Duplex;
 
-	const util = __webpack_require__(22);
-	const Readable = __webpack_require__(28);
-	const Writable = __webpack_require__(30);
+	const util = __webpack_require__(25);
+	const Readable = __webpack_require__(31);
+	const Writable = __webpack_require__(33);
 
 	util.inherits(Duplex, Readable);
 
@@ -8623,7 +8609,7 @@ var global = this;
 
 
 /***/ },
-/* 28 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -8632,11 +8618,11 @@ var global = this;
 	Readable.ReadableState = ReadableState;
 
 	const EE = __webpack_require__(13);
-	const Stream = __webpack_require__(29);
+	const Stream = __webpack_require__(32);
 	const Buffer = __webpack_require__(2).Buffer;
-	const util = __webpack_require__(22);
+	const util = __webpack_require__(25);
 	const debug = util.debuglog('stream');
-	const BufferList = __webpack_require__(34);
+	const BufferList = __webpack_require__(37);
 	var StringDecoder;
 
 	util.inherits(Readable, Stream);
@@ -8724,7 +8710,7 @@ var global = this;
 	    this.encoding = null;
 	    if (options.encoding) {
 	        if (!StringDecoder)
-	            StringDecoder = __webpack_require__(35).StringDecoder;
+	            StringDecoder = __webpack_require__(38).StringDecoder;
 	        this.decoder = new StringDecoder(options.encoding);
 	        this.encoding = options.encoding;
 	    }
@@ -8844,7 +8830,7 @@ var global = this;
 	// backwards compatibility.
 	Readable.prototype.setEncoding = function(enc) {
 	    if (!StringDecoder)
-	        StringDecoder = __webpack_require__(35).StringDecoder;
+	        StringDecoder = __webpack_require__(38).StringDecoder;
 	    this._readableState.decoder = new StringDecoder(enc);
 	    this._readableState.encoding = enc;
 	    return this;
@@ -9604,7 +9590,7 @@ var global = this;
 
 
 /***/ },
-/* 29 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -9612,14 +9598,14 @@ var global = this;
 	module.exports = Stream;
 
 	const EE = __webpack_require__(13);
-	const util = __webpack_require__(22);
+	const util = __webpack_require__(25);
 
 	util.inherits(Stream, EE);
-	Stream.Readable = __webpack_require__(28);
-	Stream.Writable = __webpack_require__(30);
-	Stream.Duplex = __webpack_require__(27);
-	Stream.Transform = __webpack_require__(32);
-	Stream.PassThrough = __webpack_require__(33);
+	Stream.Readable = __webpack_require__(31);
+	Stream.Writable = __webpack_require__(33);
+	Stream.Duplex = __webpack_require__(30);
+	Stream.Transform = __webpack_require__(35);
+	Stream.PassThrough = __webpack_require__(36);
 
 	// Backwards-compat with node 0.4.x
 	Stream.Stream = Stream;
@@ -9717,7 +9703,7 @@ var global = this;
 
 
 /***/ },
-/* 30 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// A bit simpler than readable streams.
@@ -9729,9 +9715,9 @@ var global = this;
 	module.exports = Writable;
 	Writable.WritableState = WritableState;
 
-	const util = __webpack_require__(22);
-	const internalUtil = __webpack_require__(31);
-	const Stream = __webpack_require__(29);
+	const util = __webpack_require__(25);
+	const internalUtil = __webpack_require__(34);
+	const Stream = __webpack_require__(32);
 	const Buffer = __webpack_require__(2).Buffer;
 
 	util.inherits(Writable, Stream);
@@ -10253,7 +10239,7 @@ var global = this;
 
 
 /***/ },
-/* 31 */
+/* 34 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -10354,7 +10340,7 @@ var global = this;
 
 
 /***/ },
-/* 32 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a transform stream is a readable/writable stream where you do
@@ -10403,8 +10389,8 @@ var global = this;
 
 	module.exports = Transform;
 
-	const Duplex = __webpack_require__(27);
-	const util = __webpack_require__(22);
+	const Duplex = __webpack_require__(30);
+	const util = __webpack_require__(25);
 	util.inherits(Transform, Duplex);
 
 
@@ -10555,7 +10541,7 @@ var global = this;
 
 
 /***/ },
-/* 33 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a passthrough stream.
@@ -10566,8 +10552,8 @@ var global = this;
 
 	module.exports = PassThrough;
 
-	const Transform = __webpack_require__(32);
-	const util = __webpack_require__(22);
+	const Transform = __webpack_require__(35);
+	const util = __webpack_require__(25);
 	util.inherits(PassThrough, Transform);
 
 	function PassThrough(options) {
@@ -10583,7 +10569,7 @@ var global = this;
 
 
 /***/ },
-/* 34 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -10661,13 +10647,13 @@ var global = this;
 
 
 /***/ },
-/* 35 */
+/* 38 */
 /***/ function(module, exports) {
 
 	module.exports = require("string_decoder");
 
 /***/ },
-/* 36 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
@@ -10698,7 +10684,7 @@ var global = this;
 
 	// UTILITY
 	// const compare = process.binding('buffer').compare;
-	const util = __webpack_require__(22);
+	const util = __webpack_require__(25);
 	const Buffer = __webpack_require__(2).Buffer;
 	const pToString = function(obj) { return Object.prototype.toString.call(obj); };
 
@@ -11042,10 +11028,10 @@ var global = this;
 
 
 /***/ },
-/* 37 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var util = __webpack_require__(22);
+	var util = __webpack_require__(25);
 
 
 	function Console(stdout, stderr) {
@@ -11144,7 +11130,7 @@ var global = this;
 
 	Console.prototype.assert = function(expression) {
 	    if (!expression) {
-	        __webpack_require__(36).ok(false, util.format.apply(null, arguments));
+	        __webpack_require__(39).ok(false, util.format.apply(null, arguments));
 	    }
 	};
 
@@ -11154,25 +11140,25 @@ var global = this;
 
 
 /***/ },
-/* 38 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var build = __webpack_require__(39).build;
+	var build = __webpack_require__(42).build;
 
 
-	var fs = module.exports = build({
-	    path: __webpack_require__(21),
+	module.exports = build({
+	    path: __webpack_require__(24),
 	    EventEmitter: __webpack_require__(13).EventEmitter,
 	    Buffer: __webpack_require__(2).Buffer,
-	    Readable: __webpack_require__(29).Readable,
-	    Writable: __webpack_require__(29).Writable
+	    StaticBuffer: __webpack_require__(11).StaticBuffer,
+	    Readable: __webpack_require__(32).Readable,
+	    Writable: __webpack_require__(32).Writable
 	});
 
 
 
-
 /***/ },
-/* 39 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -11182,7 +11168,7 @@ var global = this;
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var libjs = __webpack_require__(6);
-	var inotify_1 = __webpack_require__(40);
+	var inotify_1 = __webpack_require__(43);
 	if (true) {
 	    exports.isFullJS = true;
 	}
@@ -11212,12 +11198,19 @@ var global = this;
 	    if (path2 === void 0) { path2 = ''; }
 	    throw Error(formatError(errno, func, path, path2));
 	}
-	function validPathOrThrow(path) {
+	function pathOrError(path) {
 	    if (path instanceof Buffer)
 	        path = path.toString();
 	    if (typeof path !== 'string')
-	        throw TypeError('path must be a string');
+	        return TypeError('path must be a string');
 	    return path;
+	}
+	function validPathOrThrow(path) {
+	    var p = pathOrError(path);
+	    if (p instanceof TypeError)
+	        throw p;
+	    else
+	        return p;
 	}
 	function validateFd(fd) {
 	    if (typeof fd !== 'number')
@@ -11239,6 +11232,7 @@ var global = this;
 	})(exports.flags || (exports.flags = {}));
 	var flags = exports.flags;
 	var MODE_DEFAULT = 438;
+	var CHUNK = 4096;
 	var F_OK = 0;
 	var R_OK = 4;
 	var W_OK = 2;
@@ -11276,7 +11270,7 @@ var global = this;
 	}());
 	exports.Stats = Stats;
 	function build(deps) {
-	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
+	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, StaticBuffer = deps.StaticBuffer, Readable = deps.Readable, Writable = deps.Writable;
 	    var EE = _EE;
 	    function accessSync(path, mode) {
 	        if (mode === void 0) { mode = F_OK; }
@@ -11404,7 +11398,9 @@ var global = this;
 	        }
 	    }
 	    function stat(path, callback) {
-	        var vpath = validPathOrThrow(path);
+	        var vpath = pathOrError(path);
+	        if (vpath instanceof TypeError)
+	            return callback(vpath);
 	        libjs.statAsync(vpath, function (err, res) {
 	            if (err)
 	                return callback(Error(formatError(err, 'stat', vpath)));
@@ -11539,6 +11535,27 @@ var global = this;
 	            throwError(res, 'open', vpath);
 	        return res;
 	    }
+	    function open(path, flags, mode, callback) {
+	        if (typeof mode === 'function') {
+	            callback = mode;
+	            mode = MODE_DEFAULT;
+	        }
+	        try {
+	            var vpath = validPathOrThrow(path);
+	            var flagsval = flagsToFlagsValue(flags);
+	        }
+	        catch (error) {
+	            callback(error);
+	            return;
+	        }
+	        if (typeof mode !== 'number')
+	            return callback(TypeError('mode must be an integer'));
+	        libjs.openAsync(vpath, flagsval, mode, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'open', vpath)));
+	            return callback(null, res);
+	        });
+	    }
 	    function readSync(fd, buffer, offset, length, position) {
 	        validateFd(fd);
 	        if (!(buffer instanceof Buffer))
@@ -11593,16 +11610,15 @@ var global = this;
 	            if (fd < 0)
 	                throwError(fd, 'readFile', vfile);
 	        }
-	        var CHUNK = 4096;
 	        var list = [];
 	        do {
 	            var buf = new Buffer(CHUNK);
 	            var res = libjs.read(fd, buf);
+	            if (res < 0)
+	                throwError(res, 'readFile');
 	            if (res < CHUNK)
 	                buf = buf.slice(0, res);
 	            list.push(buf);
-	            if (res < 0)
-	                throwError(res, 'readFile');
 	        } while (res > 0);
 	        libjs.close(fd);
 	        var buffer = Buffer.concat(list);
@@ -11610,6 +11626,65 @@ var global = this;
 	            return buffer.toString(opts.encoding);
 	        else
 	            return buffer;
+	    }
+	    function readFile(file, options, callback) {
+	        if (options === void 0) { options = {}; }
+	        var opts;
+	        if (typeof options === 'function') {
+	            callback = options;
+	            opts = readFileOptionsDefaults;
+	        }
+	        else {
+	            if (typeof options === 'string')
+	                opts = extend({ encoding: options }, readFileOptionsDefaults);
+	            else if (typeof options !== 'object')
+	                return callback(TypeError('Invalid options'));
+	            else
+	                opts = extend(options, readFileOptionsDefaults);
+	            if (opts.encoding && (typeof opts.encoding != 'string'))
+	                return callback(TypeError('Invalid encoding'));
+	        }
+	        function on_open(fd) {
+	            var list = [];
+	            function done() {
+	                libjs.closeAsync(fd, function () {
+	                    var buffer = Buffer.concat(list);
+	                    if (opts.encoding)
+	                        callback(null, buffer.toString(opts.encoding));
+	                    else
+	                        callback(null, buffer);
+	                });
+	            }
+	            function loop() {
+	                var buf = new StaticBuffer(CHUNK);
+	                libjs.readAsync(fd, buf, function (res) {
+	                    if (res < 0)
+	                        return callback(Error(formatError(res, 'readFile')));
+	                    if (res < CHUNK)
+	                        buf = buf.slice(0, res);
+	                    list.push(buf);
+	                    if (res > 0)
+	                        loop();
+	                    else
+	                        done();
+	                });
+	            }
+	            loop();
+	        }
+	        if (typeof file === 'number')
+	            on_open(file);
+	        else {
+	            var vfile = pathOrError(file);
+	            if (vfile instanceof TypeError)
+	                return callback(vfile);
+	            var flag = flags[opts.flag];
+	            libjs.openAsync(vfile, flag, MODE_DEFAULT, function (fd) {
+	                if (fd < 0)
+	                    callback(Error(formatError(fd, 'readFile', vfile)));
+	                else
+	                    on_open(fd);
+	            });
+	        }
 	    }
 	    function readlinkSync(path, options) {
 	        if (options === void 0) { options = null; }
@@ -11845,14 +11920,17 @@ var global = this;
 	        readSync: readSync,
 	        writeSync: writeSync,
 	        unlinkSync: unlinkSync,
-	        rmdirSync: rmdirSync
+	        rmdirSync: rmdirSync,
+	        open: open,
+	        stat: stat,
+	        readFile: readFile
 	    };
 	}
 	exports.build = build;
 
 
 /***/ },
-/* 40 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -11954,7 +12032,7 @@ var global = this;
 
 
 /***/ },
-/* 41 */
+/* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var require;'use strict';
@@ -12034,7 +12112,7 @@ var global = this;
 	    Object.defineProperty(object, name, {
 	            get: function() {
 	                var r = require;
-	            var lib = __webpack_require__(42)(name);
+	            var lib = __webpack_require__(45)(name);
 
 	    // Disable the current getter/setter and set up a new
 	    // non-enumerable property.
@@ -12057,15 +12135,14 @@ var global = this;
 
 
 /***/ },
-/* 42 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./asyscall": 17,
-		"./module": 41,
-		"./streams/BufferList": 34,
-		"./streams/lazy_transform": 43,
-		"./util": 31
+		"./module": 44,
+		"./streams/BufferList": 37,
+		"./streams/lazy_transform": 46,
+		"./util": 34
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -12078,11 +12155,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 42;
+	webpackContext.id = 45;
 
 
 /***/ },
-/* 43 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// LazyTransform is a special type of Transform stream that is lazily loaded.
@@ -12090,8 +12167,8 @@ var global = this;
 	// for the stream, one conventional and one non-conventional.
 	'use strict';
 
-	const stream = __webpack_require__(29);
-	const util = __webpack_require__(22);
+	const stream = __webpack_require__(32);
+	const util = __webpack_require__(25);
 
 	module.exports = LazyTransform;
 
@@ -12127,7 +12204,7 @@ var global = this;
 
 
 /***/ },
-/* 44 */
+/* 47 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -12644,7 +12721,7 @@ var global = this;
 
 
 /***/ },
-/* 45 */
+/* 48 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify
