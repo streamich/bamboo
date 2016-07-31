@@ -1,5 +1,6 @@
 "use strict";
 var typebase_1 = require('../typebase');
+exports.PATH_MAX = 4096;
 exports.isLE = true;
 exports.NULL = 0;
 var buf = Buffer.prototype;

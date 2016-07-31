@@ -31,7 +31,7 @@ Extra:
  - [X] `process.syscall64(number, ...args): number`
  - [X] `process.asyscall(number, ...args, callback)`
  - [X] `process.asyscall64(number, ...args, callback)`
- - [X] `process.frame(address: number|[number, number]|[number, number, number]|StaticArrayBuffer, size: number): StaticArrayBuffer`
+ - [X] `process.frame(address, size): StaticArrayBuffer`
  - [X] `process.call(addr: any, offset?: number, args?: number[]): number`
  - [X] `process.errno(): number`
  
@@ -235,8 +235,6 @@ Implements `fs.js` API as in the docs, with few minor differences, here are the 
  5. `readdir()` results may differ as libfs implements it itself instead of using `libc`'s C implementation.
  6. `realpath()` results may differ as libfs implements it itself instead of using `libc`'s C implementation.
  7. `fs.ReadStream` and `fs.WriteStream` are not implemented yet.
- 
-- [ ] `persistent` currently option in watchFile() and watch() methods is always true, even if you set it to false.
 
 Below synchronous methods are implements using `process.syscall`:
 
@@ -263,16 +261,16 @@ Below synchronous methods are implements using `process.syscall`:
  - [ ] `fs.realpathSync(path[, options])`
  - [X] `fs.readFileSync(file[, options])`
  - [ ] `fs.readlinkSync(path[, options])`
- - [ ] `fs.symlinkSync(target, path[, type])`
+ - [X] `fs.symlinkSync(target, path[, type])`
  - [X] `fs.statSync(path)`
  - [X] `fs.truncateSync(path, len)`
- - [ ] `fs.renameSync(oldPath, newPath)`
- - [ ] `fs.readSync(fd, buffer, offset, length, position)`
+ - [X] `fs.renameSync(oldPath, newPath)`
+ - [X] `fs.readSync(fd, buffer, offset, length, position)`
  - [ ] `fs.writeSync(fd, buffer, offset, length[, position])`
  - [ ] `fs.writeSync(fd, data[, position[, encoding]])`
- - [ ] `fs.writeFileSync(file, data[, options])`
- - [ ] `fs.unlinkSync(path)`
- - [ ] `fs.rmdirSync(path)`
+ - [X] `fs.writeFileSync(file, data[, options])`
+ - [X] `fs.unlinkSync(path)`
+ - [X] `fs.rmdirSync(path)`
  
 Below asynchronous methods are implemented using `process.asyscall`:
  
@@ -296,16 +294,16 @@ Below asynchronous methods are implemented using `process.asyscall`:
  - [X] `fs.mkdir(path[, mode], callback)`
  - [X] `fs.mkdtemp(prefix, callback)`
  - [X] `fs.open(path, flags[, mode], callback)`
- - [ ] `fs.read(fd, buffer, offset, length, position, callback)`
+ - [X] `fs.read(fd, buffer, offset, length, position, callback)`
  - [X] `fs.readFile(file[, options], callback)`
  - [ ] `fs.readlink(path[, options], callback)`
  - [ ] `fs.realpath(path[, options], callback)`
- - [ ] `fs.rename(oldPath, newPath, callback)`
- - [ ] `fs.rmdir(path, callback)`
+ - [X] `fs.rename(oldPath, newPath, callback)`
+ - [X] `fs.rmdir(path, callback)`
  - [X] `fs.stat(path, callback)`
- - [ ] `fs.symlink(target, path[, type], callback)`
+ - [X] `fs.symlink(target, path[, type], callback)`
  - [X] `fs.truncate(path, len, callback)`
- - [ ] `fs.unlink(path, callback)`
+ - [X] `fs.unlink(path, callback)`
  - [ ] `fs.write(fd, buffer, offset, length[, position], callback)`
  - [ ] `fs.write(fd, data[, position[, encoding]], callback)`
  - [ ] `fs.writeFile(file, data[, options], callback)`
@@ -314,8 +312,9 @@ There is no such `readdir` Linux system call, instead `libc` implements it
 itself, here we too implement the `readdir` function in JavaScript, so it
 might not be 100% compatible with Node.js:
  
- - [ ] `fs.readdirSync(path[, options])`
- - [ ] `fs.readdir(path[, options], callback)`
+ - [X] `fs.readdirSync(path[, options])`
+ - [X] `fs.readdir(path[, options], callback)` -- asynchronous `readdir` sometimes
+   returns `EPROTO = -71` when trying to open directory.
  
 Currently `utime` system call is used instead of `utimes`, so timestamps resolved 
 to millisecond accuracy, you can still use `utimes` but if you specify time with 
@@ -329,8 +328,8 @@ We use `inotify` syscall interface (just like `libuv` in Node.js) from
 
  - [ ] `fs.watch(filename[, options][, listener])`
  
-Below file watching just polls file system (as does Node.js) using `setTimeout()`. There
-are some incompatibilities with Node.js, see [`fslib`](http://www.npmjs.com/package/fslib):
+Below file watching just polls file system (as does Node.js) using `setTimeout()`. Currenly
+`unref` option cannot be specified.
  
  - [ ] `fs.unwatchFile(filename[, listener])`
  - [ ] `fs.watchFile(filename[, options], listener)` 
@@ -346,7 +345,7 @@ Other:
      - [ ] `Event: 'close'`
      - [ ] `readStream.path`
      - [ ] `fs.createReadStream(path[, options])`
- - [ ] `Class: fs.Stats`
+ - [X] `Class: fs.Stats`
  - [ ] `Class: fs.WriteStream`
      - [ ] `Event: 'open'`
      - [ ] `Event: 'close'`
@@ -573,7 +572,7 @@ Below is list of already implemented API and roadmap on how the rest of the API 
 ## JavaScript Runtimes
 
 Currently `full.js` runs on Node.js and Duktape, but we should be able to
-port it to all runtimes that run on Linux
+port it to all JavaScript engines that run on Linux
 
  - [X] Node.js
  
@@ -611,5 +610,5 @@ Interpreter runtimes:
  ## TODOs
  
   - [ ] Use asynchronous Linux I/O for file systems on file systems that support that.
-  - [ ] Integrate `process.asyscall` with `epoll`.
+  - [ ] Integrate `process.asyscall` into `epoll`.
   

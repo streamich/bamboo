@@ -309,7 +309,7 @@ function readdir(path, encoding) {
 exports.readdir = readdir;
 function readdirList(path, encoding) {
     if (encoding === void 0) { encoding = 'utf8'; }
-    var fd = open(path, 0 | 65536);
+    var fd = open(path, 65536);
     if (fd < 0)
         throw fd;
     var buf = new Buffer(4096);
@@ -336,10 +336,10 @@ function readdirList(path, encoding) {
 exports.readdirList = readdirList;
 function readdirListAsync(path, encoding, callback) {
     if (encoding === void 0) { encoding = 'utf8'; }
-    openAsync(path, 0 | 65536, null, function (fd) {
+    openAsync(path, 65536, 0, function (fd) {
         if (fd < 0)
             return callback(fd);
-        var buf = new Buffer(4096);
+        var buf = new StaticBuffer(4096);
         var struct = types.linux_dirent64;
         var list = [];
         function done() {
@@ -387,12 +387,23 @@ function unlinkAsync(pathname, callback) {
     p.asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
 }
 exports.unlinkAsync = unlinkAsync;
-function readlink(pathname, buf) {
-    return syscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length);
+function readlink(pathname) {
+    var sb = new StaticBuffer(types.PATH_MAX);
+    var bytes = syscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length);
+    if (bytes < 0)
+        throw bytes;
+    else
+        return sb.slice(0, bytes).toString();
 }
 exports.readlink = readlink;
-function readlinkAsync(pathname, buf, callback) {
-    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
+function readlinkAsync(pathname, callback) {
+    var sb = new StaticBuffer(types.PATH_MAX);
+    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length, function (bytes) {
+        if (bytes < 0)
+            callback(bytes);
+        else
+            callback(bytes, sb.slice(0, bytes).toString());
+    });
 }
 exports.readlinkAsync = readlinkAsync;
 function link(oldpath, newpath) {

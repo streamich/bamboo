@@ -42,6 +42,7 @@ interface IStaticBuffer {
     new (array: number[]): StaticBuffer;
     alloc(size: number|number[], prot: string): StaticBuffer;
     frame(addr: Taddress, size: number): StaticBuffer;
+    isStaticBuffer(value: any): boolean;
 }
 
 declare var StaticBuffer: IStaticBuffer;

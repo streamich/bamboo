@@ -11,6 +11,11 @@ function print() {
 setImmediate(print);
 
 
-fs.readFile(__dirname + '/data.txt', function(err, buf) {
-    console.log(buf.toString());
-});
+try {
+    fs.readFile(__dirname + '/data.txt', function (err, buf) {
+        console.log(buf.toString());
+    });
+} catch(e) {
+    console.log(e);
+    console.log(e.errno);
+}

@@ -133,7 +133,7 @@ export function writeAsync(fd: number, buf: string|StaticBuffer, callback: Tcall
 //
 // Opens a file, returns file descriptor on success or a negative number representing an error.
 
-export function open(pathname: string, flags: types.FLAG, mode?: types.S): number {
+export function open(pathname: string, flags: types.FLAG, mode?: types.S|number): number {
     // debug('open', pathname, flags, mode);
     var args = [SYS.open, pathname, flags];
     if(typeof mode === 'number') args.push(mode);
@@ -141,7 +141,7 @@ export function open(pathname: string, flags: types.FLAG, mode?: types.S): numbe
     return syscall.apply(null, args);
 }
 
-export function openAsync(pathname: string, flags: types.FLAG, mode: types.S, callback: Tcallback) {
+export function openAsync(pathname: string, flags: types.FLAG, mode: types.S|number, callback: Tcallback) {
     p.asyscall(SYS.open, pathname, flags, mode, callback);
 }
 
@@ -641,7 +641,8 @@ export function readdir(path: string, encoding = 'utf8'): IReaddirEntry[] {
 export function readdirList(path: string, encoding = 'utf8'): string[] {
     // debug('readdirList', path, encoding);
 
-    var fd = open(path, types.FLAG.O_RDONLY | types.FLAG.O_DIRECTORY);
+    // var fd = open(path, types.FLAG.O_RDONLY | types.FLAG.O_DIRECTORY);
+    var fd = open(path, types.FLAG.O_DIRECTORY);
     if(fd < 0) throw fd;
 
     var buf = new Buffer(4096);
@@ -669,10 +670,11 @@ export function readdirList(path: string, encoding = 'utf8'): string[] {
 }
 
 export function readdirListAsync(path: string, encoding = 'utf8', callback: TcallbackErrTyped <number, string[]>) {
-    openAsync(path, types.FLAG.O_RDONLY | types.FLAG.O_DIRECTORY, null, (fd) => {
+    openAsync(path, types.FLAG.O_DIRECTORY, 0, (fd) => {
+
         if(fd < 0) return callback(fd);
 
-        var buf = new Buffer(4096);
+        var buf = new StaticBuffer(4096);
         var struct = types.linux_dirent64;
 
         var list: string[] = [];
@@ -702,7 +704,6 @@ export function readdirListAsync(path: string, encoding = 'utf8', callback: Tcal
                 else done();
             });
         }
-
         loop();
     });
 }
@@ -761,13 +762,20 @@ export function unlinkAsync(pathname: string, callback: Tcallback) {
 //
 // read value of a symbolic link
 
-export function readlink(pathname: string, buf: Buffer): number {
+export function readlink(pathname: string): string {
     // debug('readlink', pathname, buf.length);
-    return syscall(SYS.readlink, pathname, buf, buf.length);
+    var sb = new StaticBuffer(types.PATH_MAX);
+    var bytes = syscall(SYS.readlink, pathname, sb, sb.length);
+    if(bytes < 0) throw bytes;
+    else return sb.slice(0, bytes).toString();
 }
 
-export function readlinkAsync(pathname: string, buf: Buffer, callback: Tcallback) {
-    p.asyscall(SYS.readlink, pathname, buf, buf.length, callback);
+export function readlinkAsync(pathname: string, callback: TcallbackErrTyped <number, string>) {
+    var sb = new StaticBuffer(types.PATH_MAX);
+    p.asyscall(SYS.readlink, pathname, sb, sb.length, bytes => {
+        if(bytes < 0) callback(bytes);
+        else callback(bytes, sb.slice(0, bytes).toString());
+    });
 }
 
 

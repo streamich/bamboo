@@ -49,7 +49,7 @@ export class Inotify {
 
     protected pollBound = this.poll.bind(this);
 
-    pollInterval: number; /* 1 sec */
+    pollInterval: number;
     protected timeout;
 
     encoding = 'utf8';

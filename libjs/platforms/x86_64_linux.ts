@@ -4,6 +4,9 @@ import {Type, Arr, Struct} from '../typebase';
 import {Ipv4} from '../socket';
 // import {t_pointer} from "../../../libmem/struct";
 
+
+export const PATH_MAX = 4096;
+
 export const isLE = true;
 
 // The C `NULL` pointer:

@@ -173,7 +173,12 @@ var global = this;
 	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
 	            setImmediate(function() {
-	                Module.runMain();
+	                try {
+	                    Module.runMain();
+	                } catch(e) {
+	                    console.log(e);
+	                    console.log(e.stack);
+	                }
 	            });
 	        }
 
@@ -2645,7 +2650,7 @@ var global = this;
 	exports.readdir = readdir;
 	function readdirList(path, encoding) {
 	    if (encoding === void 0) { encoding = 'utf8'; }
-	    var fd = open(path, 0 | 65536);
+	    var fd = open(path, 65536);
 	    if (fd < 0)
 	        throw fd;
 	    var buf = new Buffer(4096);
@@ -2672,10 +2677,10 @@ var global = this;
 	exports.readdirList = readdirList;
 	function readdirListAsync(path, encoding, callback) {
 	    if (encoding === void 0) { encoding = 'utf8'; }
-	    openAsync(path, 0 | 65536, null, function (fd) {
+	    openAsync(path, 65536, 0, function (fd) {
 	        if (fd < 0)
 	            return callback(fd);
-	        var buf = new Buffer(4096);
+	        var buf = new StaticBuffer(4096);
 	        var struct = types.linux_dirent64;
 	        var list = [];
 	        function done() {
@@ -2723,12 +2728,23 @@ var global = this;
 	    p.asyscall(x86_64_linux_1.SYS.unlink, pathname, callback);
 	}
 	exports.unlinkAsync = unlinkAsync;
-	function readlink(pathname, buf) {
-	    return syscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length);
+	function readlink(pathname) {
+	    var sb = new StaticBuffer(types.PATH_MAX);
+	    var bytes = syscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length);
+	    if (bytes < 0)
+	        throw bytes;
+	    else
+	        return sb.slice(0, bytes).toString();
 	}
 	exports.readlink = readlink;
-	function readlinkAsync(pathname, buf, callback) {
-	    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, buf, buf.length, callback);
+	function readlinkAsync(pathname, callback) {
+	    var sb = new StaticBuffer(types.PATH_MAX);
+	    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length, function (bytes) {
+	        if (bytes < 0)
+	            callback(bytes);
+	        else
+	            callback(bytes, sb.slice(0, bytes).toString());
+	    });
 	}
 	exports.readlinkAsync = readlinkAsync;
 	function link(oldpath, newpath) {
@@ -3015,6 +3031,7 @@ var global = this;
 
 	"use strict";
 	var typebase_1 = __webpack_require__(8);
+	exports.PATH_MAX = 4096;
 	exports.isLE = true;
 	exports.NULL = 0;
 	var buf = Buffer.prototype;
@@ -3547,6 +3564,7 @@ var global = this;
 	// StaticBuffer.from(new StaticArrayBuffer(100));
 	// StaticBuffer.from(new ArrayBuffer(100));
 	// StaticBuffer.from(new Buffer(100));
+	// StaticBuffer.from('Hello world');
 	StaticBuffer.from = function(obj, a, b) {
 	    if(obj instanceof Array) {
 	        var array = obj;
@@ -3565,7 +3583,7 @@ var global = this;
 	    } else if(Buffer.isBuffer(obj) && !StaticBuffer.isStaticBuffer(obj)) {
 
 	        // Create a `StaticBuffer` from simple `Buffer`.
-	        // This is very ad-hoc currently and hacky currently.
+	        // This is very ad-hoc and hacky currently.
 
 	        const MIN_SIZE = 200;
 	        const LEN = obj.length;
@@ -3581,6 +3599,11 @@ var global = this;
 	            return new StaticBuffer(sab);
 	        }
 
+	    } else if(typeof obj === 'string') {
+	        var len = obj.length;
+	        var sb = new StaticBuffer(len);
+	        for(var i = 0; i < len; i++) sb[i] = obj.charCodeAt(i);
+	        return sb;
 	    } else if(obj instanceof Uint8Array) {
 	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
 	        var sb = new StaticBuffer(obj.length);
@@ -11266,6 +11289,11 @@ var global = this;
 	    mode: 438,
 	    flag: 'a'
 	};
+	var writeFileDefaults = {
+	    encoding: 'utf8',
+	    mode: 438,
+	    flag: 'w'
+	};
 	var ERRSTR = {
 	    PATH_STR: 'path must be a string',
 	    FD: 'fd must be a file descriptor',
@@ -11276,7 +11304,11 @@ var global = this;
 	    LEN: 'len must be an integer',
 	    ATIME: 'atime must be an integer',
 	    MTIME: 'mtime must be an integer',
-	    PREFIX: 'filename prefix is required'
+	    PREFIX: 'filename prefix is required',
+	    BUFFER: 'buffer must be an instance of Buffer or StaticBuffer',
+	    OFFSET: 'offset must be an integer',
+	    LENGTH: 'length must be an integer',
+	    POSITION: 'position must be an integer'
 	};
 	var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
 	function flagsToFlagsValue(f) {
@@ -11291,6 +11323,9 @@ var global = this;
 	}
 	var optionsDefaults = {
 	    encoding: 'utf8'
+	};
+	var readFileOptionsDefaults = {
+	    flag: 'r'
 	};
 	var Stats = (function () {
 	    function Stats() {
@@ -11882,9 +11917,9 @@ var global = this;
 	            fullname = prefix + rndStr6();
 	            access(fullname, function (err) {
 	                if (err)
-	                    name_loop();
-	                else
 	                    mk_dir();
+	                else
+	                    name_loop();
 	            });
 	        }
 	        name_loop();
@@ -11905,16 +11940,10 @@ var global = this;
 	            callback = mode;
 	            mode = 438;
 	        }
-	        try {
-	            var vpath = validPathOrThrow(path);
-	            var flagsval = flagsToFlagsValue(flags);
-	        }
-	        catch (error) {
-	            callback(error);
-	            return;
-	        }
+	        var vpath = validPathOrThrow(path);
+	        var flagsval = flagsToFlagsValue(flags);
 	        if (typeof mode !== 'number')
-	            return callback(TypeError(ERRSTR.MODE_INT));
+	            throw TypeError(ERRSTR.MODE_INT);
 	        libjs.openAsync(vpath, flagsval, mode, function (res) {
 	            if (res < 0)
 	                callback(Error(formatError(res, 'open', vpath)));
@@ -11924,14 +11953,14 @@ var global = this;
 	    function readSync(fd, buffer, offset, length, position) {
 	        validateFd(fd);
 	        if (!(buffer instanceof Buffer))
-	            throw TypeError('buffer must be an instance of Buffer');
+	            throw TypeError(ERRSTR.BUFFER);
 	        if (typeof offset !== 'number')
-	            throw TypeError('offset must be an integer');
+	            throw TypeError(ERRSTR.OFFSET);
 	        if (typeof length !== 'number')
-	            throw TypeError('length must be an integer');
+	            throw TypeError(ERRSTR.LENGTH);
 	        if (position !== null) {
 	            if (typeof position !== 'number')
-	                throw TypeError('position must be an integer');
+	                throw TypeError(ERRSTR.POSITION);
 	            var seekres = libjs.lseek(fd, position, 0);
 	            if (seekres < 0)
 	                throwError(seekres, 'read');
@@ -11942,15 +11971,76 @@ var global = this;
 	            throwError(res, 'read');
 	        return res;
 	    }
-	    function readdirSync(path, options) {
-	        if (options === void 0) { options = {}; }
-	        var vpath = validPathOrThrow(path);
-	        options = extend(options, optionsDefaults);
-	        return libjs.readdirList(vpath, options.encoding);
+	    function read(fd, buffer, offset, length, position, callback) {
+	        validateFd(fd);
+	        if (!(buffer instanceof Buffer))
+	            throw TypeError(ERRSTR.BUFFER);
+	        if (typeof offset !== 'number')
+	            throw TypeError(ERRSTR.OFFSET);
+	        if (typeof length !== 'number')
+	            throw TypeError(ERRSTR.LENGTH);
+	        function do_read() {
+	            var buf = buffer.slice(offset, offset + length);
+	            libjs.readAsync(fd, buf, function (res) {
+	                if (res < 0)
+	                    callback(Error(formatError(res, 'read')));
+	                else
+	                    callback(null, res, buffer);
+	            });
+	        }
+	        if (position !== null) {
+	            if (typeof position !== 'number')
+	                throw TypeError(ERRSTR.POSITION);
+	            libjs.lseekAsync(fd, position, 0, function (seekres) {
+	                if (seekres < 0)
+	                    callback(Error(formatError(seekres, 'read')));
+	                else
+	                    do_read();
+	            });
+	        }
+	        else {
+	            do_read();
+	        }
 	    }
-	    var readFileOptionsDefaults = {
-	        flag: 'r'
-	    };
+	    function optsEncoding(options) {
+	        if (!options)
+	            return optionsDefaults.encoding;
+	        else {
+	            var typeofopt = typeof options;
+	            switch (typeofopt) {
+	                case 'string': return options;
+	                case 'object':
+	                    return options.encoding
+	                        ? options.encoding : optionsDefaults.encoding;
+	                default: throw TypeError(ERRSTR_OPTS(typeofopt));
+	            }
+	        }
+	    }
+	    function readdirSync(path, options) {
+	        var vpath = validPathOrThrow(path);
+	        var encoding = optsEncoding(options);
+	        return libjs.readdirList(vpath, encoding);
+	    }
+	    function readdir(path, options, callback) {
+	        var vpath = validPathOrThrow(path);
+	        var encoding;
+	        if (typeof options === 'function') {
+	            callback = options;
+	            encoding = optionsDefaults.encoding;
+	        }
+	        else {
+	            encoding = optsEncoding(options);
+	            if (typeof callback !== 'function')
+	                throw TypeError(ERRSTR.CB);
+	        }
+	        options = extend(options, optionsDefaults);
+	        libjs.readdirListAsync(vpath, encoding, function (errno, list) {
+	            if (errno < 0)
+	                callback(Error(formatError(errno, 'readdir', vpath)));
+	            else
+	                callback(null, list);
+	        });
+	    }
 	    function readFileSync(file, options) {
 	        if (options === void 0) { options = {}; }
 	        var opts;
@@ -12051,25 +12141,30 @@ var global = this;
 	    function readlinkSync(path, options) {
 	        if (options === void 0) { options = null; }
 	        path = validPathOrThrow(path);
-	        var buf = new Buffer(64);
-	        var res = libjs.readlink(path, buf);
-	        if (res < 0)
-	            throwError(res, 'readlink', path);
-	        var encoding = 'buffer';
-	        if (options) {
-	            if (typeof options === 'string')
-	                encoding = options;
-	            else if (typeof options === 'object') {
-	                if (typeof options.encoding != 'string')
-	                    throw TypeError('Encoding must be string.');
-	                else
-	                    encoding = options.encoding;
-	            }
-	            else
-	                throw TypeError('Invalid options.');
+	        var encBuffer = false;
+	        var filename;
+	        if (typeof path === 'string') {
+	            filename = path;
 	        }
-	        buf = buf.slice(0, res);
-	        return encoding == 'buffer' ? buf : buf.toString(encoding);
+	        else if (Buffer.isBuffer(path)) {
+	            var encoding = optsEncoding(options);
+	            if (encoding === 'buffer') {
+	                filename = path.toString();
+	                encBuffer = true;
+	            }
+	            else {
+	                filename = path.toString(encoding);
+	            }
+	        }
+	        else
+	            throw TypeError(ERRSTR.PATH_STR);
+	        try {
+	            var res = libjs.readlink(filename);
+	        }
+	        catch (errno) {
+	            throwError(errno, 'readlink', path);
+	        }
+	        return !encBuffer ? res : new Buffer(res);
 	    }
 	    function renameSync(oldPath, newPath) {
 	        var voldPath = validPathOrThrow(oldPath);
@@ -12078,11 +12173,30 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'rename', voldPath, vnewPath);
 	    }
+	    function rename(oldPath, newPath, callback) {
+	        var voldPath = validPathOrThrow(oldPath);
+	        var vnewPath = validPathOrThrow(newPath);
+	        libjs.renameAsync(voldPath, vnewPath, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'rename', voldPath, vnewPath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function rmdirSync(path) {
 	        var vpath = validPathOrThrow(path);
 	        var res = libjs.rmdir(vpath);
 	        if (res < 0)
 	            throwError(res, 'rmdir', vpath);
+	    }
+	    function rmdir(path, callback) {
+	        var vpath = validPathOrThrow(path);
+	        libjs.rmdirAsync(vpath, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'rmdir', vpath)));
+	            else
+	                callback(null);
+	        });
 	    }
 	    function symlinkSync(target, path) {
 	        var vtarget = validPathOrThrow(target);
@@ -12091,11 +12205,35 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'symlink', vtarget, vpath);
 	    }
+	    function symlink(target, path, type, callback) {
+	        var vtarget = validPathOrThrow(target);
+	        var vpath = validPathOrThrow(path);
+	        if (typeof type === 'function') {
+	            callback = type;
+	        }
+	        if (typeof callback !== 'function')
+	            throw TypeError(ERRSTR.CB);
+	        libjs.symlinkAsync(vtarget, vpath, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'symlink', vtarget, vpath)));
+	            else
+	                callback(null);
+	        });
+	    }
 	    function unlinkSync(path) {
 	        var vpath = validPathOrThrow(path);
 	        var res = libjs.unlink(vpath);
 	        if (res < 0)
 	            throwError(res, 'unlink', vpath);
+	    }
+	    function unlink(path, callback) {
+	        var vpath = validPathOrThrow(path);
+	        libjs.unlinkAsync(vpath, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'unlink', vpath)));
+	            else
+	                callback(null);
+	        });
 	    }
 	    function createWriteStream(path, options) { }
 	    var FSWatcher = (function (_super) {
@@ -12246,9 +12384,48 @@ var global = this;
 	            if (sres < 0)
 	                throwError(sres, 'write:lseek');
 	        }
-	        var res = libjs.write(fd, buf);
+	        var sb = StaticBuffer.isStaticBuffer(buf)
+	            ? buf : StaticBuffer.from(buf);
+	        var res = libjs.write(fd, sb);
 	        if (res < 0)
 	            throwError(res, 'write');
+	    }
+	    function getOptions(defaults, options) {
+	        if (!options)
+	            return defaults;
+	        else {
+	            var tipeof = typeof options;
+	            switch (tipeof) {
+	                case 'string': return extend({}, writeFileDefaults, { encoding: options });
+	                case 'object': return extend({}, writeFileDefaults, options);
+	                default: throw TypeError(ERRSTR_OPTS(tipeof));
+	            }
+	        }
+	    }
+	    function getWriteFileOptions(options) {
+	        return getOptions(writeFileDefaults, options);
+	    }
+	    function writeFileSync(file, data, options) {
+	        var opts = getWriteFileOptions(options);
+	        var fd;
+	        var vpath;
+	        var is_fd = typeof file === 'number';
+	        if (is_fd) {
+	            fd = file;
+	        }
+	        else {
+	            vpath = validPathOrThrow(file);
+	            var flags = flagsToFlagsValue(opts.flag);
+	            fd = libjs.open(vpath, flags, opts.mode);
+	            if (fd < 0)
+	                throwError(fd, 'writeFile', vpath);
+	        }
+	        var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+	        var res = libjs.write(fd, sb);
+	        if (res < 0)
+	            throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
+	        if (!is_fd)
+	            libjs.close(fd);
 	    }
 	    return {
 	        flags: flags,
@@ -12283,8 +12460,10 @@ var global = this;
 	        renameSync: renameSync,
 	        readSync: readSync,
 	        writeSync: writeSync,
+	        writeFileSync: writeFileSync,
 	        unlinkSync: unlinkSync,
 	        rmdirSync: rmdirSync,
+	        readdirSync: readdirSync,
 	        access: access,
 	        appendFile: appendFile,
 	        chmod: chmod,
@@ -12306,7 +12485,13 @@ var global = this;
 	        mkdtemp: mkdtemp,
 	        mkdir: mkdir,
 	        open: open,
-	        readFile: readFile
+	        read: read,
+	        readFile: readFile,
+	        readdir: readdir,
+	        rename: rename,
+	        rmdir: rmdir,
+	        symlink: symlink,
+	        unlink: unlink
 	    };
 	}
 	exports.build = build;
