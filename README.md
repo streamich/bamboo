@@ -235,6 +235,8 @@ Implements `fs.js` API as in the docs, with few minor differences, here are the 
  5. `readdir()` results may differ as libfs implements it itself instead of using `libc`'s C implementation.
  6. `realpath()` results may differ as libfs implements it itself instead of using `libc`'s C implementation.
  7. `fs.ReadStream` and `fs.WriteStream` are not implemented yet.
+ 8. `fs.js` should in general use `StaticBuffer` in places of `Buffer`, many methods
+    though don't implement that yet, so under runtime which moves buffers in memory there may be `Segmentation fault`s.
 
 Below synchronous methods are implements using `process.syscall`:
 

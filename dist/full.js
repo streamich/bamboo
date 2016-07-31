@@ -11226,6 +11226,23 @@ var global = this;
 	    exports.isFullJS = true;
 	}
 	function noop() { }
+	var ERRSTR = {
+	    PATH_STR: 'path must be a string',
+	    FD: 'fd must be a file descriptor',
+	    MODE_INT: 'mode must be an integer',
+	    CB: 'callback must be a function',
+	    UID: 'uid must be an unsigned int',
+	    GID: 'gid must be an unsigned int',
+	    LEN: 'len must be an integer',
+	    ATIME: 'atime must be an integer',
+	    MTIME: 'mtime must be an integer',
+	    PREFIX: 'filename prefix is required',
+	    BUFFER: 'buffer must be an instance of Buffer or StaticBuffer',
+	    OFFSET: 'offset must be an integer',
+	    LENGTH: 'length must be an integer',
+	    POSITION: 'position must be an integer'
+	};
+	var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
 	function formatError(errno, func, path, path2) {
 	    if (func === void 0) { func = ''; }
 	    if (path === void 0) { path = ''; }
@@ -11264,6 +11281,29 @@ var global = this;
 	    if (typeof fd !== 'number')
 	        throw TypeError(ERRSTR.FD);
 	}
+	function getOptions(defaults, options) {
+	    if (!options)
+	        return defaults;
+	    else {
+	        var tipeof = typeof options;
+	        switch (tipeof) {
+	            case 'string': return extend({}, writeFileDefaults, { encoding: options });
+	            case 'object': return extend({}, writeFileDefaults, options);
+	            default: throw TypeError(ERRSTR_OPTS(tipeof));
+	        }
+	    }
+	}
+	var optionGenerator = function (defaults) { return function (options) { return getOptions(defaults, options); }; };
+	function validateCallback(callback) {
+	    if (typeof callback !== 'function')
+	        throw TypeError(ERRSTR.CB);
+	    return callback;
+	}
+	var optionAndCallbackGenerator = function (getOpts) {
+	    return function (options, callback) { return typeof options === 'function'
+	        ? [getOpts(), options]
+	        : [getOpts(options), validateCallback(callback)]; };
+	};
 	(function (flags) {
 	    flags[flags["r"] = 0] = "r";
 	    flags[flags['r+'] = 2] = 'r+';
@@ -11294,23 +11334,6 @@ var global = this;
 	    mode: 438,
 	    flag: 'w'
 	};
-	var ERRSTR = {
-	    PATH_STR: 'path must be a string',
-	    FD: 'fd must be a file descriptor',
-	    MODE_INT: 'mode must be an integer',
-	    CB: 'callback must be a function',
-	    UID: 'uid must be an unsigned int',
-	    GID: 'gid must be an unsigned int',
-	    LEN: 'len must be an integer',
-	    ATIME: 'atime must be an integer',
-	    MTIME: 'mtime must be an integer',
-	    PREFIX: 'filename prefix is required',
-	    BUFFER: 'buffer must be an instance of Buffer or StaticBuffer',
-	    OFFSET: 'offset must be an integer',
-	    LENGTH: 'length must be an integer',
-	    POSITION: 'position must be an integer'
-	};
-	var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
 	function flagsToFlagsValue(f) {
 	    if (typeof f === 'number')
 	        return flags;
@@ -11373,8 +11396,7 @@ var global = this;
 	        else {
 	            mode = a;
 	            callback = b;
-	            if (typeof callback !== 'function')
-	                throw TypeError(ERRSTR.CB);
+	            validateCallback(callback);
 	        }
 	        var vpath = pathOrError(path);
 	        if (vpath instanceof TypeError)
@@ -11452,8 +11474,7 @@ var global = this;
 	                default:
 	                    throw TypeError(ERRSTR_OPTS(tipof));
 	            }
-	            if (typeof callback !== 'function')
-	                throw TypeError(ERRSTR.CB);
+	            validateCallback(callback);
 	        }
 	        var b;
 	        if (Buffer.isBuffer(data))
@@ -12030,8 +12051,7 @@ var global = this;
 	        }
 	        else {
 	            encoding = optsEncoding(options);
-	            if (typeof callback !== 'function')
-	                throw TypeError(ERRSTR.CB);
+	            validateCallback(callback);
 	        }
 	        options = extend(options, optionsDefaults);
 	        libjs.readdirListAsync(vpath, encoding, function (errno, list) {
@@ -12041,23 +12061,16 @@ var global = this;
 	                callback(null, list);
 	        });
 	    }
+	    var getReadFileOptions = optionGenerator(readFileOptionsDefaults);
 	    function readFileSync(file, options) {
-	        if (options === void 0) { options = {}; }
-	        var opts;
-	        if (typeof options === 'string')
-	            opts = extend({ encoding: options }, readFileOptionsDefaults);
-	        else if (typeof options !== 'object')
-	            throw TypeError('Invalid options');
-	        else
-	            opts = extend(options, readFileOptionsDefaults);
-	        if (opts.encoding && (typeof opts.encoding != 'string'))
-	            throw TypeError('Invalid encoding');
+	        var opts = getReadFileOptions(options);
 	        var fd;
-	        if (typeof file === 'number')
+	        var is_fd = typeof file === 'number';
+	        if (is_fd)
 	            fd = file;
 	        else {
 	            var vfile = validPathOrThrow(file);
-	            var flag = flags[opts.flag];
+	            var flag = flagsToFlagsValue(opts.flag);
 	            fd = libjs.open(vfile, flag, 438);
 	            if (fd < 0)
 	                throwError(fd, 'readFile', vfile);
@@ -12072,40 +12085,29 @@ var global = this;
 	                buf = buf.slice(0, res);
 	            list.push(buf);
 	        } while (res > 0);
-	        libjs.close(fd);
+	        if (!is_fd)
+	            libjs.close(fd);
 	        var buffer = Buffer.concat(list);
 	        if (opts.encoding)
 	            return buffer.toString(opts.encoding);
 	        else
 	            return buffer;
 	    }
-	    function readFile(file, options, callback) {
+	    var getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
+	    function readFile(file, options, cb) {
 	        if (options === void 0) { options = {}; }
-	        var opts;
-	        if (typeof options === 'function') {
-	            callback = options;
-	            opts = readFileOptionsDefaults;
-	        }
-	        else {
-	            if (typeof options === 'string')
-	                opts = extend({ encoding: options }, readFileOptionsDefaults);
-	            else if (typeof options !== 'object')
-	                return callback(TypeError('Invalid options'));
-	            else
-	                opts = extend(options, readFileOptionsDefaults);
-	            if (opts.encoding && (typeof opts.encoding != 'string'))
-	                return callback(TypeError('Invalid encoding'));
-	        }
+	        var _a = getReadFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	        var is_fd = typeof file === 'number';
 	        function on_open(fd) {
 	            var list = [];
 	            function done() {
-	                libjs.closeAsync(fd, function () {
-	                    var buffer = Buffer.concat(list);
-	                    if (opts.encoding)
-	                        callback(null, buffer.toString(opts.encoding));
-	                    else
-	                        callback(null, buffer);
-	                });
+	                var buffer = Buffer.concat(list);
+	                if (opts.encoding)
+	                    callback(null, buffer.toString(opts.encoding));
+	                else
+	                    callback(null, buffer);
+	                if (!is_fd)
+	                    libjs.closeAsync(fd, noop);
 	            }
 	            function loop() {
 	                var buf = new StaticBuffer(CHUNK);
@@ -12123,13 +12125,11 @@ var global = this;
 	            }
 	            loop();
 	        }
-	        if (typeof file === 'number')
+	        if (is_fd)
 	            on_open(file);
 	        else {
-	            var vfile = pathOrError(file);
-	            if (vfile instanceof TypeError)
-	                return callback(vfile);
-	            var flag = flags[opts.flag];
+	            var vfile = validPathOrThrow(file);
+	            var flag = flagsToFlagsValue(opts.flag);
 	            libjs.openAsync(vfile, flag, 438, function (fd) {
 	                if (fd < 0)
 	                    callback(Error(formatError(fd, 'readFile', vfile)));
@@ -12211,8 +12211,7 @@ var global = this;
 	        if (typeof type === 'function') {
 	            callback = type;
 	        }
-	        if (typeof callback !== 'function')
-	            throw TypeError(ERRSTR.CB);
+	        validateCallback(callback);
 	        libjs.symlinkAsync(vtarget, vpath, function (res) {
 	            if (res < 0)
 	                callback(Error(formatError(res, 'symlink', vtarget, vpath)));
@@ -12390,21 +12389,7 @@ var global = this;
 	        if (res < 0)
 	            throwError(res, 'write');
 	    }
-	    function getOptions(defaults, options) {
-	        if (!options)
-	            return defaults;
-	        else {
-	            var tipeof = typeof options;
-	            switch (tipeof) {
-	                case 'string': return extend({}, writeFileDefaults, { encoding: options });
-	                case 'object': return extend({}, writeFileDefaults, options);
-	                default: throw TypeError(ERRSTR_OPTS(tipeof));
-	            }
-	        }
-	    }
-	    function getWriteFileOptions(options) {
-	        return getOptions(writeFileDefaults, options);
-	    }
+	    var getWriteFileOptions = optionGenerator(writeFileDefaults);
 	    function writeFileSync(file, data, options) {
 	        var opts = getWriteFileOptions(options);
 	        var fd;
@@ -12426,6 +12411,34 @@ var global = this;
 	            throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
 	        if (!is_fd)
 	            libjs.close(fd);
+	    }
+	    var getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
+	    function writeFile(file, data, options, cb) {
+	        var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	        var is_fd = typeof file === 'number';
+	        function on_write(fd) {
+	            var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+	            libjs.writeAsync(fd, sb, function (res) {
+	                if (res < 0)
+	                    callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
+	                else
+	                    callback(null);
+	                if (!is_fd)
+	                    libjs.closeAsync(fd, noop);
+	            });
+	        }
+	        if (is_fd)
+	            on_write(file);
+	        else {
+	            var vpath = validPathOrThrow(file);
+	            var flags = flagsToFlagsValue(opts.flag);
+	            libjs.openAsync(vpath, flags, opts.mode, function (fd) {
+	                if (fd < 0)
+	                    callback(Error(formatError(fd, 'writeFile', vpath)));
+	                else
+	                    on_write(fd);
+	            });
+	        }
 	    }
 	    return {
 	        flags: flags,

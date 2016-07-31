@@ -35,6 +35,25 @@ export type Tpath = string|Buffer|StaticBuffer;
 export type Tdata = string|Buffer|StaticBuffer;
 
 
+const ERRSTR = {
+    PATH_STR:       'path must be a string',
+    FD:             'fd must be a file descriptor',
+    MODE_INT:       'mode must be an integer',
+    CB:             'callback must be a function',
+    UID:            'uid must be an unsigned int',
+    GID:            'gid must be an unsigned int',
+    LEN:            'len must be an integer',
+    ATIME:          'atime must be an integer',
+    MTIME:          'mtime must be an integer',
+    PREFIX:         'filename prefix is required',
+    BUFFER:         'buffer must be an instance of Buffer or StaticBuffer',
+    OFFSET:         'offset must be an integer',
+    LENGTH:         'length must be an integer',
+    POSITION:       'position must be an integer',
+};
+const ERRSTR_OPTS = tipeof => `Expected options to be either an object or a string, but got ${tipeof} instead`;
+
+
 function formatError(errno, func = '', path = '', path2 = '') {
     switch(-errno) {
         case libjs.ERROR.ENOENT:    return `ENOENT: no such file or directory, ${func} '${path}'`;
@@ -66,6 +85,31 @@ function validPathOrThrow(path: Tpath): string {
 function validateFd(fd: number) {
     if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
 }
+
+function getOptions <T> (defaults: T, options?: T|string): T {
+    if(!options) return defaults;
+    else {
+        var tipeof = typeof options;
+        switch(tipeof) {
+            case 'string': return extend({}, writeFileDefaults, {encoding: options as string});
+            case 'object': return extend({}, writeFileDefaults, options);
+            default: throw TypeError(ERRSTR_OPTS(tipeof));
+        }
+    }
+}
+
+const optionGenerator = defaults => options => getOptions(defaults, options);
+
+function validateCallback(callback) {
+    if(typeof callback !== 'function')
+        throw TypeError(ERRSTR.CB);
+    return callback;
+}
+
+const optionAndCallbackGenerator = getOpts =>
+    (options, callback?) => typeof options === 'function'
+        ? [getOpts(), options]
+        : [getOpts(options), validateCallback(callback)];
 
 
 // List of file `flags` as defined by node.
@@ -129,25 +173,6 @@ var writeFileDefaults: IFileOptions = {
     mode: MODE.FILE,
     flag: 'w',
 };
-
-
-const ERRSTR = {
-    PATH_STR:       'path must be a string',
-    FD:             'fd must be a file descriptor',
-    MODE_INT:       'mode must be an integer',
-    CB:             'callback must be a function',
-    UID:            'uid must be an unsigned int',
-    GID:            'gid must be an unsigned int',
-    LEN:            'len must be an integer',
-    ATIME:          'atime must be an integer',
-    MTIME:          'mtime must be an integer',
-    PREFIX:         'filename prefix is required',
-    BUFFER:         'buffer must be an instance of Buffer or StaticBuffer',
-    OFFSET:         'offset must be an integer',
-    LENGTH:         'length must be an integer',
-    POSITION:       'position must be an integer',
-};
-const ERRSTR_OPTS = tipeof => `Expected options to be either an object or a string, but got ${tipeof} instead`;
 
 
 function flagsToFlagsValue(f: string|number) {
@@ -265,9 +290,7 @@ export function build(deps) {
         } else {
             mode = a as number;
             callback = b;
-
-            if(typeof callback !== 'function')
-                throw TypeError(ERRSTR.CB);
+            validateCallback(callback);
         }
 
         var vpath = pathOrError(path);
@@ -347,8 +370,7 @@ export function build(deps) {
                     throw TypeError(ERRSTR_OPTS(tipof));
             }
 
-            if(typeof callback !== 'function')
-                throw TypeError(ERRSTR.CB);
+            validateCallback(callback);
         }
 
         var b: Buffer;
@@ -903,8 +925,7 @@ export function build(deps) {
             encoding = optionsDefaults.encoding;
         } else {
             encoding = optsEncoding(options);
-            if(typeof callback !== 'function')
-                throw TypeError(ERRSTR.CB);
+            validateCallback(callback);
         }
 
         options = extend(options, optionsDefaults);
@@ -915,18 +936,17 @@ export function build(deps) {
     }
 
 
-    function readFileSync(file: string|Buffer|number, options: IReadFileOptions|string = {}): string|Buffer {
-        var opts: IReadFileOptions;
-        if(typeof options === 'string') opts = extend({encoding: options}, readFileOptionsDefaults);
-        else if(typeof options !== 'object') throw TypeError('Invalid options');
-        else opts = extend(options, readFileOptionsDefaults);
-        if(opts.encoding && (typeof opts.encoding != 'string')) throw TypeError('Invalid encoding');
+    const getReadFileOptions = optionGenerator(readFileOptionsDefaults);
+
+    function readFileSync(file: string|Buffer|number, options?: IReadFileOptions|string): string|Buffer {
+        var opts = getReadFileOptions(options);
 
         var fd: number;
-        if(typeof file === 'number') fd = file as number;
+        var is_fd = typeof file === 'number';
+        if(is_fd) fd = file as number;
         else {
             var vfile = validPathOrThrow(file as string|Buffer);
-            var flag = flags[opts.flag];
+            var flag = flagsToFlagsValue(opts.flag);
             fd = libjs.open(vfile, flag, MODE.FILE);
             if(fd < 0) throwError(fd, 'readFile', vfile);
         }
@@ -944,38 +964,27 @@ export function build(deps) {
             list.push(buf);
         } while(res > 0);
 
-        libjs.close(fd);
+        if(!is_fd) libjs.close(fd);
 
         var buffer = Buffer.concat(list);
         if(opts.encoding) return buffer.toString(opts.encoding);
         else return buffer;
     }
 
-    function readFile(file: string|Buffer|number, options: IReadFileOptions|string = {}, callback?: TcallbackData <string|Buffer>) {
-        var opts: IReadFileOptions;
+    const getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
 
-        if(typeof options === 'function') {
-            callback = options as any as TcallbackData <string|Buffer>;
-            opts = readFileOptionsDefaults;
-        } else {
-            if(typeof options === 'string') opts = extend({encoding: options}, readFileOptionsDefaults);
-            else if(typeof options !== 'object')
-                return callback(TypeError('Invalid options'));
-            else opts = extend(options, readFileOptionsDefaults);
-
-            if(opts.encoding && (typeof opts.encoding != 'string'))
-                return callback(TypeError('Invalid encoding'));
-        }
+    function readFile(file: string|Buffer|number, options: IReadFileOptions|string = {}, cb?: TcallbackData <string|Buffer>) {
+        var [opts, callback] = getReadFileOptionsAndCallback(options, cb);
+        var is_fd = typeof file === 'number';
 
         function on_open(fd: number) {
             var list: StaticBuffer[] = [];
 
             function done() {
-                libjs.closeAsync(fd,  function() {
-                    var buffer = Buffer.concat(list);
-                    if(opts.encoding) callback(null, buffer.toString(opts.encoding));
-                    else callback(null, buffer);
-                });
+                var buffer = Buffer.concat(list);
+                if(opts.encoding) callback(null, buffer.toString(opts.encoding));
+                else callback(null, buffer);
+                if(!is_fd) libjs.closeAsync(fd, noop);
             }
 
             function loop() {
@@ -993,15 +1002,12 @@ export function build(deps) {
             loop();
         }
 
-        // Here we open file.
-        if(typeof file === 'number') on_open(file as number);
+        if(is_fd) on_open(file as number);
         else {
-            var vfile = pathOrError(file as string|Buffer);
-            if(vfile instanceof TypeError) return callback(vfile);
-
-            var flag = flags[opts.flag];
-            libjs.openAsync(vfile as string, flag, MODE.FILE, function(fd) {
-                if(fd < 0) callback(Error(formatError(fd, 'readFile', vfile as string)));
+            var vfile = validPathOrThrow(file as string|Buffer);
+            var flag = flagsToFlagsValue(opts.flag);
+            libjs.openAsync(vfile as string, flag, MODE.FILE, function (fd) {
+                if (fd < 0) callback(Error(formatError(fd, 'readFile', vfile as string)));
                 else on_open(fd);
             });
         }
@@ -1082,8 +1088,7 @@ export function build(deps) {
             callback = type;
         }
 
-        if(typeof callback !== 'function')
-            throw TypeError(ERRSTR.CB);
+        validateCallback(callback);
 
         // > The type argument [..] is only available on Windows (ignored on other platforms)
         /* type = typeof type === 'string' ? type : null; */
@@ -1333,21 +1338,7 @@ export function build(deps) {
     }
 
 
-    function getOptions <T> (defaults: T, options?: T|string): T {
-        if(!options) return defaults;
-        else {
-            var tipeof = typeof options;
-            switch(tipeof) {
-                case 'string': return extend({}, writeFileDefaults, {encoding: options as string});
-                case 'object': return extend({}, writeFileDefaults, options);
-                default: throw TypeError(ERRSTR_OPTS(tipeof));
-            }
-        }
-    }
-
-    function getWriteFileOptions(options?: IFileOptions|string): IFileOptions {
-        return getOptions <IFileOptions> (writeFileDefaults, options);
-    }
+    const getWriteFileOptions = optionGenerator(writeFileDefaults);
 
     function writeFileSync(file: Tfile, data: Tdata, options?: IFileOptions|string) {
         var opts = getWriteFileOptions(options);
@@ -1368,6 +1359,33 @@ export function build(deps) {
         var res = libjs.write(fd, sb);
         if(res < 0) throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
         if(!is_fd) libjs.close(fd);
+    }
+
+    const getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
+
+    function writeFile(file: Tfile, data: Tdata, callback: TcallbackData <void>);
+    function writeFile(file: Tfile, data: Tdata, options: IFileOptions|string|TcallbackData <void>, cb?: TcallbackData <void>) {
+        var [opts, callback] = getWriteFileOptionsAndCallback(options, cb);
+        var is_fd = typeof file === 'number';
+
+        function on_write(fd: number) {
+            var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+            libjs.writeAsync(fd, sb, res => {
+                if(res < 0) callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
+                else callback(null);
+                if(!is_fd) libjs.closeAsync(fd, noop);
+            });
+        }
+
+        if(is_fd) on_write(file as number)
+        else {
+            var vpath = validPathOrThrow(file as Tpath);
+            var flags = flagsToFlagsValue(opts.flag);
+            libjs.openAsync(vpath, flags, opts.mode, fd => {
+                if(fd < 0) callback(Error(formatError(fd, 'writeFile', vpath)));
+                else on_write(fd);
+            });
+        }
     }
 
 
