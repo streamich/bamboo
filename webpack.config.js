@@ -25,7 +25,7 @@ module.exports = {
 
     plugins: [
         new WrapperPlugin({
-            header: 'var global = this;\n',
+            header: 'global = this;\n',
             footer: ''
         }),
         globals_plugin

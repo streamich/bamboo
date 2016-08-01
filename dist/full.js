@@ -46,6 +46,7 @@ var global = this;
 /***/ function(module, exports, __webpack_require__) {
 
 	
+
 	if(typeof console === 'undefined') {
 	  console = {
 	    log: function () {
@@ -162,11 +163,11 @@ var global = this;
 	    // Create `process.asyscall` and `process.asyscall64`
 	    __webpack_require__(17);
 
-	    
+
 	    try {
 
 	        // Eval the file specified in first argument `full app.js`
-	        // console.log(process.argv);
+	        console.log(process.argv);
 	        if(process.argv[1]) {
 	            var path = __webpack_require__(20);
 	            var Module = __webpack_require__(23).Module;
@@ -4950,29 +4951,25 @@ var global = this;
 	        this.code.call();
 	    };
 	    Asyscall.prototype.recycleBlock = function (block) {
+	        console.log(block.getAddress());
+	        block._id = Asyscall._id;
+	        Asyscall._id++;
 	        if (!this.usedFirst) {
 	            this.usedFirst = this.usedLast = block;
 	        }
 	        else {
-	            var last = this.usedLast;
-	            last._next = block;
+	            block._next = this.usedLast;
 	            this.usedLast = block;
 	        }
 	    };
 	    Asyscall.prototype.newBlock = function () {
 	        var block = this.usedFirst;
 	        if (block && (block.readInt32LE(4) === 2)) {
-	            if (this.usedLast === block) {
-	                this.usedFirst = this.usedLast = null;
-	            }
-	            else {
-	                this.usedFirst = block._next;
-	                block._next = null;
-	            }
+	            console.log('freeing memory');
+	            this.usedFirst = block._next;
 	        }
-	        else {
-	            block = StaticBuffer.alloc(72, 'rw');
-	        }
+	        block = StaticBuffer.alloc(72, 'rw');
+	        console.log(block.getAddress());
 	        block.writeInt32LE(0, 0);
 	        block.writeInt32LE(0, 4);
 	        return block;
@@ -5059,6 +5056,7 @@ var global = this;
 	        this.next.writeInt32LE(4, 0);
 	        this.code.free();
 	    };
+	    Asyscall._id = 0;
 	    return Asyscall;
 	}());
 	exports.Asyscall = Asyscall;

@@ -71,41 +71,59 @@ export class Asyscall {
         // }
     // }
 
+    static _id = 0;
+
     protected recycleBlock(block) {
+        console.log(block.getAddress());
+        block._id = Asyscall._id;
+        Asyscall._id++;
         if(!this.usedFirst) {
             this.usedFirst = this.usedLast = block;
         } else {
-            var last = this.usedLast;
-            last._next = block;
+            block._next = this.usedLast;
             this.usedLast = block;
         }
     }
 
     protected newBlock() {
         var block = this.usedFirst;
+        // if(this.usedFirst) {
+        //     var threadsLeft = this.usedFirst.readInt32LE(4);
+        //     console.log('Threads left: ' + threadsLeft);
+        // }
         if(block && (block.readInt32LE(4) === CONF.THREADS)) { // Check if all threads already left this block
-            if(this.usedLast === block) {
-                this.usedFirst = this.usedLast = null;
-            } else {
-                this.usedFirst = block._next;
-                block._next = null;
-            }
-        } else {
+            // console.log('REUSING');
+            // console.log('ID: ' + block._id);
+            // console.log(block.getAddress());
+            // if(this.usedLast === block) {
+            //     this.usedFirst = this.usedLast = null;
+            // } else {
+            //     this.usedFirst = block._next;
+            //     block._next = null;
+            // }
+            console.log('freeing memory');
+            this.usedFirst = block._next;
+        }
+        // } else {
+        //     console.log('ALLOCATING NEW');
             // TODO: We should use `new StaticBuffer()` here, but we allocate
             // using `mmap` instead because for now we don't have a proper `StaticBuffer`
             // in V8.
             block = StaticBuffer.alloc(CONF.BLOCK_SIZE, 'rw');
+
             // block = new StaticBuffer(CONF.BLOCK_SIZE);
-        }
+         console.log(block.getAddress());
+            // block = new StaticBuffer(CONF.BLOCK_SIZE);
+        // }
 
         block.writeInt32LE(LOCK.UNINITIALIZED, 0);
         block.writeInt32LE(0, 4); // Number of threads left this block.
+        // block.print();
         return block;
     }
 
     protected writeArg(arg, slot: number) {
         var curr = this.curr;
-
         if(typeof arg === 'string') {
             var str = arg + '\0';
             arg = new StaticBuffer(str.length);
@@ -158,6 +176,9 @@ export class Asyscall {
             curr.writeInt32LE(0, (j + 1) * CONF.INT + 4);
         }
 
+        // console.log('Filled:');
+        // curr.print();
+
         // The last thing we do, is mark this block as available for threads.
         // curr.writeInt32LE(LOCK.FREE, 0);
         curr[0] = LOCK.FREE;
@@ -172,6 +193,7 @@ export class Asyscall {
             // Or then refactor thread pool to use 8-bit value.
             var lock = curr[0];
             if(lock === LOCK.DONE) {
+                // console.log('Done:');
                 // curr.print();
                 // console.log('---------');
                 if(is64) {

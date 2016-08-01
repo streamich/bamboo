@@ -23,29 +23,25 @@ var Asyscall = (function () {
         this.code.call();
     };
     Asyscall.prototype.recycleBlock = function (block) {
+        console.log(block.getAddress());
+        block._id = Asyscall._id;
+        Asyscall._id++;
         if (!this.usedFirst) {
             this.usedFirst = this.usedLast = block;
         }
         else {
-            var last = this.usedLast;
-            last._next = block;
+            block._next = this.usedLast;
             this.usedLast = block;
         }
     };
     Asyscall.prototype.newBlock = function () {
         var block = this.usedFirst;
         if (block && (block.readInt32LE(4) === 2)) {
-            if (this.usedLast === block) {
-                this.usedFirst = this.usedLast = null;
-            }
-            else {
-                this.usedFirst = block._next;
-                block._next = null;
-            }
+            console.log('freeing memory');
+            this.usedFirst = block._next;
         }
-        else {
-            block = StaticBuffer.alloc(72, 'rw');
-        }
+        block = StaticBuffer.alloc(72, 'rw');
+        console.log(block.getAddress());
         block.writeInt32LE(0, 0);
         block.writeInt32LE(0, 4);
         return block;
@@ -132,6 +128,7 @@ var Asyscall = (function () {
         this.next.writeInt32LE(4, 0);
         this.code.free();
     };
+    Asyscall._id = 0;
     return Asyscall;
 }());
 exports.Asyscall = Asyscall;

@@ -1,3 +1,5 @@
+![](./FULL.gif)
+
 # FULL.js
 
 **TL;DR**: Node.js clone in pure JavaScript.

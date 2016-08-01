@@ -49,6 +49,10 @@ namespace FULL {
     int64_t argToInt(Local<Value> arg) {
         if(arg->IsNumber()) {
             return (int64_t) arg->Int32Value();
+        } else if (arg->IsTypedArray()) {
+            Local<TypedArray> ta = arg.As<TypedArray>();
+            ArrayBuffer::Contents ab_c = ta->Buffer()->GetContents();
+            return (int64_t) ((int64_t) ab_c.Data() + ta->ByteOffset());
         } else if(arg->IsArrayBuffer()) {
             Local<ArrayBuffer> ab = arg.As<ArrayBuffer>();
             ArrayBuffer::Contents ab_c = ab->GetContents();
@@ -125,21 +129,7 @@ namespace FULL {
         }
     }
 
-    uint8_t* readFile(char* filename) {
-        std::ifstream file(filename);
-        if(file) {
-            std::string str;
-            std::string file_contents;
-            while (std::getline(file, str)) {
-                file_contents += str;
-                file_contents.push_back('\n');
-            }
-            return (uint8_t *) file_contents.c_str();
-        } else
-            return NULL;
-    }
-
-    void readFileApi(const FunctionCallbackInfo<Value>& args) {
+    void readFile(const FunctionCallbackInfo<Value>& args) {
         String::Utf8Value v8str(args[0]->ToString());
         std::string cppstr = std::string(*v8str);
         std::ifstream file(cppstr);
@@ -333,11 +323,19 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
 public:
     virtual void* Allocate(size_t length) {
         void* data = AllocateUninitialized(length);
-        return data == NULL ? data : memset(data, 0, length);
+        return data;
+//        return data == NULL ? data : memset(data, 0, length);
     }
 
-    virtual void* AllocateUninitialized(size_t length) { return malloc(length); }
-    virtual void Free(void* data, size_t) { free(data); }
+    virtual void* AllocateUninitialized(size_t length) {
+        void* ptr = malloc(length);
+        printf("malloc: %lli\n", ptr);
+        return ptr;
+    }
+    virtual void Free(void* data, size_t) {
+        printf("free: %lli\n", data);
+        free(data);
+    }
 };
 
 int main(int argc, char* argv[]) {
@@ -389,7 +387,7 @@ int main(int argc, char* argv[]) {
 
         // The below methods are not used by FULL.js, they are here just for while debugging FULL.js.
         superGlobal->Set(String::NewFromUtf8(isolate, "print"), FunctionTemplate::New(isolate, FULL::print));
-        superGlobal->Set(String::NewFromUtf8(isolate, "readFile"), FunctionTemplate::New(isolate, FULL::readFileApi));
+        superGlobal->Set(String::NewFromUtf8(isolate, "readFile"), FunctionTemplate::New(isolate, FULL::readFile));
 
         //Persistent<Context> context = Context::New(isolate, NULL, global);
         Local<Context> context = Context::New(isolate, NULL, superGlobal);
@@ -412,10 +410,21 @@ int main(int argc, char* argv[]) {
 //        String::Utf8Value utf8(result);
 //        printf("%s\n", *utf8);
 
+
         // Run FULL.js
-        uint8_t* str = FULL::readFile(argv[1]);
-        Local<String> fulljs = String::NewFromOneByte(isolate, str);
-        Script::Compile(context, fulljs).ToLocalChecked()->Run(context).ToLocalChecked();
+        std::ifstream file(argv[1]);
+        std::string str;
+        std::string file_contents;
+        if(file) {
+            while (std::getline(file, str)) {
+                file_contents += str;
+                file_contents.push_back('\n');
+            }
+            Local<String> fulljs = String::NewFromOneByte(isolate, (uint8_t*) file_contents.c_str());
+            Script::Compile(context, fulljs).ToLocalChecked()->Run(context).ToLocalChecked();
+        } else {
+            printf("%s\n", "Could not find FULL.js file.");
+        }
     }
 
     // Dispose the isolate and tear down V8.
