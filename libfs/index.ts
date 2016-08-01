@@ -1,19 +1,17 @@
 import * as libjs from '../libjs/index';
 import {Inotify, IInotifyEvent} from '../libaio/inotify';
 var extend = require('../lib/util').extend;
+var pathModule = require('../lib/path');
+import {EventEmitter} from '../lib/events';
+import {Buffer} from '../lib/buffer';
+import {StaticBuffer} from '../lib/static-buffer';
+
+// Buffer, StaticBuffer, Readable, Writable
 
 
 if(__DEBUG__) {
-    exports.isFullJS = true;
+    exports.isFULLjs = true;
 }
-
-
-// Included only in type space for type declaration:
-// import * as path from 'path';
-import {EventEmitter} from 'events';
-// import {Readable} from "stream";
-// import {Writable} from "stream";
-
 
 //     interface ObjectConstructor {
 //         assign(...args: any[]): any;
@@ -26,9 +24,10 @@ import {EventEmitter} from 'events';
 //     return a;
 // }
 
-function noop(...args: any[]);
+function noop(...args: any[]): any;
 function noop() {}
 
+const isSB = StaticBuffer.isStaticBuffer;
 
 export type Tfile = number|string|Buffer|StaticBuffer;
 export type Tpath = string|Buffer|StaticBuffer;
@@ -70,14 +69,14 @@ function throwError(errno, func = '', path = '', path2 = '') {
     throw Error(formatError(errno, func, path, path2));
 }
 
-function pathOrError(path: Tpath): string|TypeError {
-    if(path instanceof Buffer) path = path.toString();
+function pathOrError(path: Tpath, encoding?): string|TypeError {
+    if(path instanceof Buffer) path = (path as Buffer).toString(encoding);
     if(typeof path !== 'string') return TypeError(ERRSTR.PATH_STR);
     return path as string;
 }
 
-function validPathOrThrow(path: Tpath): string {
-    var p = pathOrError(path);
+function validPathOrThrow(path: Tpath, encoding?): string {
+    var p = pathOrError(path, encoding);
     if(p instanceof TypeError) throw p;
     else return p;
 }
@@ -91,8 +90,8 @@ function getOptions <T> (defaults: T, options?: T|string): T {
     else {
         var tipeof = typeof options;
         switch(tipeof) {
-            case 'string': return extend({}, writeFileDefaults, {encoding: options as string});
-            case 'object': return extend({}, writeFileDefaults, options);
+            case 'string': return extend({}, defaults, {encoding: options as string});
+            case 'object': return extend({}, defaults, options);
             default: throw TypeError(ERRSTR_OPTS(tipeof));
         }
     }
@@ -143,7 +142,7 @@ export enum flags {
 // Default mode for opening files.
 const enum MODE {
     FILE = 0o666,
-    DIR = 0o777,
+    DIR  = 0o777,
 }
 
 // Chunk size for reading files.
@@ -269,8 +268,18 @@ export class Stats {
 }
 
 
+// class WriteStream extends Writable {
+//     bytesWritten: number = 0;
+//     path: string|Buffer|StaticBuffer = null;
+    // Event: 'open'
+    // Event: 'close'
+// }
+
+
+
+
 export function build(deps) {
-    var {path: pathModule, EventEmitter: _EE, Buffer, StaticBuffer, Readable, Writable} = deps;
+    var {path: pathModule, EventEmitter: _EE, Buffer, Readable, Writable} = deps;
     var EE: typeof EventEmitter = _EE as typeof EventEmitter;
 
 
@@ -1015,7 +1024,7 @@ export function build(deps) {
 
 
     function readlinkSync(path: Tpath, options: IOptions|string = null): string|Buffer {
-        path = validPathOrThrow(path);
+        var vpath = validPathOrThrow(path);
 
         var encBuffer = false;
 
@@ -1036,7 +1045,7 @@ export function build(deps) {
         try {
             var res = libjs.readlink(filename);
         } catch(errno) {
-            throwError(errno, 'readlink', path);
+            throwError(errno, 'readlink', vpath);
         }
 
         return !encBuffer ? res : new Buffer(res);
@@ -1369,15 +1378,18 @@ export function build(deps) {
         var is_fd = typeof file === 'number';
 
         function on_write(fd: number) {
-            var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+            var sb = isSB(data) ? data : StaticBuffer.from(data);
             libjs.writeAsync(fd, sb, res => {
                 if(res < 0) callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
-                else callback(null);
+                else callback(null, sb);
+                setTimeout(() => {
+                    sb.print();
+                }, 100);
                 if(!is_fd) libjs.closeAsync(fd, noop);
             });
         }
 
-        if(is_fd) on_write(file as number)
+        if(is_fd) on_write(file as number);
         else {
             var vpath = validPathOrThrow(file as Tpath);
             var flags = flagsToFlagsValue(opts.flag);
@@ -1464,6 +1476,7 @@ export function build(deps) {
         rmdir,
         symlink,
         unlink,
+        writeFile,
 
     };
 }

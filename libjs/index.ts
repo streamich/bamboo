@@ -18,12 +18,15 @@
 
 
 // `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
+import {Buffer} from "../lib/buffer";
 var p = process as any;
 
 // Import syscall functions from `process` or require from `libsys` package if we
 // are running under Node.js
 const syscall = p.syscall;
 const syscall64 = p.syscall64;
+
+const isSB = StaticBuffer.isStaticBuffer;
 
 // We cannot define asynchronous syscall functions here, because they are created
 // already after `libjs` is already used.
@@ -112,13 +115,13 @@ export function readAsync(fd: number, buf: StaticBuffer, callback: Tcallback) {
 
 export function write(fd: number, buf: string|StaticBuffer): number {
     // debug('write', fd);
-    if(!(buf instanceof Buffer)) buf = new Buffer((buf as string) + '\0');
+    // if(!isSB(buf)) buf = StaticBuffer.from(buf);
     return syscall(SYS.write, fd, buf, buf.length);
 }
 
 export function writeAsync(fd: number, buf: string|StaticBuffer, callback: Tcallback) {
-    if(!(buf instanceof Buffer)) buf = new Buffer((buf as string) + '\0');
-    return syscall(SYS.write, fd, buf, buf.length, callback);
+    // if(!isSB(buf)) buf = StaticBuffer.from(buf);
+    p.asyscall(SYS.write, fd, buf, buf.length, callback);
 }
 
 

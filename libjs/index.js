@@ -2,11 +2,13 @@
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
+var buffer_1 = require("../lib/buffer");
 var p = process;
 var syscall = p.syscall;
 var syscall64 = p.syscall64;
+var isSB = StaticBuffer.isStaticBuffer;
 function malloc(size) {
-    return new Buffer(size);
+    return new buffer_1.Buffer(size);
 }
 var x86_64_linux_1 = require('./platforms/x86_64_linux');
 var types = require('./platforms/x86_64_linux');
@@ -30,15 +32,11 @@ function readAsync(fd, buf, callback) {
 }
 exports.readAsync = readAsync;
 function write(fd, buf) {
-    if (!(buf instanceof Buffer))
-        buf = new Buffer(buf + '\0');
     return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length);
 }
 exports.write = write;
 function writeAsync(fd, buf, callback) {
-    if (!(buf instanceof Buffer))
-        buf = new Buffer(buf + '\0');
-    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
+    p.asyscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
 }
 exports.writeAsync = writeAsync;
 function open(pathname, flags, mode) {
@@ -125,7 +123,7 @@ function fdatasyncAsync(fd, callback) {
 }
 exports.fdatasyncAsync = fdatasyncAsync;
 function stat(filepath) {
-    var buf = new Buffer(types.stat.size + 200);
+    var buf = new buffer_1.Buffer(types.stat.size + 200);
     var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
     if (result == 0)
         return types.stat.unpack(buf);
@@ -145,12 +143,12 @@ function __unpackStats(buf, result, callback) {
         callback(result);
 }
 function statAsync(filepath, callback) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new buffer_1.Buffer(types.stat.size + 100);
     p.asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
 }
 exports.statAsync = statAsync;
 function lstat(linkpath) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new buffer_1.Buffer(types.stat.size + 100);
     var result = syscall(x86_64_linux_1.SYS.lstat, linkpath, buf);
     if (result == 0)
         return types.stat.unpack(buf);
@@ -158,12 +156,12 @@ function lstat(linkpath) {
 }
 exports.lstat = lstat;
 function lstatAsync(linkpath, callback) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new buffer_1.Buffer(types.stat.size + 100);
     p.asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
 }
 exports.lstatAsync = lstatAsync;
 function fstat(fd) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new buffer_1.Buffer(types.stat.size + 100);
     var result = syscall(x86_64_linux_1.SYS.fstat, fd, buf);
     if (result == 0)
         return types.stat.unpack(buf);
@@ -171,7 +169,7 @@ function fstat(fd) {
 }
 exports.fstat = fstat;
 function fstatAsync(fd, callback) {
-    var buf = new Buffer(types.stat.size + 100);
+    var buf = new buffer_1.Buffer(types.stat.size + 100);
     p.asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
 }
 exports.fstatAsync = fstatAsync;
@@ -232,11 +230,11 @@ function rmdirAsync(pathname, callback) {
 }
 exports.rmdirAsync = rmdirAsync;
 function getcwd() {
-    var buf = new Buffer(264);
+    var buf = new buffer_1.Buffer(264);
     var res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
     if (res < 0) {
         if (res === -34) {
-            buf = new Buffer(4096);
+            buf = new buffer_1.Buffer(4096);
             res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
             if (res < 0)
                 throw res;
@@ -248,11 +246,11 @@ function getcwd() {
 }
 exports.getcwd = getcwd;
 function getcwdAsync(callback) {
-    var buf = new Buffer(264);
+    var buf = new buffer_1.Buffer(264);
     p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
         if (res < 0) {
             if (res === -34) {
-                buf = new Buffer(4096);
+                buf = new buffer_1.Buffer(4096);
                 p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
                     if (res < 0)
                         callback(res);
@@ -280,7 +278,7 @@ function readdir(path, encoding) {
     var fd = open(path, 0 | 65536);
     if (fd < 0)
         throw fd;
-    var buf = new Buffer(4096);
+    var buf = new buffer_1.Buffer(4096);
     var struct = types.linux_dirent64;
     var list = [];
     var res = getdents64(fd, buf);
@@ -312,7 +310,7 @@ function readdirList(path, encoding) {
     var fd = open(path, 65536);
     if (fd < 0)
         throw fd;
-    var buf = new Buffer(4096);
+    var buf = new buffer_1.Buffer(4096);
     var struct = types.linux_dirent64;
     var list = [];
     var res = getdents64(fd, buf);
@@ -672,7 +670,7 @@ function shmdt(shmaddr) {
 exports.shmdt = shmdt;
 function shmctl(shmid, cmd, buf) {
     if (buf === void 0) { buf = types.NULL; }
-    if (buf instanceof Buffer) {
+    if (buf instanceof buffer_1.Buffer) {
     }
     else if (typeof buf === 'object') {
         buf = types.shmid_ds.pack(buf);

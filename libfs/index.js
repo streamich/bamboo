@@ -7,10 +7,14 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = require('../libjs/index');
 var inotify_1 = require('../libaio/inotify');
 var extend = require('../lib/util').extend;
+var pathModule = require('../lib/path');
+var buffer_1 = require('../lib/buffer');
+var static_buffer_1 = require('../lib/static-buffer');
 if (__DEBUG__) {
-    exports.isFullJS = true;
+    exports.isFULLjs = true;
 }
 function noop() { }
+var isSB = static_buffer_1.StaticBuffer.isStaticBuffer;
 var ERRSTR = {
     PATH_STR: 'path must be a string',
     FD: 'fd must be a file descriptor',
@@ -48,15 +52,15 @@ function throwError(errno, func, path, path2) {
     if (path2 === void 0) { path2 = ''; }
     throw Error(formatError(errno, func, path, path2));
 }
-function pathOrError(path) {
-    if (path instanceof Buffer)
-        path = path.toString();
+function pathOrError(path, encoding) {
+    if (path instanceof buffer_1.Buffer)
+        path = path.toString(encoding);
     if (typeof path !== 'string')
         return TypeError(ERRSTR.PATH_STR);
     return path;
 }
-function validPathOrThrow(path) {
-    var p = pathOrError(path);
+function validPathOrThrow(path, encoding) {
+    var p = pathOrError(path, encoding);
     if (p instanceof TypeError)
         throw p;
     else
@@ -72,8 +76,8 @@ function getOptions(defaults, options) {
     else {
         var tipeof = typeof options;
         switch (tipeof) {
-            case 'string': return extend({}, writeFileDefaults, { encoding: options });
-            case 'object': return extend({}, writeFileDefaults, options);
+            case 'string': return extend({}, defaults, { encoding: options });
+            case 'object': return extend({}, defaults, options);
             default: throw TypeError(ERRSTR_OPTS(tipeof));
         }
     }
@@ -163,7 +167,7 @@ var Stats = (function () {
 }());
 exports.Stats = Stats;
 function build(deps) {
-    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, StaticBuffer = deps.StaticBuffer, Readable = deps.Readable, Writable = deps.Writable;
+    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
     var EE = _EE;
     function accessSync(path, mode) {
         if (mode === void 0) { mode = F_OK; }
@@ -214,7 +218,7 @@ function build(deps) {
             b = data;
         else
             b = new Buffer(String(data), options.encoding);
-        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
         var fd;
         var is_fd = typeof file === 'number';
         if (is_fd) {
@@ -266,7 +270,7 @@ function build(deps) {
             b = data;
         else
             b = new Buffer(String(data), opts.encoding);
-        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
         function on_open(fd, is_fd) {
             var res = libjs.write(fd, sb);
             if (res < 0)
@@ -895,7 +899,7 @@ function build(deps) {
                     libjs.closeAsync(fd, noop);
             }
             function loop() {
-                var buf = new StaticBuffer(CHUNK);
+                var buf = new static_buffer_1.StaticBuffer(CHUNK);
                 libjs.readAsync(fd, buf, function (res) {
                     if (res < 0)
                         return callback(Error(formatError(res, 'readFile')));
@@ -925,7 +929,7 @@ function build(deps) {
     }
     function readlinkSync(path, options) {
         if (options === void 0) { options = null; }
-        path = validPathOrThrow(path);
+        var vpath = validPathOrThrow(path);
         var encBuffer = false;
         var filename;
         if (typeof path === 'string') {
@@ -947,7 +951,7 @@ function build(deps) {
             var res = libjs.readlink(filename);
         }
         catch (errno) {
-            throwError(errno, 'readlink', path);
+            throwError(errno, 'readlink', vpath);
         }
         return !encBuffer ? res : new Buffer(res);
     }
@@ -1168,8 +1172,8 @@ function build(deps) {
             if (sres < 0)
                 throwError(sres, 'write:lseek');
         }
-        var sb = StaticBuffer.isStaticBuffer(buf)
-            ? buf : StaticBuffer.from(buf);
+        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
+            ? buf : static_buffer_1.StaticBuffer.from(buf);
         var res = libjs.write(fd, sb);
         if (res < 0)
             throwError(res, 'write');
@@ -1190,7 +1194,7 @@ function build(deps) {
             if (fd < 0)
                 throwError(fd, 'writeFile', vpath);
         }
-        var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
         var res = libjs.write(fd, sb);
         if (res < 0)
             throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
@@ -1202,12 +1206,15 @@ function build(deps) {
         var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
         var is_fd = typeof file === 'number';
         function on_write(fd) {
-            var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+            var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
             libjs.writeAsync(fd, sb, function (res) {
                 if (res < 0)
                     callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
                 else
-                    callback(null);
+                    callback(null, sb);
+                setTimeout(function () {
+                    sb.print();
+                }, 100);
                 if (!is_fd)
                     libjs.closeAsync(fd, noop);
             });
@@ -1289,7 +1296,8 @@ function build(deps) {
         rename: rename,
         rmdir: rmdir,
         symlink: symlink,
-        unlink: unlink
+        unlink: unlink,
+        writeFile: writeFile
     };
 }
 exports.build = build;

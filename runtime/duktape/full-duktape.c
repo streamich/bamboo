@@ -216,17 +216,20 @@ int fulljs_api_call(duk_context *ctx) {
                 res = ((callback2) addr)(
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 3:
                 res = ((callback3) addr)(
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 4:
                 res = ((callback4) addr)(
                         fulljs_arg_to_int(ctx, -4),
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 5:
                 res = ((callback5) addr)(
                         fulljs_arg_to_int(ctx, -5),
@@ -234,6 +237,7 @@ int fulljs_api_call(duk_context *ctx) {
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 6:
                 res = ((callback6) addr)(
                         fulljs_arg_to_int(ctx, -6),
@@ -242,6 +246,7 @@ int fulljs_api_call(duk_context *ctx) {
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 7:
                 res = ((callback7) addr)(
                         fulljs_arg_to_int(ctx, -7),
@@ -251,6 +256,7 @@ int fulljs_api_call(duk_context *ctx) {
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 8:
                 res = ((callback8) addr)(
                         fulljs_arg_to_int(ctx, -8),
@@ -261,6 +267,7 @@ int fulljs_api_call(duk_context *ctx) {
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 9:
                 res = ((callback9) addr)(
                         fulljs_arg_to_int(ctx, -9),
@@ -272,6 +279,7 @@ int fulljs_api_call(duk_context *ctx) {
                         fulljs_arg_to_int(ctx, -3),
                         fulljs_arg_to_int(ctx, -2),
                         fulljs_arg_to_int(ctx, -1));
+                break;
             case 10:
                 res = ((callback10) addr)(
                         fulljs_arg_to_int(ctx, -10),

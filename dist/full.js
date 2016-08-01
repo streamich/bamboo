@@ -2343,11 +2343,13 @@ var global = this;
 	function __export(m) {
 	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 	}
+	var buffer_1 = __webpack_require__(2);
 	var p = process;
 	var syscall = p.syscall;
 	var syscall64 = p.syscall64;
+	var isSB = StaticBuffer.isStaticBuffer;
 	function malloc(size) {
-	    return new Buffer(size);
+	    return new buffer_1.Buffer(size);
 	}
 	var x86_64_linux_1 = __webpack_require__(7);
 	var types = __webpack_require__(7);
@@ -2371,15 +2373,11 @@ var global = this;
 	}
 	exports.readAsync = readAsync;
 	function write(fd, buf) {
-	    if (!(buf instanceof Buffer))
-	        buf = new Buffer(buf + '\0');
 	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length);
 	}
 	exports.write = write;
 	function writeAsync(fd, buf, callback) {
-	    if (!(buf instanceof Buffer))
-	        buf = new Buffer(buf + '\0');
-	    return syscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
+	    p.asyscall(x86_64_linux_1.SYS.write, fd, buf, buf.length, callback);
 	}
 	exports.writeAsync = writeAsync;
 	function open(pathname, flags, mode) {
@@ -2466,7 +2464,7 @@ var global = this;
 	}
 	exports.fdatasyncAsync = fdatasyncAsync;
 	function stat(filepath) {
-	    var buf = new Buffer(types.stat.size + 200);
+	    var buf = new buffer_1.Buffer(types.stat.size + 200);
 	    var result = syscall(x86_64_linux_1.SYS.stat, filepath, buf);
 	    if (result == 0)
 	        return types.stat.unpack(buf);
@@ -2486,12 +2484,12 @@ var global = this;
 	        callback(result);
 	}
 	function statAsync(filepath, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new buffer_1.Buffer(types.stat.size + 100);
 	    p.asyscall(x86_64_linux_1.SYS.stat, filepath, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.statAsync = statAsync;
 	function lstat(linkpath) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new buffer_1.Buffer(types.stat.size + 100);
 	    var result = syscall(x86_64_linux_1.SYS.lstat, linkpath, buf);
 	    if (result == 0)
 	        return types.stat.unpack(buf);
@@ -2499,12 +2497,12 @@ var global = this;
 	}
 	exports.lstat = lstat;
 	function lstatAsync(linkpath, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new buffer_1.Buffer(types.stat.size + 100);
 	    p.asyscall(x86_64_linux_1.SYS.lstat, linkpath, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.lstatAsync = lstatAsync;
 	function fstat(fd) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new buffer_1.Buffer(types.stat.size + 100);
 	    var result = syscall(x86_64_linux_1.SYS.fstat, fd, buf);
 	    if (result == 0)
 	        return types.stat.unpack(buf);
@@ -2512,7 +2510,7 @@ var global = this;
 	}
 	exports.fstat = fstat;
 	function fstatAsync(fd, callback) {
-	    var buf = new Buffer(types.stat.size + 100);
+	    var buf = new buffer_1.Buffer(types.stat.size + 100);
 	    p.asyscall(x86_64_linux_1.SYS.fstat, fd, buf, function (result) { return __unpackStats(buf, result, callback); });
 	}
 	exports.fstatAsync = fstatAsync;
@@ -2573,11 +2571,11 @@ var global = this;
 	}
 	exports.rmdirAsync = rmdirAsync;
 	function getcwd() {
-	    var buf = new Buffer(264);
+	    var buf = new buffer_1.Buffer(264);
 	    var res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
 	    if (res < 0) {
 	        if (res === -34) {
-	            buf = new Buffer(4096);
+	            buf = new buffer_1.Buffer(4096);
 	            res = syscall(x86_64_linux_1.SYS.getcwd, buf, buf.length);
 	            if (res < 0)
 	                throw res;
@@ -2589,11 +2587,11 @@ var global = this;
 	}
 	exports.getcwd = getcwd;
 	function getcwdAsync(callback) {
-	    var buf = new Buffer(264);
+	    var buf = new buffer_1.Buffer(264);
 	    p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
 	        if (res < 0) {
 	            if (res === -34) {
-	                buf = new Buffer(4096);
+	                buf = new buffer_1.Buffer(4096);
 	                p.asyscall(x86_64_linux_1.SYS.getcwd, buf, buf.length, function (res) {
 	                    if (res < 0)
 	                        callback(res);
@@ -2621,7 +2619,7 @@ var global = this;
 	    var fd = open(path, 0 | 65536);
 	    if (fd < 0)
 	        throw fd;
-	    var buf = new Buffer(4096);
+	    var buf = new buffer_1.Buffer(4096);
 	    var struct = types.linux_dirent64;
 	    var list = [];
 	    var res = getdents64(fd, buf);
@@ -2653,7 +2651,7 @@ var global = this;
 	    var fd = open(path, 65536);
 	    if (fd < 0)
 	        throw fd;
-	    var buf = new Buffer(4096);
+	    var buf = new buffer_1.Buffer(4096);
 	    var struct = types.linux_dirent64;
 	    var list = [];
 	    var res = getdents64(fd, buf);
@@ -3013,7 +3011,7 @@ var global = this;
 	exports.shmdt = shmdt;
 	function shmctl(shmid, cmd, buf) {
 	    if (buf === void 0) { buf = types.NULL; }
-	    if (buf instanceof Buffer) {
+	    if (buf instanceof buffer_1.Buffer) {
 	    }
 	    else if (typeof buf === 'object') {
 	        buf = types.shmid_ds.pack(buf);
@@ -3601,7 +3599,10 @@ var global = this;
 
 	    } else if(typeof obj === 'string') {
 	        var len = obj.length;
+	        // TODO: It should be new StaticBuffer()
 	        var sb = new StaticBuffer(len);
+	        // var sb1 = new StaticBuffer(30000000);
+	        // var sb = sb1.slice(0, obj.length);
 	        for(var i = 0; i < len; i++) sb[i] = obj.charCodeAt(i);
 	        return sb;
 	    } else if(obj instanceof Uint8Array) {
@@ -11222,10 +11223,14 @@ var global = this;
 	var libjs = __webpack_require__(6);
 	var inotify_1 = __webpack_require__(39);
 	var extend = __webpack_require__(21).extend;
+	var pathModule = __webpack_require__(20);
+	var buffer_1 = __webpack_require__(2);
+	var static_buffer_1 = __webpack_require__(11);
 	if (true) {
-	    exports.isFullJS = true;
+	    exports.isFULLjs = true;
 	}
 	function noop() { }
+	var isSB = static_buffer_1.StaticBuffer.isStaticBuffer;
 	var ERRSTR = {
 	    PATH_STR: 'path must be a string',
 	    FD: 'fd must be a file descriptor',
@@ -11263,15 +11268,15 @@ var global = this;
 	    if (path2 === void 0) { path2 = ''; }
 	    throw Error(formatError(errno, func, path, path2));
 	}
-	function pathOrError(path) {
-	    if (path instanceof Buffer)
-	        path = path.toString();
+	function pathOrError(path, encoding) {
+	    if (path instanceof buffer_1.Buffer)
+	        path = path.toString(encoding);
 	    if (typeof path !== 'string')
 	        return TypeError(ERRSTR.PATH_STR);
 	    return path;
 	}
-	function validPathOrThrow(path) {
-	    var p = pathOrError(path);
+	function validPathOrThrow(path, encoding) {
+	    var p = pathOrError(path, encoding);
 	    if (p instanceof TypeError)
 	        throw p;
 	    else
@@ -11287,8 +11292,8 @@ var global = this;
 	    else {
 	        var tipeof = typeof options;
 	        switch (tipeof) {
-	            case 'string': return extend({}, writeFileDefaults, { encoding: options });
-	            case 'object': return extend({}, writeFileDefaults, options);
+	            case 'string': return extend({}, defaults, { encoding: options });
+	            case 'object': return extend({}, defaults, options);
 	            default: throw TypeError(ERRSTR_OPTS(tipeof));
 	        }
 	    }
@@ -11378,7 +11383,7 @@ var global = this;
 	}());
 	exports.Stats = Stats;
 	function build(deps) {
-	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, StaticBuffer = deps.StaticBuffer, Readable = deps.Readable, Writable = deps.Writable;
+	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
 	    var EE = _EE;
 	    function accessSync(path, mode) {
 	        if (mode === void 0) { mode = F_OK; }
@@ -11429,7 +11434,7 @@ var global = this;
 	            b = data;
 	        else
 	            b = new Buffer(String(data), options.encoding);
-	        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
 	        var fd;
 	        var is_fd = typeof file === 'number';
 	        if (is_fd) {
@@ -11481,7 +11486,7 @@ var global = this;
 	            b = data;
 	        else
 	            b = new Buffer(String(data), opts.encoding);
-	        var sb = StaticBuffer.isStaticBuffer(b) ? b : StaticBuffer.from(b);
+	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
 	        function on_open(fd, is_fd) {
 	            var res = libjs.write(fd, sb);
 	            if (res < 0)
@@ -12110,7 +12115,7 @@ var global = this;
 	                    libjs.closeAsync(fd, noop);
 	            }
 	            function loop() {
-	                var buf = new StaticBuffer(CHUNK);
+	                var buf = new static_buffer_1.StaticBuffer(CHUNK);
 	                libjs.readAsync(fd, buf, function (res) {
 	                    if (res < 0)
 	                        return callback(Error(formatError(res, 'readFile')));
@@ -12140,7 +12145,7 @@ var global = this;
 	    }
 	    function readlinkSync(path, options) {
 	        if (options === void 0) { options = null; }
-	        path = validPathOrThrow(path);
+	        var vpath = validPathOrThrow(path);
 	        var encBuffer = false;
 	        var filename;
 	        if (typeof path === 'string') {
@@ -12162,7 +12167,7 @@ var global = this;
 	            var res = libjs.readlink(filename);
 	        }
 	        catch (errno) {
-	            throwError(errno, 'readlink', path);
+	            throwError(errno, 'readlink', vpath);
 	        }
 	        return !encBuffer ? res : new Buffer(res);
 	    }
@@ -12383,8 +12388,8 @@ var global = this;
 	            if (sres < 0)
 	                throwError(sres, 'write:lseek');
 	        }
-	        var sb = StaticBuffer.isStaticBuffer(buf)
-	            ? buf : StaticBuffer.from(buf);
+	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
+	            ? buf : static_buffer_1.StaticBuffer.from(buf);
 	        var res = libjs.write(fd, sb);
 	        if (res < 0)
 	            throwError(res, 'write');
@@ -12405,7 +12410,7 @@ var global = this;
 	            if (fd < 0)
 	                throwError(fd, 'writeFile', vpath);
 	        }
-	        var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
 	        var res = libjs.write(fd, sb);
 	        if (res < 0)
 	            throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
@@ -12417,12 +12422,15 @@ var global = this;
 	        var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
 	        var is_fd = typeof file === 'number';
 	        function on_write(fd) {
-	            var sb = StaticBuffer.isStaticBuffer(data) ? data : StaticBuffer.from(data);
+	            var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
 	            libjs.writeAsync(fd, sb, function (res) {
 	                if (res < 0)
 	                    callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
 	                else
-	                    callback(null);
+	                    callback(null, sb);
+	                setTimeout(function () {
+	                    sb.print();
+	                }, 100);
 	                if (!is_fd)
 	                    libjs.closeAsync(fd, noop);
 	            });
@@ -12504,7 +12512,8 @@ var global = this;
 	        rename: rename,
 	        rmdir: rmdir,
 	        symlink: symlink,
-	        unlink: unlink
+	        unlink: unlink,
+	        writeFile: writeFile
 	    };
 	}
 	exports.build = build;

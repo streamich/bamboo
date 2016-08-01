@@ -190,6 +190,7 @@ export class Asyscall {
 
     exec(num, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, callback?);
     exec() {
+        
         // Allocate the third block before we fill in the current block,
         // so that threads that go to the next block can see a correct
         // pointer written in it to the third block.

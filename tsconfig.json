@@ -3,9 +3,11 @@
     "target": "es3",
     "module": "commonjs",
     "removeComments": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "listFiles": true
   },
   "exclude": [
+    "node_modules",
     "dist"
   ]
 }

@@ -268,7 +268,7 @@ Below synchronous methods are implements using `process.syscall`:
  - [X] `fs.truncateSync(path, len)`
  - [X] `fs.renameSync(oldPath, newPath)`
  - [X] `fs.readSync(fd, buffer, offset, length, position)`
- - [ ] `fs.writeSync(fd, buffer, offset, length[, position])`
+ - [X] `fs.writeSync(fd, buffer, offset, length[, position])`
  - [ ] `fs.writeSync(fd, data[, position[, encoding]])`
  - [X] `fs.writeFileSync(file, data[, options])`
  - [X] `fs.unlinkSync(path)`
@@ -308,7 +308,7 @@ Below asynchronous methods are implemented using `process.asyscall`:
  - [X] `fs.unlink(path, callback)`
  - [ ] `fs.write(fd, buffer, offset, length[, position], callback)`
  - [ ] `fs.write(fd, data[, position[, encoding]], callback)`
- - [ ] `fs.writeFile(file, data[, options], callback)`
+ - [X] `fs.writeFile(file, data[, options], callback)`
  
 There is no such `readdir` Linux system call, instead `libc` implements it
 itself, here we too implement the `readdir` function in JavaScript, so it
@@ -613,4 +613,5 @@ Interpreter runtimes:
  
   - [ ] Use asynchronous Linux I/O for file systems on file systems that support that.
   - [ ] Integrate `process.asyscall` into `epoll`.
+  - [ ] Compile full.js into V8's binary startup snapshot.  
   

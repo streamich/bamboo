@@ -3,6 +3,27 @@ var operand_1 = require('../node_modules/ass-js/x86/operand');
 var code_1 = require('../node_modules/ass-js/x86/x64/code');
 var abi_1 = require('../node_modules/ass-js/abi');
 var __DEBUG__ = true;
+var SYS;
+(function (SYS) {
+    SYS[SYS["write"] = 1] = "write";
+    SYS[SYS["mmap"] = 9] = "mmap";
+    SYS[SYS["clone"] = 56] = "clone";
+    SYS[SYS["exit"] = 60] = "exit";
+    SYS[SYS["sched_yield"] = 24] = "sched_yield";
+    SYS[SYS["getuid"] = 102] = "getuid";
+    SYS[SYS["getpid"] = 39] = "getpid";
+})(SYS || (SYS = {}));
+var CLONE;
+(function (CLONE) {
+    CLONE[CLONE["VM"] = 256] = "VM";
+    CLONE[CLONE["FS"] = 512] = "FS";
+    CLONE[CLONE["FILES"] = 1024] = "FILES";
+    CLONE[CLONE["SIGHAND"] = 2048] = "SIGHAND";
+    CLONE[CLONE["PARENT"] = 32768] = "PARENT";
+    CLONE[CLONE["THREAD"] = 65536] = "THREAD";
+    CLONE[CLONE["IO"] = 2147483648] = "IO";
+    CLONE[CLONE["THREAD_FLAGS"] = -2147381504] = "THREAD_FLAGS";
+})(CLONE || (CLONE = {}));
 var AsyscallCompiler = (function () {
     function AsyscallCompiler() {
         this.queue = 100;

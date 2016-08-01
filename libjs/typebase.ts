@@ -1,3 +1,4 @@
+// import {Buffer} from "../lib/buffer";
 
 // When less data provided than the C structs hold, the `.pack()` commad
 // should still generate a `Buffer` of the kernel's C struct size, otherwise
@@ -6,6 +7,7 @@
 // the fields we don't need, and each data type has `.size` attribute
 // that specifies its size in bytes, so even if we are not using some data
 // from C structs, we still produce the correctly sized `Buffers`.
+
 
 export interface IType {
     size: number;
