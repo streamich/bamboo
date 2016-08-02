@@ -2,7 +2,7 @@ var util = require('./util');
 
 
 function Console(stdout, stderr) {
-    
+
     if (!(this instanceof Console)) {
         return new Console(stdout, stderr);
     }
@@ -57,7 +57,7 @@ Console.prototype.error = Console.prototype.warn;
 
 
 Console.prototype.dir = function(object, options) {
-    options = Object.assign({customInspect: false}, options);
+    options = util.extend({customInspect: false}, options);
     this._stdout.write(util.inspect(object, options) + '\n');
 };
 
@@ -87,7 +87,11 @@ Console.prototype.trace = function trace() {
     var err = new Error();
     err.name = 'Trace';
     err.message = util.format.apply(null, arguments);
-    Error.captureStackTrace(err, trace);
+
+    // TODO: is `Error.captureStackTrace` specific to V8?
+    if(Error.captureStackTrace)
+        Error.captureStackTrace(err, trace);
+
     this.error(err.stack);
 };
 

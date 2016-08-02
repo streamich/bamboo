@@ -21,6 +21,7 @@ console.trace(data);
 console.warn('lol');
 console.info('lol');
 console.error('lol');
+console.log('all fine...');
 
 
 

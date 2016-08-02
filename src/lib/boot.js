@@ -74,6 +74,12 @@ task.callback = function() {
     require('../libasyscall/create');
 
 
+    // Includ in distribution bundle all `/lib/*` files.
+    // function a(a) {
+    //     require('./' + a + '.js');
+    // }
+
+
     try {
         // Eval the file specified in first argument `full app.js`
         if(process.argv[1]) {

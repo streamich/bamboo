@@ -432,6 +432,51 @@ Other:
  - [X] `console.warn([data][, ...])`
 
 
+### [`punycode`](https://nodejs.org/api/punycode.html)
+
+*Depends on:* none
+
+ - [X] `punycode.decode(string)`
+ - [X] `punycode.encode(string)`
+ - [X] `punycode.toASCII(domain)`
+ - [X] `punycode.toUnicode(domain)`
+ - [X] `punycode.ucs2`
+ - [X] `punycode.ucs2.decode(string)`
+ - [X] `punycode.ucs2.encode(codePoints)`
+ - [X] `punycode.version`
+
+
+### [`querystring`](https://nodejs.org/api/querystring.html)
+
+*Depends on:* `Buffer`
+
+ - [X] `querystring.escape(str)`
+ - [X] `querystring.parse(str[, sep[, eq[, options]]])`
+ - [X] `querystring.stringify(obj[, sep[, eq[, options]]])`
+ - [X] `querystring.unescape(str)`
+
+
+### [`url`](https://nodejs.org/api/url.html)
+
+*Depends on:* `punycode`, `querystring`
+
+ - [X] URL Strings and URL Objects
+     - [X] `urlObject.href`
+     - [X] `urlObject.protocol`
+     - [X] `urlObject.slashes`
+     - [X] `urlObject.host`
+     - [X] `urlObject.auth`
+     - [X] `urlObject.hostname`
+     - [X] `urlObject.port`
+     - [X] `urlObject.pathname`
+     - [X] `urlObject.search`
+     - [X] `urlObject.path`
+     - [X] `urlObject.query`
+     - [X] `urlObject.hash`
+ - [X] `url.format(urlObject)`
+ - [X] `url.parse(urlString[, parseQueryString[, slashesDenoteHost]])`
+ - [X] `url.resolve(from, to)`
+
 ### [`dgram`](https://nodejs.org/api/dgram.html)
 
 *Depends on:* 

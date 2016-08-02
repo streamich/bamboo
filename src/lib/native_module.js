@@ -21,6 +21,10 @@ NativeModule._cache = {
     stream: null,
     timers: null,
     util: null,
+    url: null,
+    querystring: null,
+    punycode: null,
+    vm: null,
 };
 
 NativeModule.require = function(id) {
