@@ -1,17 +1,70 @@
-![](./FULL.gif)
-
 # FULL.js
 
-**TL;DR**: Node.js clone in pure JavaScript.
+**What?** Node.js clone in pure JavaScript.
+
+**Why?** To get rid of C/C++ layer between your JavaScript app and kernel.
+
+**How?** Execute all system calls straight from JavaScript, also create
+thread pool for asynchronous file system IO directly in JavaScript.
+
+----
 
 `full.js` is Node.js without C++ parts. The goal is to implement **100%**
-of Node.js API without any dependencies on any C++ libraries.
+of Node.js API without any dependencies on any C++ libraries. `full.js` will 
+be a drop-in replacement for Node.js and is able to run on any JavaScript runtime.
 
-`full.js` will be a drop-in replacement for Node.js and will be able to run
-on any JavaScript runtime.
+## Try it out
 
-Requirements: it runs on x86_64 Ubuntu 14.04, not tested on other systems.
+`full.js` is in early prototype stage, so many features don't work or might
+not work as expected or it might crash outright. Currently, it runs on x86_64 Linux.
+If you want to try it out, I suggest you do it in a VM or a Docker container.
 
+See below *Api Status* section for compatibility with Node.js, to try it
+out run these commands:
+
+    git clone https://github.com/streamich/full-js
+    cd full-js
+    ./bin/full-duktape dist/full.js examples/hello-world.js    
+
+
+## JavaScript Runtimes
+
+Currently `full.js` runs on Node.js, Duktape and V8, but you should be able to
+port it to any JavaScript engine that runs on Linux.
+
+ - [X] Node.js
+ - [ ] Browsers
+ 
+JIT compiling runtimes:
+
+ - [X] V8
+ - [ ] Carakan
+ - [ ] Chakra -- currently Chakra runs only on Windows
+ - [ ] SpiderMonkey
+ - [ ] JavaScriptCore
+ - [ ] Nashorn
+
+Interpreter runtimes:
+
+ - [X] Duktape
+ - [ ] Continuum
+ - [ ] Futhark
+ - [ ] InScript
+ - [ ] JScript
+ - [ ] KJS
+ - [ ] Linear B
+ - [ ] Narcissus
+ - [ ] JS-Interpreter
+ - [ ] Rhino
+ - [ ] YAJI
+ - [ ] Jsish
+ - [ ] Websocket.js
+ - [ ] Espruino
+ - [ ] MuJS
+ - [ ] V7
+ - [ ] Tiny-JS
+ - [ ] JerryScript
+ 
 ## API Status
 
 ### [`events`](https://nodejs.org/api/events.html)
@@ -21,7 +74,6 @@ Requirements: it runs on x86_64 Ubuntu 14.04, not tested on other systems.
 Verbatim copy from Node.js
 
  - [X] `EventEmitter`
-
 
 ### [`process`](https://nodejs.org/api/process.html)
 
@@ -368,16 +420,16 @@ Other:
 
 *Depends on:* `util`, `stream`, `fs`, `assert`
 
- - [ ] `new Console(stdout[, stderr])`
- - [ ] `console.assert(value[, message][, ...])`
- - [ ] `console.dir(obj[, options])`
- - [ ] `console.error([data][, ...])`
- - [ ] `console.info([data][, ...])`
- - [ ] `console.log([data][, ...])`
+ - [X] `new Console(stdout[, stderr])`
+ - [X] `console.assert(value[, message][, ...])`
+ - [X] `console.dir(obj[, options])`
+ - [X] `console.error([data][, ...])`
+ - [X] `console.info([data][, ...])`
+ - [X] `console.log([data][, ...])`
  - [ ] `console.time(label)`
  - [ ] `console.timeEnd(label)`
- - [ ] `console.trace(message[, ...])`
- - [ ] `console.warn([data][, ...])`
+ - [X] `console.trace(message[, ...])`
+ - [X] `console.warn([data][, ...])`
 
 
 ### [`dgram`](https://nodejs.org/api/dgram.html)
@@ -571,45 +623,7 @@ Below is list of already implemented API and roadmap on how the rest of the API 
     - `timers.js`
  - These we need to think about:
     - `child_process.js`
-    - `cluster.js`
-
-## JavaScript Runtimes
-
-Currently `full.js` runs on Node.js and Duktape, but we should be able to
-port it to all JavaScript engines that run on Linux
-
- - [X] Node.js
- 
-JIT compiling runtimes:
-
- - [ ] Carakan
- - [ ] Chakra -- currently Chakra runs only on Windows
- - [ ] SpiderMonkey
- - [ ] JavaScriptCore
- - [ ] V8
- - [ ] Nashorn
-
-Interpreter runtimes:
-
- - [ ] Continuum
- - [ ] Futhark
- - [ ] InScript
- - [ ] JScript
- - [ ] KJS
- - [ ] Linear B
- - [ ] Narcissus
- - [ ] JS-Interpreter
- - [ ] Rhino
- - [ ] YAJI
- - [X] Duktape
- - [ ] Jsish
- - [ ] Websocket.js
- - [ ] Espruino
- - [ ] MuJS
- - [ ] V7
- - [ ] Tiny-JS
- - [ ] JerryScript
- 
+    - `cluster.js` 
  
  ## TODOs
  

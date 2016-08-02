@@ -1,4 +1,4 @@
-var global = this;
+global = this;
 /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -46,46 +46,18 @@ var global = this;
 /***/ function(module, exports, __webpack_require__) {
 
 	
-
-	if(typeof console === 'undefined') {
-	  console = {
-	    log: function () {
-	      var str = Array.prototype.join.call(arguments, ', ');
-	      print(str);
-	    }
-	  };
-	}
+	// Useful for debugging when porting to new runtime, just create a global `print`
+	// function that prints strings to STDOUT and uncomment this.
+	// if(typeof console === 'undefined') {
+	//     console = {
+	//         log: function () {
+	//             var str = Array.prototype.join.call(arguments, ', ');
+	//             print(str);
+	//         }
+	//     };
+	// }
 
 	__webpack_require__(1);
-
-	// Export `Buffer` as global.
-	// var Buffer = global.Buffer = require('./lib/buffer').Buffer;
-
-	// var buf = new Buffer('Hello');
-
-	// Export `process` as global.
-	// require('./lib/process');
-
-	// console.log(process)
-
-	// Export `StaticBuffer` and `StaticArrayBuffer` as globals
-
-
-	// Load `fs.js`
-
-	// Load `module.js`
-
-	// Crate `require` function
-
-
-	// console.log(process.nextTick);
-
-	// console.log(process);
-
-	// console.log(require('./stream'));
-
-
-
 
 
 /***/ },
@@ -123,13 +95,17 @@ var global = this;
 	// Export `StaticBuffer`, `libjs` needs `StaticBuffer` so export it early.
 	if(typeof StaticBuffer === 'undefined') {
 	    StaticBuffer = global.StaticBuffer= process.hasBinaryUtils
-	            ? __webpack_require__(11).StaticBuffer
+	            ? __webpack_require__(7).StaticBuffer
 	            : Buffer;
 	}
 
 
 	// Set-up `process` global.
 	__webpack_require__(12);
+
+
+	// Create global `console` object.
+	console = __webpack_require__(33);
 
 
 	// The main event loop, attached to `process` as `loop` property.
@@ -157,20 +133,18 @@ var global = this;
 
 	    // !IMPORTANT: everything that uses `process.nextTick()` must
 	    // bet executed in this callback so all the micro-tasks get correctly
-	    // executed after this first task is processed.
+	    // executed after this first macro-task is processed.
 
 
 	    // Create `process.asyscall` and `process.asyscall64`
-	    __webpack_require__(17);
+	    __webpack_require__(42);
 
 
 	    try {
-
 	        // Eval the file specified in first argument `full app.js`
-	        console.log(process.argv);
 	        if(process.argv[1]) {
-	            var path = __webpack_require__(20);
-	            var Module = __webpack_require__(23).Module;
+	            var path = __webpack_require__(17);
+	            var Module = __webpack_require__(20).Module;
 	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
 	            setImmediate(function() {
@@ -182,10 +156,8 @@ var global = this;
 	                }
 	            });
 	        }
-
 	    } catch(e) {
 	        console.log(e);
-	        console.log(e.line);
 	        console.log(e.stack);
 	    }
 
@@ -2345,16 +2317,17 @@ var global = this;
 	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 	}
 	var buffer_1 = __webpack_require__(2);
+	var static_buffer_1 = __webpack_require__(7);
 	var p = process;
 	var syscall = p.syscall;
 	var syscall64 = p.syscall64;
-	var isSB = StaticBuffer.isStaticBuffer;
+	var isSB = static_buffer_1.StaticBuffer.isStaticBuffer;
 	function malloc(size) {
 	    return new buffer_1.Buffer(size);
 	}
-	var x86_64_linux_1 = __webpack_require__(7);
-	var types = __webpack_require__(7);
-	__export(__webpack_require__(7));
+	var x86_64_linux_1 = __webpack_require__(8);
+	var types = __webpack_require__(8);
+	__export(__webpack_require__(8));
 	exports.arch = {
 	    isLE: true,
 	    kernel: 'linux',
@@ -2362,8 +2335,8 @@ var global = this;
 	    SYS: x86_64_linux_1.SYS,
 	    types: types
 	};
+	__export(__webpack_require__(11));
 	__export(__webpack_require__(10));
-	__export(__webpack_require__(9));
 	function noop() { }
 	function read(fd, buf) {
 	    return syscall(x86_64_linux_1.SYS.read, fd, buf, buf.length);
@@ -2679,7 +2652,7 @@ var global = this;
 	    openAsync(path, 65536, 0, function (fd) {
 	        if (fd < 0)
 	            return callback(fd);
-	        var buf = new StaticBuffer(4096);
+	        var buf = new static_buffer_1.StaticBuffer(4096);
 	        var struct = types.linux_dirent64;
 	        var list = [];
 	        function done() {
@@ -2728,7 +2701,7 @@ var global = this;
 	}
 	exports.unlinkAsync = unlinkAsync;
 	function readlink(pathname) {
-	    var sb = new StaticBuffer(types.PATH_MAX);
+	    var sb = new static_buffer_1.StaticBuffer(types.PATH_MAX);
 	    var bytes = syscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length);
 	    if (bytes < 0)
 	        throw bytes;
@@ -2737,7 +2710,7 @@ var global = this;
 	}
 	exports.readlink = readlink;
 	function readlinkAsync(pathname, callback) {
-	    var sb = new StaticBuffer(types.PATH_MAX);
+	    var sb = new static_buffer_1.StaticBuffer(types.PATH_MAX);
 	    p.asyscall(x86_64_linux_1.SYS.readlink, pathname, sb, sb.length, function (bytes) {
 	        if (bytes < 0)
 	            callback(bytes);
@@ -3028,8 +3001,198 @@ var global = this;
 /* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
+	var StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
+
+
+	exports.StaticBuffer = StaticBuffer;
+
+
+	// function bufferNew(size) {
+	//     return new Buffer(size); // Node < 6.0
+	// return Buffer.allocUnsafe(size); // Node 6.0
+	// }
+
+	function bufferFrom(arr, a, b) {
+	    return new Buffer(arr, a, b); // Node < 6.0
+	    // return Buffer.from(arr, a, b); // Node 6.0
+	}
+
+
+	// new StaticBuffer(size);
+	// new StaticBuffer(staticArrayBuffer, byteOffset, length);
+	function StaticBuffer(a, b, c) {
+	    this._next = null; // Used in thread pool
+
+	    var buf;
+	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
+	        var staticArrayBuffer = a, byteOffset = b, length = c;
+	        if(!byteOffset) byteOffset = 0;
+	        if(!length) length = staticArrayBuffer.byteLength;
+	        buf = bufferFrom(staticArrayBuffer);
+	        if((byteOffset !== 0) || (length !== staticArrayBuffer.byteLength)) {
+	            buf = buf.slice(byteOffset, byteOffset + length);
+	        }
+	    } else if(typeof a === 'number') {
+	        var size = a;
+	        var sab = new StaticArrayBuffer(size);
+	        buf = bufferFrom(sab);
+	    } else if(typeof a === 'string') {
+	        var str = a;
+	        var size = str.length;
+	        var sab = new StaticArrayBuffer(size);
+	        buf = bufferFrom(sab);
+	        for(var i = 0; i < size; i++) buf[i] = str.charCodeAt(i);
+	    } else
+	        throw TypeError('Invalid StaticBuffer constructor arguments.');
+
+	    buf.__proto__ = StaticBuffer.prototype;
+	    return buf;
+	}
+
+
+	// # Static methods
+
+	StaticBuffer.isStaticBuffer = function(sbuf) {
+	    if((sbuf instanceof StaticBuffer) && (typeof sbuf.getAddress === 'function')) return true;
+	    else return false;
+	};
+
+	StaticBuffer.alloc = function(size, prot) {
+	    var arr;
+	    if(size instanceof Array) {
+	        arr = size;
+	        size = size.length;
+	    }
+	    var sab = StaticArrayBuffer.alloc(size, prot);
+	    var sb = new StaticBuffer(sab);
+
+	    if(arr) sb.fillWith(arr);
+	    return sb;
+	};
+
+	StaticBuffer.allocSafe = function(size, fill, encoding, prot) {
+	    var sb = StaticBuffer.alloc(size, prot);
+	    sb.fill(fill, 0, sab.length, encoding);
+	    return sb;
+	};
+
+	StaticBuffer.frame = function(address, size) {
+	    var sab = StaticArrayBuffer.frame(address, size);
+	    return new StaticBuffer(sab);
+	};
+
+	// StaticBuffer.from([1, 2, 3]);
+	// StaticBuffer.from(new StaticArrayBuffer(100));
+	// StaticBuffer.from(new ArrayBuffer(100));
+	// StaticBuffer.from(new Buffer(100));
+	// StaticBuffer.from('Hello world');
+	StaticBuffer.from = function(obj, a, b) {
+	    if(obj instanceof Array) {
+	        var array = obj;
+	        var size = array.length;
+	        var sb = new StaticBuffer(size);
+	        for(var i = 0; i < size; i++) sbuf[i] = array[i];
+	        return sb;
+	    } else if(StaticArrayBuffer.isStaticArrayBuffer(obj)) {
+	        var staticArrayBuffer = obj, byteOffset = a, length = b;
+	        return new StaticBuffer(staticArrayBuffer, byteOffset, length);
+	    } else if(obj instanceof ArrayBuffer) {
+	        var arrayBuffer = obj, byteOffset = a, length = b;
+	        return StaticBuffer.from(new StaticArrayBuffer(arrayBuffer), byteOffset, length);
+
+
+	    } else if(Buffer.isBuffer(obj) && !StaticBuffer.isStaticBuffer(obj)) {
+
+	        // Create a `StaticBuffer` from simple `Buffer`.
+	        // This is very ad-hoc and hacky currently.
+
+	        const MIN_SIZE = 200;
+	        const LEN = obj.length;
+	        if(LEN < MIN_SIZE) {
+	            var sab = new StaticArrayBuffer(MIN_SIZE);
+	            var sb = new StaticBuffer(sab, 0, LEN);
+	            obj.copy(sb);
+	            return sb;
+	        } else {
+	            // If buffer is already big we just wrap that memory contents into
+	            // StaticBuffer, btw could we use `process.frame()` here?
+	            var sab = new StaticArrayBuffer(obj.buffer);
+	            return new StaticBuffer(sab);
+	        }
+
+	    } else if(typeof obj === 'string') {
+	        var len = obj.length;
+	        // TODO: It should be new StaticBuffer()
+	        var sb = new StaticBuffer(len);
+	        // var sb1 = new StaticBuffer(30000000);
+	        // var sb = sb1.slice(0, obj.length);
+	        for(var i = 0; i < len; i++) sb[i] = obj.charCodeAt(i);
+	        return sb;
+	    } else if(obj instanceof Uint8Array) {
+	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
+	        var sb = new StaticBuffer(obj.length);
+	        sb.fill(obj);
+	        return sb;
+	    } else
+	        throw TypeError("Do not know how to create StaticBuffer from this type.");
+	};
+
+
+
+
+	StaticBuffer.prototype.__proto__ =
+	    Buffer.prototype;
+
+
+
+	// # Member instance methods
+
+	// Execute machine code inside the buffer.
+	StaticBuffer.prototype.call = function(offset, args) {
+	    offset += this.byteOffset;
+	    return this.buffer.call(offset, args);
+	};
+
+	StaticBuffer.prototype.getAddress = function(offset) {
+	    if(!offset) offset = 0;
+	    offset += this.byteOffset;
+	    return this.buffer.getAddress(offset);
+	};
+
+	// We don't add `setProtection` and `free` methods to `StaticBuffer`
+	// because those are really specific to the underlying `StaticArrayBuffer`.
+
+	// We extend the `Buffer`. In general, all methods of `Buffer` return
+	// something that IS NOT a `Buffer` OR they return `this`.
+	//
+	// The exception is `.slice()` method that creates a new `Buffer`, but
+	// we need to return `StaticBuffer`. So we override it here.
+	StaticBuffer.prototype.slice = function(start, end) {
+	    if(!start) start = 0;
+	    if(!end) end = this.length;
+	    if(typeof start !== 'number')   throw TypeError('start must be number');
+	    if(typeof end !== 'number')     throw TypeError('end must be number');
+	    var length = end - start;
+	    if(length <= 0) throw TypeError('end must be greater than start');
+	    return new StaticBuffer(this.buffer, start, length);
+	};
+
+
+	StaticBuffer.prototype.fillWith = function(arr, offset, offsetArr, len) {
+	    if(!offset) offset = 0;
+	    if(!offsetArr) offsetArr = 0;
+	    if(!len) len = arr.length;
+	    for(var i = 0; i < len; i++)
+	        this[offset + i] = arr[offsetArr + i];
+	};
+
+
+/***/ },
+/* 8 */
+/***/ function(module, exports, __webpack_require__) {
+
 	"use strict";
-	var typebase_1 = __webpack_require__(8);
+	var typebase_1 = __webpack_require__(9);
 	exports.PATH_MAX = 4096;
 	exports.isLE = true;
 	exports.NULL = 0;
@@ -3048,7 +3211,7 @@ var global = this;
 	exports.ipv4 = typebase_1.Type.define(4, function (offset) {
 	    if (offset === void 0) { offset = 0; }
 	    var buf = this;
-	    var socket = __webpack_require__(9);
+	    var socket = __webpack_require__(10);
 	    var octets = socket.Ipv4.type.unpack(buf, offset);
 	    return new socket.Ipv4(octets);
 	}, function (data, offset) {
@@ -3241,10 +3404,11 @@ var global = this;
 
 
 /***/ },
-/* 8 */
-/***/ function(module, exports) {
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var buffer_1 = __webpack_require__(2);
 	var Type = (function () {
 	    function Type() {
 	        this.size = 1;
@@ -3263,8 +3427,8 @@ var global = this;
 	    Type.prototype.pack = function (data, buf, offset) {
 	        if (offset === void 0) { offset = 0; }
 	        if (!buf)
-	            buf = new Buffer(this.size);
-	        if (data instanceof Buffer)
+	            buf = new buffer_1.Buffer(this.size);
+	        if (data instanceof buffer_1.Buffer)
 	            data.copy(buf, offset);
 	        else if (typeof data == 'object')
 	            data.toBuffer().copy(buf, offset);
@@ -3297,7 +3461,7 @@ var global = this;
 	    Arr.prototype.pack = function (data, buf, offset) {
 	        if (offset === void 0) { offset = 0; }
 	        if (!buf)
-	            buf = new Buffer(this.size);
+	            buf = new buffer_1.Buffer(this.size);
 	        if (data) {
 	            var off;
 	            for (var i = 0; (i < this.len) && (i < data.length); i++) {
@@ -3334,7 +3498,7 @@ var global = this;
 	    Struct.prototype.pack = function (data, buf, offset) {
 	        if (offset === void 0) { offset = 0; }
 	        if (!buf)
-	            buf = new Buffer(this.size);
+	            buf = new buffer_1.Buffer(this.size);
 	        for (var _i = 0, _a = this.defs; _i < _a.length; _i++) {
 	            var field = _a[_i];
 	            var off = field[0], type = field[1], name = field[2];
@@ -3348,7 +3512,7 @@ var global = this;
 
 
 /***/ },
-/* 9 */
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -3357,8 +3521,9 @@ var global = this;
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var typebase_1 = __webpack_require__(8);
-	var x86_64_linux_1 = __webpack_require__(7);
+	var typebase_1 = __webpack_require__(9);
+	var buffer_1 = __webpack_require__(2);
+	var x86_64_linux_1 = __webpack_require__(8);
 	function flip(buf, offset, len) {
 	    if (offset === void 0) { offset = 0; }
 	    if (len === void 0) { len = buf.length; }
@@ -3393,10 +3558,10 @@ var global = this;
 	    function Ip(ip) {
 	        this.sep = '.';
 	        if (typeof ip === 'string') {
-	            this.buf = new Buffer(ip.split(this.sep));
+	            this.buf = new buffer_1.Buffer(ip.split(this.sep));
 	        }
 	        else if (ip instanceof Array) {
-	            this.buf = new Buffer(ip);
+	            this.buf = new buffer_1.Buffer(ip);
 	        }
 	    }
 	    Ip.prototype.toString = function () {
@@ -3444,7 +3609,7 @@ var global = this;
 
 
 /***/ },
-/* 10 */
+/* 11 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -3473,196 +3638,6 @@ var global = this;
 	    return UInt64;
 	}());
 	exports.UInt64 = UInt64;
-
-
-/***/ },
-/* 11 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var StaticArrayBuffer = __webpack_require__(5).StaticArrayBuffer;
-
-
-	exports.StaticBuffer = StaticBuffer;
-
-
-	// function bufferNew(size) {
-	//     return new Buffer(size); // Node < 6.0
-	// return Buffer.allocUnsafe(size); // Node 6.0
-	// }
-
-	function bufferFrom(arr, a, b) {
-	    return new Buffer(arr, a, b); // Node < 6.0
-	    // return Buffer.from(arr, a, b); // Node 6.0
-	}
-
-
-	// new StaticBuffer(size);
-	// new StaticBuffer(staticArrayBuffer, byteOffset, length);
-	function StaticBuffer(a, b, c) {
-	    this._next = null; // Used in thread pool
-
-	    var buf;
-	    if(StaticArrayBuffer.isStaticArrayBuffer(a)) {
-	        var staticArrayBuffer = a, byteOffset = b, length = c;
-	        if(!byteOffset) byteOffset = 0;
-	        if(!length) length = staticArrayBuffer.byteLength;
-	        buf = bufferFrom(staticArrayBuffer);
-	        if((byteOffset !== 0) || (length !== staticArrayBuffer.byteLength)) {
-	            buf = buf.slice(byteOffset, byteOffset + length);
-	        }
-	    } else if(typeof a === 'number') {
-	        var size = a;
-	        var sab = new StaticArrayBuffer(size);
-	        buf = bufferFrom(sab);
-	    } else if(typeof a === 'string') {
-	        var str = a;
-	        var size = str.length;
-	        var sab = new StaticArrayBuffer(size);
-	        buf = bufferFrom(sab);
-	        for(var i = 0; i < size; i++) buf[i] = str.charCodeAt(i);
-	    } else
-	        throw TypeError('Invalid StaticBuffer constructor arguments.');
-
-	    buf.__proto__ = StaticBuffer.prototype;
-	    return buf;
-	}
-
-
-	// # Static methods
-
-	StaticBuffer.isStaticBuffer = function(sbuf) {
-	    if((sbuf instanceof StaticBuffer) && (typeof sbuf.getAddress === 'function')) return true;
-	    else return false;
-	};
-
-	StaticBuffer.alloc = function(size, prot) {
-	    var arr;
-	    if(size instanceof Array) {
-	        arr = size;
-	        size = size.length;
-	    }
-	    var sab = StaticArrayBuffer.alloc(size, prot);
-	    var sb = new StaticBuffer(sab);
-
-	    if(arr) sb.fillWith(arr);
-	    return sb;
-	};
-
-	StaticBuffer.allocSafe = function(size, fill, encoding, prot) {
-	    var sb = StaticBuffer.alloc(size, prot);
-	    sb.fill(fill, 0, sab.length, encoding);
-	    return sb;
-	};
-
-	StaticBuffer.frame = function(address, size) {
-	    var sab = StaticArrayBuffer.frame(address, size);
-	    return new StaticBuffer(sab);
-	};
-
-	// StaticBuffer.from([1, 2, 3]);
-	// StaticBuffer.from(new StaticArrayBuffer(100));
-	// StaticBuffer.from(new ArrayBuffer(100));
-	// StaticBuffer.from(new Buffer(100));
-	// StaticBuffer.from('Hello world');
-	StaticBuffer.from = function(obj, a, b) {
-	    if(obj instanceof Array) {
-	        var array = obj;
-	        var size = array.length;
-	        var sb = new StaticBuffer(size);
-	        for(var i = 0; i < size; i++) sbuf[i] = array[i];
-	        return sb;
-	    } else if(StaticArrayBuffer.isStaticArrayBuffer(obj)) {
-	        var staticArrayBuffer = obj, byteOffset = a, length = b;
-	        return new StaticBuffer(staticArrayBuffer, byteOffset, length);
-	    } else if(obj instanceof ArrayBuffer) {
-	        var arrayBuffer = obj, byteOffset = a, length = b;
-	        return StaticBuffer.from(new StaticArrayBuffer(arrayBuffer), byteOffset, length);
-
-
-	    } else if(Buffer.isBuffer(obj) && !StaticBuffer.isStaticBuffer(obj)) {
-
-	        // Create a `StaticBuffer` from simple `Buffer`.
-	        // This is very ad-hoc and hacky currently.
-
-	        const MIN_SIZE = 200;
-	        const LEN = obj.length;
-	        if(LEN < MIN_SIZE) {
-	            var sab = new StaticArrayBuffer(MIN_SIZE);
-	            var sb = new StaticBuffer(sab, 0, LEN);
-	            obj.copy(sb);
-	            return sb;
-	        } else {
-	            // If buffer is already big we just wrap that memory contents into
-	            // StaticBuffer, btw could we use `process.frame()` here?
-	            var sab = new StaticArrayBuffer(obj.buffer);
-	            return new StaticBuffer(sab);
-	        }
-
-	    } else if(typeof obj === 'string') {
-	        var len = obj.length;
-	        // TODO: It should be new StaticBuffer()
-	        var sb = new StaticBuffer(len);
-	        // var sb1 = new StaticBuffer(30000000);
-	        // var sb = sb1.slice(0, obj.length);
-	        for(var i = 0; i < len; i++) sb[i] = obj.charCodeAt(i);
-	        return sb;
-	    } else if(obj instanceof Uint8Array) {
-	        // This includes `instanceof Buffer` as Buffer extends Uint8Array.
-	        var sb = new StaticBuffer(obj.length);
-	        sb.fill(obj);
-	        return sb;
-	    } else
-	        throw TypeError("Do not know how to create StaticBuffer from this type.");
-	};
-
-
-
-
-	StaticBuffer.prototype.__proto__ =
-	    Buffer.prototype;
-
-
-
-	// # Member instance methods
-
-	// Execute machine code inside the buffer.
-	StaticBuffer.prototype.call = function(offset, args) {
-	    offset += this.byteOffset;
-	    return this.buffer.call(offset, args);
-	};
-
-	StaticBuffer.prototype.getAddress = function(offset) {
-	    if(!offset) offset = 0;
-	    offset += this.byteOffset;
-	    return this.buffer.getAddress(offset);
-	};
-
-	// We don't add `setProtection` and `free` methods to `StaticBuffer`
-	// because those are really specific to the underlying `StaticArrayBuffer`.
-
-	// We extend the `Buffer`. In general, all methods of `Buffer` return
-	// something that IS NOT a `Buffer` OR they return `this`.
-	//
-	// The exception is `.slice()` method that creates a new `Buffer`, but
-	// we need to return `StaticBuffer`. So we override it here.
-	StaticBuffer.prototype.slice = function(start, end) {
-	    if(!start) start = 0;
-	    if(!end) end = this.length;
-	    if(typeof start !== 'number')   throw TypeError('start must be number');
-	    if(typeof end !== 'number')     throw TypeError('end must be number');
-	    var length = end - start;
-	    if(length <= 0) throw TypeError('end must be greater than start');
-	    return new StaticBuffer(this.buffer, start, length);
-	};
-
-
-	StaticBuffer.prototype.fillWith = function(arr, offset, offsetArr, len) {
-	    if(!offset) offset = 0;
-	    if(!offsetArr) offsetArr = 0;
-	    if(!len) len = arr.length;
-	    for(var i = 0; i < len; i++)
-	        this[offset + i] = arr[offsetArr + i];
-	};
 
 
 /***/ },
@@ -3781,6 +3756,15 @@ var global = this;
 	};
 
 
+
+	process.hrtime = function hrtime() {
+
+	};
+
+
+	var fs = __webpack_require__(34);
+	var STDOUT = 1;
+	process.stdout = process.stderr = new fs.SyncWriteStream(STDOUT);
 
 
 
@@ -4893,188 +4877,9 @@ var global = this;
 /* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
-	if (!process.asyscall) {
-	    if (process.hasBinaryUtils && (true)) {
-	        var Asyscall = __webpack_require__(18).Asyscall;
-	        var asyscall = new Asyscall;
-	        asyscall.build();
-	        process.asyscall = asyscall.exec.bind(asyscall);
-	        process.asyscall64 = asyscall.exec64.bind(asyscall);
-	    }
-	    else {
-	        process.asyscall = function () {
-	            var len = arguments.length - 1;
-	            var args = new Array(len);
-	            for (var i = 0; i < len; i++)
-	                args[i] = arguments[i];
-	            var res = process.syscall.apply(null, args);
-	            arguments[len](res);
-	        };
-	        process.asyscall64 = function () {
-	            var len = arguments.length - 1;
-	            var args = new Array(len);
-	            for (var i = 0; i < len; i++)
-	                args[i] = arguments[i];
-	            var res = process.syscall64.apply(null, args);
-	            arguments[len](res);
-	        };
-	    }
-	}
-
-
-/***/ },
-/* 18 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	function link(curr, next) {
-	    var _a = next.getAddress(), lo = _a[0], hi = _a[1];
-	    curr.writeInt32LE(lo, 72 - 8);
-	    curr.writeInt32LE(hi, 72 - 8 + 4);
-	}
-	var Asyscall = (function () {
-	    function Asyscall() {
-	        this.code = null;
-	        this.curr = null;
-	        this.next = null;
-	        this.usedFirst = null;
-	        this.usedLast = null;
-	    }
-	    Asyscall.prototype.build = function () {
-	        var bin = __webpack_require__(19);
-	        this.code = StaticBuffer.alloc(bin, 'rwe');
-	        this.curr = this.code.slice(this.code.length - 72);
-	        this.curr.writeInt32LE(0, 0);
-	        this.curr.writeInt32LE(0, 4);
-	        this.next = this.newBlock();
-	        link(this.curr, this.next);
-	        this.code.call();
-	    };
-	    Asyscall.prototype.recycleBlock = function (block) {
-	        console.log(block.getAddress());
-	        block._id = Asyscall._id;
-	        Asyscall._id++;
-	        if (!this.usedFirst) {
-	            this.usedFirst = this.usedLast = block;
-	        }
-	        else {
-	            block._next = this.usedLast;
-	            this.usedLast = block;
-	        }
-	    };
-	    Asyscall.prototype.newBlock = function () {
-	        var block = this.usedFirst;
-	        if (block && (block.readInt32LE(4) === 2)) {
-	            console.log('freeing memory');
-	            this.usedFirst = block._next;
-	        }
-	        block = StaticBuffer.alloc(72, 'rw');
-	        console.log(block.getAddress());
-	        block.writeInt32LE(0, 0);
-	        block.writeInt32LE(0, 4);
-	        return block;
-	    };
-	    Asyscall.prototype.writeArg = function (arg, slot) {
-	        var curr = this.curr;
-	        if (typeof arg === 'string') {
-	            var str = arg + '\0';
-	            arg = new StaticBuffer(str.length);
-	            for (var l = 0; l < str.length; l++)
-	                arg[l] = str.charCodeAt(l);
-	        }
-	        if (arg instanceof Buffer) {
-	            arg = arg.getAddress();
-	        }
-	        if (typeof arg === 'number') {
-	            curr.writeInt32LE(arg, slot * 8);
-	            curr.writeInt32LE(0, slot * 8 + 4);
-	        }
-	        else if (arg instanceof Array) {
-	            curr.writeInt32LE(arg[0], slot * 8);
-	            curr.writeInt32LE(arg[1], slot * 8 + 4);
-	        }
-	    };
-	    Asyscall.prototype.fillBlock = function () {
-	        var _a = this, curr = _a.curr, next = _a.next;
-	        var callback;
-	        for (var j = 0; j < arguments.length; j++) {
-	            var arg = arguments[j];
-	            if (typeof arg === 'function') {
-	                callback = arg;
-	                break;
-	            }
-	            else {
-	                this.writeArg(arg, j + 1);
-	            }
-	        }
-	        for (var j = arguments.length; j < 7; j++) {
-	            curr.writeInt32LE(0, (j + 1) * 8);
-	            curr.writeInt32LE(0, (j + 1) * 8 + 4);
-	        }
-	        curr[0] = 1;
-	        return callback;
-	    };
-	    Asyscall.prototype.pollBlock = function (callback, is64) {
-	        var _this = this;
-	        var curr = this.curr;
-	        var poll = function () {
-	            var lock = curr[0];
-	            if (lock === 3) {
-	                if (is64) {
-	                    callback([
-	                        curr.readInt32LE(8 * 7),
-	                        curr.readInt32LE(8 * 7 + 4)]);
-	                }
-	                else {
-	                    callback(curr.readInt32LE(8 * 7));
-	                }
-	                _this.recycleBlock(curr);
-	            }
-	            else
-	                setIOPoll(poll);
-	        };
-	        setIOPoll(poll);
-	    };
-	    Asyscall.prototype.exec = function () {
-	        var block = this.newBlock();
-	        link(this.next, block);
-	        var callback = this.fillBlock.apply(this, arguments);
-	        this.pollBlock(callback, false);
-	        this.curr = this.next;
-	        this.next = block;
-	    };
-	    Asyscall.prototype.exec64 = function () {
-	        var block = this.newBlock();
-	        link(this.next, block);
-	        var callback = this.fillBlock.apply(this, arguments);
-	        this.pollBlock(callback, true);
-	        this.curr = this.next;
-	        this.next = block;
-	    };
-	    Asyscall.prototype.stop = function () {
-	        this.curr.writeInt32LE(4, 0);
-	        this.next.writeInt32LE(4, 0);
-	        this.code.free();
-	    };
-	    Asyscall._id = 0;
-	    return Asyscall;
-	}());
-	exports.Asyscall = Asyscall;
-
-
-/***/ },
-/* 19 */
-/***/ function(module, exports) {
-
-	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,179,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,242,0,0,0,77,139,117,64,65,139,69,0,131,248,4,15,132,107,0,0,0,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,227,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,240,65,131,69,4,1,77,137,245,77,139,117,64,233,136,255,255,255,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,15,31,64,0,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-
-/***/ },
-/* 20 */
-/***/ function(module, exports, __webpack_require__) {
-
 	'use strict';
 
-	const inspect = __webpack_require__(21).inspect;
+	const inspect = __webpack_require__(18).inspect;
 
 	function assertPath(path) {
 	    if (typeof path !== 'string') {
@@ -6675,7 +6480,7 @@ var global = this;
 
 
 /***/ },
-/* 21 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var Buffer = __webpack_require__(2).Buffer;
@@ -6920,7 +6725,7 @@ var global = this;
 
 	function ensureDebugIsInitialized() {
 	    if (Debug === undefined) {
-	        const runInDebugContext = __webpack_require__(22).runInDebugContext;
+	        const runInDebugContext = __webpack_require__(19).runInDebugContext;
 	        Debug = runInDebugContext('Debug');
 	    }
 	}
@@ -7688,13 +7493,13 @@ var global = this;
 
 
 /***/ },
-/* 22 */
+/* 19 */
 /***/ function(module, exports) {
 
 	module.exports = require("vm");
 
 /***/ },
-/* 23 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -7710,14 +7515,14 @@ var global = this;
 	// though it might not be 100% compatible with Node.js.
 
 
-	var NativeModule = __webpack_require__(24).NativeModule;
-	var util = __webpack_require__(21);
-	var internalModule = __webpack_require__(40);
-	var internalUtil = __webpack_require__(30);
-	var vm = __webpack_require__(44);
-	var assert = __webpack_require__(35).ok;
-	var fs = __webpack_require__(37);
-	var path = __webpack_require__(20);
+	var NativeModule = __webpack_require__(21).NativeModule;
+	var util = __webpack_require__(18);
+	var internalModule = __webpack_require__(37);
+	var internalUtil = __webpack_require__(27);
+	var vm = __webpack_require__(41);
+	var assert = __webpack_require__(32).ok;
+	var fs = __webpack_require__(34);
+	var path = __webpack_require__(17);
 	var libjs = __webpack_require__(6);
 
 	// const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -8421,7 +8226,7 @@ var global = this;
 
 
 /***/ },
-/* 24 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function NativeModule(id) {
@@ -8534,7 +8339,7 @@ var global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(25)("./" + this.id);
+	        this.exports = __webpack_require__(22)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -8550,37 +8355,38 @@ var global = this;
 
 
 /***/ },
-/* 25 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./_stream_duplex": 26,
-		"./_stream_passthrough": 32,
-		"./_stream_readable": 27,
-		"./_stream_transform": 31,
-		"./_stream_writable": 29,
-		"./assert": 35,
+		"./_stream_duplex": 23,
+		"./_stream_passthrough": 29,
+		"./_stream_readable": 24,
+		"./_stream_transform": 28,
+		"./_stream_writable": 26,
+		"./assert": 32,
 		"./boot": 1,
 		"./buffer": 2,
-		"./console": 36,
+		"./console": 33,
 		"./eloop": 15,
 		"./events": 13,
-		"./fs": 37,
-		"./internal/module": 40,
-		"./internal/streams/BufferList": 33,
-		"./internal/streams/lazy_transform": 42,
-		"./internal/util": 30,
-		"./module": 23,
-		"./native_module": 24,
-		"./path": 20,
+		"./fs": 34,
+		"./index": 36,
+		"./internal/module": 37,
+		"./internal/streams/BufferList": 30,
+		"./internal/streams/lazy_transform": 39,
+		"./internal/util": 27,
+		"./module": 20,
+		"./native_module": 21,
+		"./path": 17,
 		"./process": 12,
-		"./punycode": 43,
+		"./punycode": 40,
 		"./static-arraybuffer": 5,
-		"./static-buffer": 11,
-		"./stream": 28,
+		"./static-buffer": 7,
+		"./stream": 25,
 		"./timers": 16,
-		"./util": 21,
-		"./vm": 44
+		"./util": 18,
+		"./vm": 41
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -8593,11 +8399,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 25;
+	webpackContext.id = 22;
 
 
 /***/ },
-/* 26 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a duplex stream is just a stream that is both readable and writable.
@@ -8609,9 +8415,9 @@ var global = this;
 
 	module.exports = Duplex;
 
-	const util = __webpack_require__(21);
-	const Readable = __webpack_require__(27);
-	const Writable = __webpack_require__(29);
+	const util = __webpack_require__(18);
+	const Readable = __webpack_require__(24);
+	const Writable = __webpack_require__(26);
 
 	util.inherits(Duplex, Readable);
 
@@ -8660,7 +8466,7 @@ var global = this;
 
 
 /***/ },
-/* 27 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -8669,11 +8475,11 @@ var global = this;
 	Readable.ReadableState = ReadableState;
 
 	const EE = __webpack_require__(13);
-	const Stream = __webpack_require__(28);
+	const Stream = __webpack_require__(25);
 	const Buffer = __webpack_require__(2).Buffer;
-	const util = __webpack_require__(21);
+	const util = __webpack_require__(18);
 	const debug = util.debuglog('stream');
-	const BufferList = __webpack_require__(33);
+	const BufferList = __webpack_require__(30);
 	var StringDecoder;
 
 	util.inherits(Readable, Stream);
@@ -8761,7 +8567,7 @@ var global = this;
 	    this.encoding = null;
 	    if (options.encoding) {
 	        if (!StringDecoder)
-	            StringDecoder = __webpack_require__(34).StringDecoder;
+	            StringDecoder = __webpack_require__(31).StringDecoder;
 	        this.decoder = new StringDecoder(options.encoding);
 	        this.encoding = options.encoding;
 	    }
@@ -8881,7 +8687,7 @@ var global = this;
 	// backwards compatibility.
 	Readable.prototype.setEncoding = function(enc) {
 	    if (!StringDecoder)
-	        StringDecoder = __webpack_require__(34).StringDecoder;
+	        StringDecoder = __webpack_require__(31).StringDecoder;
 	    this._readableState.decoder = new StringDecoder(enc);
 	    this._readableState.encoding = enc;
 	    return this;
@@ -9641,7 +9447,7 @@ var global = this;
 
 
 /***/ },
-/* 28 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -9649,14 +9455,14 @@ var global = this;
 	module.exports = Stream;
 
 	const EE = __webpack_require__(13);
-	const util = __webpack_require__(21);
+	const util = __webpack_require__(18);
 
 	util.inherits(Stream, EE);
-	Stream.Readable = __webpack_require__(27);
-	Stream.Writable = __webpack_require__(29);
-	Stream.Duplex = __webpack_require__(26);
-	Stream.Transform = __webpack_require__(31);
-	Stream.PassThrough = __webpack_require__(32);
+	Stream.Readable = __webpack_require__(24);
+	Stream.Writable = __webpack_require__(26);
+	Stream.Duplex = __webpack_require__(23);
+	Stream.Transform = __webpack_require__(28);
+	Stream.PassThrough = __webpack_require__(29);
 
 	// Backwards-compat with node 0.4.x
 	Stream.Stream = Stream;
@@ -9754,7 +9560,7 @@ var global = this;
 
 
 /***/ },
-/* 29 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// A bit simpler than readable streams.
@@ -9766,9 +9572,9 @@ var global = this;
 	module.exports = Writable;
 	Writable.WritableState = WritableState;
 
-	const util = __webpack_require__(21);
-	const internalUtil = __webpack_require__(30);
-	const Stream = __webpack_require__(28);
+	const util = __webpack_require__(18);
+	const internalUtil = __webpack_require__(27);
+	const Stream = __webpack_require__(25);
 	const Buffer = __webpack_require__(2).Buffer;
 
 	util.inherits(Writable, Stream);
@@ -10290,7 +10096,7 @@ var global = this;
 
 
 /***/ },
-/* 30 */
+/* 27 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -10391,7 +10197,7 @@ var global = this;
 
 
 /***/ },
-/* 31 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a transform stream is a readable/writable stream where you do
@@ -10440,8 +10246,8 @@ var global = this;
 
 	module.exports = Transform;
 
-	const Duplex = __webpack_require__(26);
-	const util = __webpack_require__(21);
+	const Duplex = __webpack_require__(23);
+	const util = __webpack_require__(18);
 	util.inherits(Transform, Duplex);
 
 
@@ -10592,7 +10398,7 @@ var global = this;
 
 
 /***/ },
-/* 32 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// a passthrough stream.
@@ -10603,8 +10409,8 @@ var global = this;
 
 	module.exports = PassThrough;
 
-	const Transform = __webpack_require__(31);
-	const util = __webpack_require__(21);
+	const Transform = __webpack_require__(28);
+	const util = __webpack_require__(18);
 	util.inherits(PassThrough, Transform);
 
 	function PassThrough(options) {
@@ -10620,7 +10426,7 @@ var global = this;
 
 
 /***/ },
-/* 33 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -10698,13 +10504,13 @@ var global = this;
 
 
 /***/ },
-/* 34 */
+/* 31 */
 /***/ function(module, exports) {
 
 	module.exports = require("string_decoder");
 
 /***/ },
-/* 35 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
@@ -10735,7 +10541,7 @@ var global = this;
 
 	// UTILITY
 	// const compare = process.binding('buffer').compare;
-	const util = __webpack_require__(21);
+	const util = __webpack_require__(18);
 	const Buffer = __webpack_require__(2).Buffer;
 	const pToString = function(obj) { return Object.prototype.toString.call(obj); };
 
@@ -11079,13 +10885,14 @@ var global = this;
 
 
 /***/ },
-/* 36 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var util = __webpack_require__(21);
+	var util = __webpack_require__(18);
 
 
 	function Console(stdout, stderr) {
+	    
 	    if (!(this instanceof Console)) {
 	        return new Console(stdout, stderr);
 	    }
@@ -11116,11 +10923,7 @@ var global = this;
 	    this._times = {};
 
 	    // bind the prototype functions to this Console instance
-	    var keys = Object.keys(Console.prototype);
-	    for (var v = 0; v < keys.length; v++) {
-	        var k = keys[v];
-	        this[k] = this[k].bind(this);
-	    }
+	    for(var k in Console.prototype) this[k] = this[k].bind(this);
 	}
 
 
@@ -11181,7 +10984,7 @@ var global = this;
 
 	Console.prototype.assert = function(expression) {
 	    if (!expression) {
-	        __webpack_require__(35).ok(false, util.format.apply(null, arguments));
+	        __webpack_require__(32).ok(false, util.format.apply(null, arguments));
 	    }
 	};
 
@@ -11191,25 +10994,7 @@ var global = this;
 
 
 /***/ },
-/* 37 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var build = __webpack_require__(38).build;
-
-
-	module.exports = build({
-	    path: __webpack_require__(20),
-	    EventEmitter: __webpack_require__(13).EventEmitter,
-	    Buffer: __webpack_require__(2).Buffer,
-	    StaticBuffer: __webpack_require__(11).StaticBuffer,
-	    Readable: __webpack_require__(28).Readable,
-	    Writable: __webpack_require__(28).Writable
-	});
-
-
-
-/***/ },
-/* 38 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -11219,11 +11004,1470 @@ var global = this;
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var libjs = __webpack_require__(6);
-	var inotify_1 = __webpack_require__(39);
-	var extend = __webpack_require__(21).extend;
-	var pathModule = __webpack_require__(20);
+	var inotify_1 = __webpack_require__(35);
+	var util = __webpack_require__(18);
+	var pathModule = __webpack_require__(17);
+	var events_1 = __webpack_require__(13);
 	var buffer_1 = __webpack_require__(2);
-	var static_buffer_1 = __webpack_require__(11);
+	var static_buffer_1 = __webpack_require__(7);
+	var stream_1 = __webpack_require__(25);
+	if (true) {
+	    exports.isFULLjs = true;
+	}
+	function noop() { }
+	var isSB = static_buffer_1.StaticBuffer.isStaticBuffer;
+	var ERRSTR = {
+	    PATH_STR: 'path must be a string',
+	    FD: 'file descriptor must be a unsigned 32-bit integer',
+	    MODE_INT: 'mode must be an integer',
+	    CB: 'callback must be a function',
+	    UID: 'uid must be an unsigned int',
+	    GID: 'gid must be an unsigned int',
+	    LEN: 'len must be an integer',
+	    ATIME: 'atime must be an integer',
+	    MTIME: 'mtime must be an integer',
+	    PREFIX: 'filename prefix is required',
+	    BUFFER: 'buffer must be an instance of Buffer or StaticBuffer',
+	    OFFSET: 'offset must be an integer',
+	    LENGTH: 'length must be an integer',
+	    POSITION: 'position must be an integer'
+	};
+	var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
+	function formatError(errno, func, path, path2) {
+	    if (func === void 0) { func = ''; }
+	    if (path === void 0) { path = ''; }
+	    if (path2 === void 0) { path2 = ''; }
+	    switch (-errno) {
+	        case 2: return "ENOENT: no such file or directory, " + func + " '" + path + "'";
+	        case 9: return "EBADF: bad file descriptor, " + func;
+	        case 22: return "EINVAL: invalid argument, " + func;
+	        case 1: return "EPERM: operation not permitted, " + func + " '" + path + "' -> '" + path2 + "'";
+	        case 71: return "EPROTO: protocol error, " + func + " '" + path + "' -> '" + path2 + "'";
+	        case 17: return "EEXIST: file already exists, " + func + " '" + path + "' -> '" + path2 + "'";
+	        default: return "Error occurred in " + func + ": errno = " + errno;
+	    }
+	}
+	function throwError(errno, func, path, path2) {
+	    if (func === void 0) { func = ''; }
+	    if (path === void 0) { path = ''; }
+	    if (path2 === void 0) { path2 = ''; }
+	    throw Error(formatError(errno, func, path, path2));
+	}
+	function pathOrError(path, encoding) {
+	    if (path instanceof buffer_1.Buffer)
+	        path = path.toString(encoding);
+	    if (typeof path !== 'string')
+	        return TypeError(ERRSTR.PATH_STR);
+	    return path;
+	}
+	function validPathOrThrow(path, encoding) {
+	    var p = pathOrError(path, encoding);
+	    if (p instanceof TypeError)
+	        throw p;
+	    else
+	        return p;
+	}
+	function assertEncoding(encoding) {
+	    if (encoding && !buffer_1.Buffer.isEncoding(encoding))
+	        throw Error('Unknown encoding: ' + encoding);
+	}
+	function validateFd(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	}
+	function getOptions(defaults, options) {
+	    if (!options)
+	        return defaults;
+	    else {
+	        var tipeof = typeof options;
+	        switch (tipeof) {
+	            case 'string': return util.extend({}, defaults, { encoding: options });
+	            case 'object': return util.extend({}, defaults, options);
+	            default: throw TypeError(ERRSTR_OPTS(tipeof));
+	        }
+	    }
+	}
+	var optionGenerator = function (defaults) { return function (options) { return getOptions(defaults, options); }; };
+	function validateCallback(callback) {
+	    if (typeof callback !== 'function')
+	        throw TypeError(ERRSTR.CB);
+	    return callback;
+	}
+	var optionAndCallbackGenerator = function (getOpts) {
+	    return function (options, callback) { return typeof options === 'function'
+	        ? [getOpts(), options]
+	        : [getOpts(options), validateCallback(callback)]; };
+	};
+	(function (flags) {
+	    flags[flags["r"] = 0] = "r";
+	    flags[flags['r+'] = 2] = 'r+';
+	    flags[flags["rs"] = 1069056] = "rs";
+	    flags[flags['rs+'] = 1069058] = 'rs+';
+	    flags[flags["w"] = 577] = "w";
+	    flags[flags["wx"] = 705] = "wx";
+	    flags[flags['w+'] = 578] = 'w+';
+	    flags[flags['wx+'] = 706] = 'wx+';
+	    flags[flags["a"] = 1089] = "a";
+	    flags[flags["ax"] = 1217] = "ax";
+	    flags[flags['a+'] = 1090] = 'a+';
+	    flags[flags['ax+'] = 1218] = 'ax+';
+	})(exports.flags || (exports.flags = {}));
+	var flags = exports.flags;
+	var CHUNK = 4096;
+	exports.F_OK = 0;
+	exports.R_OK = 4;
+	exports.W_OK = 2;
+	exports.X_OK = 1;
+	var appendFileDefaults = {
+	    encoding: 'utf8',
+	    mode: 438,
+	    flag: 'a'
+	};
+	var writeFileDefaults = {
+	    encoding: 'utf8',
+	    mode: 438,
+	    flag: 'w'
+	};
+	function flagsToFlagsValue(f) {
+	    if (typeof f === 'number')
+	        return f;
+	    if (typeof f !== 'string')
+	        throw TypeError("flags must be string or number");
+	    var flagsval = flags[f];
+	    if (typeof flagsval !== 'number')
+	        throw TypeError("Invalid flags string value '" + f + "'");
+	    return flagsval;
+	}
+	var optionsDefaults = {
+	    encoding: 'utf8'
+	};
+	var readFileOptionsDefaults = {
+	    flag: 'r'
+	};
+	var Stats = (function () {
+	    function Stats() {
+	    }
+	    Stats.prototype.isFile = function () {
+	        return (this.mode & 32768) == 32768;
+	    };
+	    Stats.prototype.isDirectory = function () {
+	        return (this.mode & 16384) == 16384;
+	    };
+	    Stats.prototype.isBlockDevice = function () {
+	        return (this.mode & 24576) == 24576;
+	    };
+	    Stats.prototype.isCharacterDevice = function () {
+	        return (this.mode & 8192) == 8192;
+	    };
+	    Stats.prototype.isSymbolicLink = function () {
+	        return (this.mode & 40960) == 40960;
+	    };
+	    Stats.prototype.isFIFO = function () {
+	        return (this.mode & 4096) == 4096;
+	    };
+	    Stats.prototype.isSocket = function () {
+	        return (this.mode & 49152) == 49152;
+	    };
+	    return Stats;
+	}());
+	exports.Stats = Stats;
+	function accessSync(path, mode) {
+	    if (mode === void 0) { mode = exports.F_OK; }
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.access(vpath, mode);
+	    if (res < 0)
+	        throwError(res, 'access', vpath);
+	}
+	exports.accessSync = accessSync;
+	function access(path, a, b) {
+	    var mode, callback;
+	    if (typeof a === 'function') {
+	        callback = a;
+	        mode = exports.F_OK;
+	    }
+	    else {
+	        mode = a;
+	        callback = b;
+	        validateCallback(callback);
+	    }
+	    var vpath = pathOrError(path);
+	    if (vpath instanceof TypeError)
+	        return callback(vpath);
+	    libjs.accessAsync(vpath, mode, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'access', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.access = access;
+	function appendFileSync(file, data, options) {
+	    if (!options)
+	        options = appendFileDefaults;
+	    else {
+	        var tipof = typeof options;
+	        switch (tipof) {
+	            case 'object':
+	                options = util.extend({}, appendFileDefaults, options);
+	                break;
+	            case 'string':
+	                options = util.extend({ encoding: options }, appendFileDefaults);
+	                break;
+	            default:
+	                throw TypeError(ERRSTR_OPTS(tipof));
+	        }
+	    }
+	    var b;
+	    if (buffer_1.Buffer.isBuffer(data))
+	        b = data;
+	    else
+	        b = new buffer_1.Buffer(String(data), options.encoding);
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	    }
+	    else {
+	        var filename;
+	        if (buffer_1.Buffer.isBuffer(file))
+	            filename = file.toString();
+	        else if (typeof file === 'string')
+	            filename = file;
+	        else
+	            throw TypeError(ERRSTR.PATH_STR);
+	        var flags = flagsToFlagsValue(options.flag);
+	        if (typeof options.mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        fd = libjs.open(filename, flags, options.mode);
+	        if (fd < 0)
+	            throwError(fd, 'appendFile', filename);
+	    }
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'appendFile', String(file));
+	    if (!is_fd)
+	        libjs.close(fd);
+	}
+	exports.appendFileSync = appendFileSync;
+	function appendFile(file, data, options, callback) {
+	    var opts;
+	    if (typeof options === 'function') {
+	        callback = options;
+	        opts = appendFileDefaults;
+	    }
+	    else {
+	        var tipof = typeof options;
+	        switch (tipof) {
+	            case 'object':
+	                opts = util.extend({}, appendFileDefaults, options);
+	                break;
+	            case 'string':
+	                opts = util.extend({ encoding: options }, appendFileDefaults);
+	                break;
+	            default:
+	                throw TypeError(ERRSTR_OPTS(tipof));
+	        }
+	        validateCallback(callback);
+	    }
+	    var b;
+	    if (buffer_1.Buffer.isBuffer(data))
+	        b = data;
+	    else
+	        b = new buffer_1.Buffer(String(data), opts.encoding);
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
+	    function on_open(fd, is_fd) {
+	        var res = libjs.write(fd, sb);
+	        if (res < 0)
+	            throwError(res, 'appendFile', String(file));
+	        if (!is_fd)
+	            libjs.closeAsync(fd, noop);
+	    }
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	        on_open(fd, is_fd);
+	    }
+	    else {
+	        var filename;
+	        if (buffer_1.Buffer.isBuffer(file))
+	            filename = file.toString();
+	        else if (typeof file === 'string')
+	            filename = file;
+	        else
+	            throw TypeError(ERRSTR.PATH_STR);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        if (typeof opts.mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        libjs.openAsync(filename, flags, opts.mode, function (fd) {
+	            if (fd < 0)
+	                return callback(Error(formatError(fd, 'appendFile', filename)));
+	            on_open(fd, is_fd);
+	        });
+	    }
+	}
+	exports.appendFile = appendFile;
+	function chmodSync(path, mode) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var result = libjs.chmod(vpath, mode);
+	    if (result < 0)
+	        throwError(result, 'chmod', vpath);
+	}
+	exports.chmodSync = chmodSync;
+	function chmod(path, mode, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.chmodAsync(vpath, mode, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chmod', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.chmod = chmod;
+	function fchmodSync(fd, mode) {
+	    validateFd(fd);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var result = libjs.fchmod(fd, mode);
+	    if (result < 0)
+	        throwError(result, 'chmod');
+	}
+	exports.fchmodSync = fchmodSync;
+	function fchmod(fd, mode, callback) {
+	    validateFd(fd);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.fchmodAsync(fd, mode, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chmod')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.fchmod = fchmod;
+	function chownSync(path, uid, gid) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.chown(vpath, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'chown', vpath);
+	}
+	exports.chownSync = chownSync;
+	function chown(path, uid, gid, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.chownAsync(vpath, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chown', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.chown = chown;
+	function fchownSync(fd, uid, gid) {
+	    validateFd(fd);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.fchown(fd, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'fchown');
+	}
+	exports.fchownSync = fchownSync;
+	function fchown(fd, uid, gid, callback) {
+	    validateFd(fd);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.fchownAsync(fd, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fchown')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.fchown = fchown;
+	function lchownSync(path, uid, gid) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.lchown(vpath, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'lchown', vpath);
+	}
+	exports.lchownSync = lchownSync;
+	function lchown(path, uid, gid, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.lchownAsync(vpath, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'lchown', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.lchown = lchown;
+	function closeSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.close(fd);
+	    if (result < 0)
+	        throwError(result, 'close');
+	}
+	exports.closeSync = closeSync;
+	function close(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.closeAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'close')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.close = close;
+	function existsSync(path) {
+	    try {
+	        accessSync(path);
+	        return true;
+	    }
+	    catch (e) {
+	        return false;
+	    }
+	}
+	exports.existsSync = existsSync;
+	function exists(path, callback) {
+	    access(path, function (err) { callback(!err); });
+	}
+	exports.exists = exists;
+	function fsyncSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.fsync(fd);
+	    if (result < 0)
+	        throwError(result, 'fsync');
+	}
+	exports.fsyncSync = fsyncSync;
+	function fsync(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.fsyncAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fsync')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.fsync = fsync;
+	function fdatasyncSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.fdatasync(fd);
+	    if (result < 0)
+	        throwError(result, 'fdatasync');
+	}
+	exports.fdatasyncSync = fdatasyncSync;
+	function fdatasync(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.fdatasyncAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fdatasync')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.fdatasync = fdatasync;
+	function createStatsObject(res) {
+	    var stats = new Stats;
+	    stats.dev = res.dev;
+	    stats.mode = res.mode;
+	    stats.nlink = res.nlink;
+	    stats.uid = res.uid;
+	    stats.gid = res.gid;
+	    stats.rdev = res.rdev;
+	    stats.blksize = res.blksize;
+	    stats.ino = res.ino;
+	    stats.size = res.size;
+	    stats.blocks = res.blocks;
+	    stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
+	    stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
+	    stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
+	    stats.birthtime = stats.ctime;
+	    return stats;
+	}
+	function statSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    try {
+	        var res = libjs.stat(vpath);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'stat', vpath);
+	    }
+	}
+	exports.statSync = statSync;
+	function stat(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.statAsync(vpath, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'stat', vpath)));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	exports.stat = stat;
+	function fstatSync(fd) {
+	    validateFd(fd);
+	    try {
+	        var res = libjs.fstat(fd);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'fstat');
+	    }
+	}
+	exports.fstatSync = fstatSync;
+	function fstat(fd, callback) {
+	    validateFd(fd);
+	    libjs.fstatAsync(fd, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'fstat')));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	exports.fstat = fstat;
+	function lstatSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    try {
+	        var res = libjs.lstat(vpath);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'lstat', vpath);
+	    }
+	}
+	exports.lstatSync = lstatSync;
+	function lstat(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.lstatAsync(vpath, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'lstat', vpath)));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	exports.lstat = lstat;
+	function truncateSync(path, len) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    var res = libjs.truncate(vpath, len);
+	    if (res < 0)
+	        throwError(res, 'truncate', vpath);
+	}
+	exports.truncateSync = truncateSync;
+	function truncate(path, len, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    libjs.truncateAsync(vpath, len, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'truncate', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.truncate = truncate;
+	function ftruncateSync(fd, len) {
+	    validateFd(fd);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    var res = libjs.ftruncate(fd, len);
+	    if (res < 0)
+	        throwError(res, 'ftruncate');
+	}
+	exports.ftruncateSync = ftruncateSync;
+	function ftruncate(fd, len, callback) {
+	    validateFd(fd);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    libjs.ftruncateAsync(fd, len, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'ftruncate')));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.ftruncate = ftruncate;
+	function utimesSync(path, atime, mtime) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof atime !== 'number')
+	        throw TypeError(ERRSTR.ATIME);
+	    if (typeof mtime !== 'number')
+	        throw TypeError(ERRSTR.MTIME);
+	    var vatime = atime;
+	    var vmtime = mtime;
+	    if (!isFinite(vatime))
+	        vatime = Date.now();
+	    if (!isFinite(vmtime))
+	        vmtime = Date.now();
+	    vatime = Math.round(vatime / 1000);
+	    vmtime = Math.round(vmtime / 1000);
+	    var times = {
+	        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	    };
+	    var res = libjs.utime(vpath, times);
+	    if (res < 0)
+	        throwError(res, 'utimes', vpath);
+	}
+	exports.utimesSync = utimesSync;
+	function utimes(path, atime, mtime, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof atime !== 'number')
+	        throw TypeError(ERRSTR.ATIME);
+	    if (typeof mtime !== 'number')
+	        throw TypeError(ERRSTR.MTIME);
+	    var vatime = atime;
+	    var vmtime = mtime;
+	    if (!isFinite(vatime))
+	        vatime = Date.now();
+	    if (!isFinite(vmtime))
+	        vmtime = Date.now();
+	    vatime = Math.round(vatime / 1000);
+	    vmtime = Math.round(vmtime / 1000);
+	    var times = {
+	        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	    };
+	    libjs.utimeAsync(vpath, times, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'utimes', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.utimes = utimes;
+	function linkSync(srcpath, dstpath) {
+	    var vsrcpath = validPathOrThrow(srcpath);
+	    var vdstpath = validPathOrThrow(dstpath);
+	    var res = libjs.link(vsrcpath, vdstpath);
+	    if (res < 0)
+	        throwError(res, 'link', vsrcpath, vdstpath);
+	}
+	exports.linkSync = linkSync;
+	function link(srcpath, dstpath, callback) {
+	    var vsrcpath = validPathOrThrow(srcpath);
+	    var vdstpath = validPathOrThrow(dstpath);
+	    libjs.linkAsync(vsrcpath, vdstpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.link = link;
+	function mkdirSync(path, mode) {
+	    if (mode === void 0) { mode = 511; }
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var res = libjs.mkdir(vpath, mode);
+	    if (res < 0)
+	        throwError(res, 'mkdir', vpath);
+	}
+	exports.mkdirSync = mkdirSync;
+	function mkdir(path, mode, callback) {
+	    if (mode === void 0) { mode = 511; }
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode === 'function') {
+	        callback = mode;
+	        mode = 511;
+	    }
+	    else {
+	        if (typeof mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        if (typeof callback !== 'function')
+	            throw TypeError(ERRSTR.CB);
+	    }
+	    libjs.mkdirAsync(vpath, mode, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'mkdir', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.mkdir = mkdir;
+	function rndStr6() {
+	    return (+new Date).toString(36).slice(-6);
+	}
+	function mkdtempSync(prefix) {
+	    if (!prefix || typeof prefix !== 'string')
+	        throw new TypeError(ERRSTR.PREFIX);
+	    var retries = 10;
+	    var fullname;
+	    var found_tmp_name = false;
+	    for (var i = 0; i < retries; i++) {
+	        fullname = prefix + rndStr6();
+	        try {
+	            accessSync(fullname);
+	        }
+	        catch (e) {
+	            found_tmp_name = true;
+	            break;
+	        }
+	    }
+	    if (found_tmp_name) {
+	        mkdirSync(fullname);
+	        return fullname;
+	    }
+	    else {
+	        throw Error("Could not find a new name, mkdtemp");
+	    }
+	}
+	exports.mkdtempSync = mkdtempSync;
+	function mkdtemp(prefix, callback) {
+	    if (!prefix || typeof prefix !== 'string')
+	        throw new TypeError(ERRSTR.PREFIX);
+	    var retries = 10;
+	    var fullname;
+	    function mk_dir() {
+	        mkdir(fullname, function (err) {
+	            if (err)
+	                callback(err);
+	            else
+	                callback(null, fullname);
+	        });
+	    }
+	    function name_loop() {
+	        if (retries < 1) {
+	            callback(Error('Could not find a new name, mkdtemp'));
+	            return;
+	        }
+	        retries--;
+	        fullname = prefix + rndStr6();
+	        access(fullname, function (err) {
+	            if (err)
+	                mk_dir();
+	            else
+	                name_loop();
+	        });
+	    }
+	    name_loop();
+	}
+	exports.mkdtemp = mkdtemp;
+	function openSync(path, flags, mode) {
+	    if (mode === void 0) { mode = 438; }
+	    var vpath = validPathOrThrow(path);
+	    var flagsval = flagsToFlagsValue(flags);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var res = libjs.open(vpath, flagsval, mode);
+	    if (res < 0)
+	        throwError(res, 'open', vpath);
+	    return res;
+	}
+	exports.openSync = openSync;
+	function open(path, flags, mode, callback) {
+	    if (typeof mode === 'function') {
+	        callback = mode;
+	        mode = 438;
+	    }
+	    var vpath = validPathOrThrow(path);
+	    var flagsval = flagsToFlagsValue(flags);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.openAsync(vpath, flagsval, mode, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'open', vpath)));
+	        return callback(null, res);
+	    });
+	}
+	exports.open = open;
+	function readSync(fd, buffer, offset, length, position) {
+	    validateFd(fd);
+	    if (!(buffer instanceof buffer_1.Buffer))
+	        throw TypeError(ERRSTR.BUFFER);
+	    if (typeof offset !== 'number')
+	        throw TypeError(ERRSTR.OFFSET);
+	    if (typeof length !== 'number')
+	        throw TypeError(ERRSTR.LENGTH);
+	    if (position !== null) {
+	        if (typeof position !== 'number')
+	            throw TypeError(ERRSTR.POSITION);
+	        var seekres = libjs.lseek(fd, position, 0);
+	        if (seekres < 0)
+	            throwError(seekres, 'read');
+	    }
+	    var buf = buffer.slice(offset, offset + length);
+	    var res = libjs.read(fd, buf);
+	    if (res < 0)
+	        throwError(res, 'read');
+	    return res;
+	}
+	exports.readSync = readSync;
+	function read(fd, buffer, offset, length, position, callback) {
+	    validateFd(fd);
+	    if (!(buffer instanceof buffer_1.Buffer))
+	        throw TypeError(ERRSTR.BUFFER);
+	    if (typeof offset !== 'number')
+	        throw TypeError(ERRSTR.OFFSET);
+	    if (typeof length !== 'number')
+	        throw TypeError(ERRSTR.LENGTH);
+	    function do_read() {
+	        var buf = buffer.slice(offset, offset + length);
+	        libjs.readAsync(fd, buf, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'read')));
+	            else
+	                callback(null, res, buffer);
+	        });
+	    }
+	    if (position !== null) {
+	        if (typeof position !== 'number')
+	            throw TypeError(ERRSTR.POSITION);
+	        libjs.lseekAsync(fd, position, 0, function (seekres) {
+	            if (seekres < 0)
+	                callback(Error(formatError(seekres, 'read')));
+	            else
+	                do_read();
+	        });
+	    }
+	    else {
+	        do_read();
+	    }
+	}
+	exports.read = read;
+	function optsEncoding(options) {
+	    if (!options)
+	        return optionsDefaults.encoding;
+	    else {
+	        var typeofopt = typeof options;
+	        switch (typeofopt) {
+	            case 'string': return options;
+	            case 'object':
+	                return options.encoding
+	                    ? options.encoding : optionsDefaults.encoding;
+	            default: throw TypeError(ERRSTR_OPTS(typeofopt));
+	        }
+	    }
+	}
+	function readdirSync(path, options) {
+	    var vpath = validPathOrThrow(path);
+	    var encoding = optsEncoding(options);
+	    return libjs.readdirList(vpath, encoding);
+	}
+	exports.readdirSync = readdirSync;
+	function readdir(path, options, callback) {
+	    var vpath = validPathOrThrow(path);
+	    var encoding;
+	    if (typeof options === 'function') {
+	        callback = options;
+	        encoding = optionsDefaults.encoding;
+	    }
+	    else {
+	        encoding = optsEncoding(options);
+	        validateCallback(callback);
+	    }
+	    options = util.extend(options, optionsDefaults);
+	    libjs.readdirListAsync(vpath, encoding, function (errno, list) {
+	        if (errno < 0)
+	            callback(Error(formatError(errno, 'readdir', vpath)));
+	        else
+	            callback(null, list);
+	    });
+	}
+	exports.readdir = readdir;
+	var getReadFileOptions = optionGenerator(readFileOptionsDefaults);
+	function readFileSync(file, options) {
+	    var opts = getReadFileOptions(options);
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd)
+	        fd = file;
+	    else {
+	        var vfile = validPathOrThrow(file);
+	        var flag = flagsToFlagsValue(opts.flag);
+	        fd = libjs.open(vfile, flag, 438);
+	        if (fd < 0)
+	            throwError(fd, 'readFile', vfile);
+	    }
+	    var list = [];
+	    do {
+	        var buf = new buffer_1.Buffer(CHUNK);
+	        var res = libjs.read(fd, buf);
+	        if (res < 0)
+	            throwError(res, 'readFile');
+	        if (res < CHUNK)
+	            buf = buf.slice(0, res);
+	        list.push(buf);
+	    } while (res > 0);
+	    if (!is_fd)
+	        libjs.close(fd);
+	    var buffer = buffer_1.Buffer.concat(list);
+	    if (opts.encoding)
+	        return buffer.toString(opts.encoding);
+	    else
+	        return buffer;
+	}
+	exports.readFileSync = readFileSync;
+	var getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
+	function readFile(file, options, cb) {
+	    if (options === void 0) { options = {}; }
+	    var _a = getReadFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	    var is_fd = typeof file === 'number';
+	    function on_open(fd) {
+	        var list = [];
+	        function done() {
+	            var buffer = buffer_1.Buffer.concat(list);
+	            if (opts.encoding)
+	                callback(null, buffer.toString(opts.encoding));
+	            else
+	                callback(null, buffer);
+	            if (!is_fd)
+	                libjs.closeAsync(fd, noop);
+	        }
+	        function loop() {
+	            var buf = new static_buffer_1.StaticBuffer(CHUNK);
+	            libjs.readAsync(fd, buf, function (res) {
+	                if (res < 0)
+	                    return callback(Error(formatError(res, 'readFile')));
+	                if (res < CHUNK)
+	                    buf = buf.slice(0, res);
+	                list.push(buf);
+	                if (res > 0)
+	                    loop();
+	                else
+	                    done();
+	            });
+	        }
+	        loop();
+	    }
+	    if (is_fd)
+	        on_open(file);
+	    else {
+	        var vfile = validPathOrThrow(file);
+	        var flag = flagsToFlagsValue(opts.flag);
+	        libjs.openAsync(vfile, flag, 438, function (fd) {
+	            if (fd < 0)
+	                callback(Error(formatError(fd, 'readFile', vfile)));
+	            else
+	                on_open(fd);
+	        });
+	    }
+	}
+	exports.readFile = readFile;
+	function readlinkSync(path, options) {
+	    if (options === void 0) { options = null; }
+	    var vpath = validPathOrThrow(path);
+	    var encBuffer = false;
+	    var filename;
+	    if (typeof path === 'string') {
+	        filename = path;
+	    }
+	    else if (buffer_1.Buffer.isBuffer(path)) {
+	        var encoding = optsEncoding(options);
+	        if (encoding === 'buffer') {
+	            filename = path.toString();
+	            encBuffer = true;
+	        }
+	        else {
+	            filename = path.toString(encoding);
+	        }
+	    }
+	    else
+	        throw TypeError(ERRSTR.PATH_STR);
+	    try {
+	        var res = libjs.readlink(filename);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'readlink', vpath);
+	    }
+	    return !encBuffer ? res : new buffer_1.Buffer(res);
+	}
+	exports.readlinkSync = readlinkSync;
+	function renameSync(oldPath, newPath) {
+	    var voldPath = validPathOrThrow(oldPath);
+	    var vnewPath = validPathOrThrow(newPath);
+	    var res = libjs.rename(voldPath, vnewPath);
+	    if (res < 0)
+	        throwError(res, 'rename', voldPath, vnewPath);
+	}
+	exports.renameSync = renameSync;
+	function rename(oldPath, newPath, callback) {
+	    var voldPath = validPathOrThrow(oldPath);
+	    var vnewPath = validPathOrThrow(newPath);
+	    libjs.renameAsync(voldPath, vnewPath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'rename', voldPath, vnewPath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.rename = rename;
+	function rmdirSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.rmdir(vpath);
+	    if (res < 0)
+	        throwError(res, 'rmdir', vpath);
+	}
+	exports.rmdirSync = rmdirSync;
+	function rmdir(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.rmdirAsync(vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'rmdir', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.rmdir = rmdir;
+	function symlinkSync(target, path) {
+	    var vtarget = validPathOrThrow(target);
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.symlink(vtarget, vpath);
+	    if (res < 0)
+	        throwError(res, 'symlink', vtarget, vpath);
+	}
+	exports.symlinkSync = symlinkSync;
+	function symlink(target, path, type, callback) {
+	    var vtarget = validPathOrThrow(target);
+	    var vpath = validPathOrThrow(path);
+	    if (typeof type === 'function') {
+	        callback = type;
+	    }
+	    validateCallback(callback);
+	    libjs.symlinkAsync(vtarget, vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'symlink', vtarget, vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.symlink = symlink;
+	function unlinkSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.unlink(vpath);
+	    if (res < 0)
+	        throwError(res, 'unlink', vpath);
+	}
+	exports.unlinkSync = unlinkSync;
+	function unlink(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.unlinkAsync(vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'unlink', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	exports.unlink = unlink;
+	function watchFile(filename, a, b) {
+	    if (a === void 0) { a = {}; }
+	    var vfilename = validPathOrThrow(filename);
+	    vfilename = pathModule.resolve(vfilename);
+	    var opts;
+	    var listener;
+	    if (typeof a !== 'object') {
+	        opts = watchFileOptionDefaults;
+	        listener = a;
+	    }
+	    else {
+	        opts = util.extend(a, watchFileOptionDefaults);
+	        listener = b;
+	    }
+	    if (typeof listener !== 'function')
+	        throw new Error('"watchFile()" requires a listener function');
+	    var watcher = StatWatcher.map[vfilename];
+	    if (!watcher) {
+	        watcher = new StatWatcher;
+	        watcher.start(vfilename, opts.persistent, opts.interval);
+	        StatWatcher.map[vfilename] = watcher;
+	    }
+	    watcher.on('change', listener);
+	    return watcher;
+	}
+	exports.watchFile = watchFile;
+	function writeSync(fd, data, a, b, c) {
+	    validateFd(fd);
+	    var buf;
+	    var position;
+	    if (typeof b === 'number') {
+	        if (!(data instanceof buffer_1.Buffer))
+	            throw TypeError('buffer must be instance of Buffer.');
+	        var offset = a;
+	        if (typeof offset !== 'number')
+	            throw TypeError('offset must be an integer');
+	        var length = b;
+	        buf = data.slice(offset, offset + length);
+	        position = c;
+	    }
+	    else {
+	        var encoding = 'utf8';
+	        if (b) {
+	            if (typeof b !== 'string')
+	                throw TypeError('encoding must be a string');
+	            encoding = b;
+	        }
+	        if (data instanceof buffer_1.Buffer)
+	            buf = data;
+	        else if (typeof data === 'string') {
+	            buf = new buffer_1.Buffer(data, encoding);
+	        }
+	        else
+	            throw TypeError('data must be a Buffer or a string.');
+	        position = a;
+	    }
+	    if (typeof position === 'number') {
+	        var sres = libjs.lseek(fd, position, 0);
+	        if (sres < 0)
+	            throwError(sres, 'write:lseek');
+	    }
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
+	        ? buf : static_buffer_1.StaticBuffer.from(buf);
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'write');
+	}
+	exports.writeSync = writeSync;
+	var getWriteFileOptions = optionGenerator(writeFileDefaults);
+	function writeFileSync(file, data, options) {
+	    var opts = getWriteFileOptions(options);
+	    var fd;
+	    var vpath;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	    }
+	    else {
+	        vpath = validPathOrThrow(file);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        fd = libjs.open(vpath, flags, opts.mode);
+	        if (fd < 0)
+	            throwError(fd, 'writeFile', vpath);
+	    }
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
+	    if (!is_fd)
+	        libjs.close(fd);
+	}
+	exports.writeFileSync = writeFileSync;
+	var getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
+	function writeFile(file, data, options, cb) {
+	    var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	    var is_fd = typeof file === 'number';
+	    function on_write(fd) {
+	        var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
+	        libjs.writeAsync(fd, sb, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
+	            else
+	                callback(null, sb);
+	            setTimeout(function () {
+	                sb.print();
+	            }, 100);
+	            if (!is_fd)
+	                libjs.closeAsync(fd, noop);
+	        });
+	    }
+	    if (is_fd)
+	        on_write(file);
+	    else {
+	        var vpath = validPathOrThrow(file);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        libjs.openAsync(vpath, flags, opts.mode, function (fd) {
+	            if (fd < 0)
+	                callback(Error(formatError(fd, 'writeFile', vpath)));
+	            else
+	                on_write(fd);
+	        });
+	    }
+	}
+	exports.writeFile = writeFile;
+	function createWriteStream(path, options) { }
+	exports.createWriteStream = createWriteStream;
+	var FSWatcher = (function (_super) {
+	    __extends(FSWatcher, _super);
+	    function FSWatcher() {
+	        _super.apply(this, arguments);
+	        this.inotify = new inotify_1.Inotify;
+	    }
+	    FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
+	        var _this = this;
+	        this.inotify.encoding = encoding;
+	        this.inotify.onerror = noop;
+	        this.inotify.onevent = function (event) {
+	            var is_rename = (event.mask & 192) || (event.mask & 256);
+	            if (is_rename) {
+	                _this.emit('change', 'rename', event.name);
+	            }
+	            else {
+	                _this.emit('change', 'change', event.name);
+	            }
+	        };
+	        this.inotify.start();
+	        this.inotify.addPath(filename);
+	    };
+	    FSWatcher.prototype.close = function () {
+	        this.inotify.stop();
+	        this.inotify = null;
+	    };
+	    return FSWatcher;
+	}(events_1.EventEmitter));
+	exports.FSWatcher = FSWatcher;
+	var watchOptionsDefaults = {
+	    encoding: 'utf8',
+	    persistent: true,
+	    recursive: false
+	};
+	var StatWatcher = (function (_super) {
+	    __extends(StatWatcher, _super);
+	    function StatWatcher() {
+	        _super.apply(this, arguments);
+	        this.last = null;
+	    }
+	    StatWatcher.prototype.loop = function () {
+	        var _this = this;
+	        stat(this.filename, function (err, stats) {
+	            if (err)
+	                return _this.emit('error', err);
+	            if (_this.last instanceof Stats) {
+	                if (_this.last.atime.getTime() != stats.atime.getTime()) {
+	                    _this.emit('change', stats, _this.last);
+	                }
+	            }
+	            _this.last = stats;
+	        });
+	    };
+	    StatWatcher.prototype.start = function (filename, persistent, interval) {
+	        var _this = this;
+	        this.filename = filename;
+	        stat(filename, function (err, stats) {
+	            if (err)
+	                return _this.emit('error', err);
+	            _this.last = stats;
+	            _this.interval = setInterval(_this.loop.bind(_this), interval);
+	        });
+	    };
+	    StatWatcher.prototype.stop = function () {
+	        clearInterval(this.interval);
+	        this.last = null;
+	    };
+	    StatWatcher.map = {};
+	    return StatWatcher;
+	}(events_1.EventEmitter));
+	exports.StatWatcher = StatWatcher;
+	var watchFileOptionDefaults = {
+	    persistent: true,
+	    interval: 5007
+	};
+	function unwatchFile(filename, listener) {
+	    var vfilename = validPathOrThrow(filename);
+	    vfilename = pathModule.resolve(vfilename);
+	    var watcher = StatWatcher.map[vfilename];
+	    if (!watcher)
+	        return;
+	    if (typeof listener === 'function')
+	        watcher.removeListener('change', listener);
+	    else
+	        watcher.removeAllListeners('change');
+	    if (watcher.listenerCount('change') === 0) {
+	        watcher.stop();
+	        delete StatWatcher.map[vfilename];
+	    }
+	}
+	exports.unwatchFile = unwatchFile;
+	function SyncWriteStream(fd, options) {
+	    stream_1.Stream.call(this);
+	    options = options || {};
+	    validateFd(fd);
+	    this.fd = fd;
+	    this.writable = true;
+	    this.readable = false;
+	    this.autoClose = options.autoClose === undefined ? true : options.autoClose;
+	}
+	exports.SyncWriteStream = SyncWriteStream;
+	util.inherits(SyncWriteStream, stream_1.Stream);
+	SyncWriteStream.prototype.write = function (data, arg1, arg2) {
+	    var encoding, cb;
+	    if (arg1) {
+	        if (typeof arg1 === 'string') {
+	            encoding = arg1;
+	            cb = arg2;
+	        }
+	        else if (typeof arg1 === 'function') {
+	            cb = arg1;
+	        }
+	        else {
+	            throw Error('Bad arguments');
+	        }
+	    }
+	    assertEncoding(encoding);
+	    if (typeof data === 'string') {
+	        data = buffer_1.Buffer.from(data, encoding);
+	    }
+	    writeSync(this.fd, data, 0, data.length);
+	    if (cb)
+	        process.nextTick(cb);
+	    return true;
+	};
+	SyncWriteStream.prototype.end = function (data, arg1, arg2) {
+	    if (data) {
+	        this.write(data, arg1, arg2);
+	    }
+	    this.destroy();
+	};
+	SyncWriteStream.prototype.destroy = function () {
+	    if (this.autoClose)
+	        closeSync(this.fd);
+	    this.fd = null;
+	    this.emit('close');
+	    return true;
+	};
+	SyncWriteStream.prototype.destroySoon = SyncWriteStream.prototype.destroy;
+
+
+/***/ },
+/* 35 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var libjs = __webpack_require__(6);
+	var static_buffer_1 = __webpack_require__(7);
+	function noop() { }
+	var Inotify = (function () {
+	    function Inotify(poll_interval, buffer_size) {
+	        if (poll_interval === void 0) { poll_interval = 200; }
+	        if (buffer_size === void 0) { buffer_size = 4096; }
+	        this.onevent = noop;
+	        this.onerror = noop;
+	        this.wdCount = 0;
+	        this.wd = {};
+	        this.wdr = {};
+	        this.pollBound = this.poll.bind(this);
+	        this.encoding = 'utf8';
+	        this.pollInterval = poll_interval;
+	        this.bufSize = buffer_size;
+	    }
+	    Inotify.prototype.poll = function () {
+	        var res = libjs.read(this.fd, this.buf);
+	        if (res < 0) {
+	            if (-res == 11) {
+	            }
+	            else {
+	                this.onerror(Error("Could not poll for events: errno = " + res), res);
+	            }
+	            this.nextTick();
+	            return;
+	        }
+	        if (res > 0) {
+	            var offset = 0;
+	            var struct = libjs.inotify_event;
+	            while (offset < res) {
+	                var event = struct.unpack(this.buf, offset);
+	                var name_off = offset + struct.size;
+	                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
+	                name = name.substr(0, name.indexOf("\0"));
+	                event.name = name;
+	                event.path = this.wdr[event.wd];
+	                this.onevent(event);
+	                offset += struct.size + event.len;
+	            }
+	        }
+	        this.nextTick();
+	    };
+	    Inotify.prototype.nextTick = function () {
+	        if (this.hasStarted() && this.wdCount)
+	            this.timeout = setTimeout(this.pollBound, this.pollInterval);
+	    };
+	    Inotify.prototype.stopPolling = function () {
+	        clearTimeout(this.timeout);
+	        this.timeout = null;
+	    };
+	    Inotify.prototype.hasStarted = function () {
+	        return !!this.fd;
+	    };
+	    Inotify.prototype.start = function () {
+	        this.fd = libjs.inotify_init1(2048);
+	        if (this.fd < 0)
+	            throw Error("Could not init: errno = " + this.fd);
+	        this.buf = new static_buffer_1.StaticBuffer(this.bufSize);
+	        return this.fd;
+	    };
+	    Inotify.prototype.stop = function () {
+	        this.stopPolling();
+	        for (var pathname in this.wd)
+	            this.removePath(pathname);
+	        var fd = this.fd;
+	        this.fd = 0;
+	        return libjs.close(fd);
+	    };
+	    Inotify.prototype.addPath = function (pathname, events) {
+	        if (events === void 0) { events = 4095; }
+	        if (!this.fd)
+	            throw Error("inotify file descriptor not initialized, call .init() first.");
+	        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
+	        if (wd < 0)
+	            throw Error("Could not add watch: errno = " + wd);
+	        this.wdCount++;
+	        this.wd[pathname] = wd;
+	        this.wdr[wd] = pathname;
+	        if (this.wdCount == 1)
+	            this.nextTick();
+	        return wd;
+	    };
+	    Inotify.prototype.removePath = function (pathname) {
+	        var wd = this.wd[pathname];
+	        if (!wd)
+	            return -1;
+	        delete this.wd[pathname];
+	        delete this.wdr[wd];
+	        this.wdCount--;
+	        return libjs.inotify_rm_watch(this.fd, wd);
+	    };
+	    return Inotify;
+	}());
+	exports.Inotify = Inotify;
+
+
+/***/ },
+/* 36 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var libjs = __webpack_require__(6);
+	var inotify_1 = __webpack_require__(35);
+	var extend = __webpack_require__(18).extend;
+	var pathModule = __webpack_require__(17);
+	var buffer_1 = __webpack_require__(2);
+	var static_buffer_1 = __webpack_require__(7);
 	if (true) {
 	    exports.isFULLjs = true;
 	}
@@ -11380,1247 +12624,1073 @@ var global = this;
 	    return Stats;
 	}());
 	exports.Stats = Stats;
-	function build(deps) {
-	    var pathModule = deps.path, _EE = deps.EventEmitter, Buffer = deps.Buffer, Readable = deps.Readable, Writable = deps.Writable;
-	    var EE = _EE;
-	    function accessSync(path, mode) {
-	        if (mode === void 0) { mode = F_OK; }
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.access(vpath, mode);
+	function accessSync(path, mode) {
+	    if (mode === void 0) { mode = F_OK; }
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.access(vpath, mode);
+	    if (res < 0)
+	        throwError(res, 'access', vpath);
+	}
+	function access(path, a, b) {
+	    var mode, callback;
+	    if (typeof a === 'function') {
+	        callback = a;
+	        mode = F_OK;
+	    }
+	    else {
+	        mode = a;
+	        callback = b;
+	        validateCallback(callback);
+	    }
+	    var vpath = pathOrError(path);
+	    if (vpath instanceof TypeError)
+	        return callback(vpath);
+	    libjs.accessAsync(vpath, mode, function (res) {
 	        if (res < 0)
-	            throwError(res, 'access', vpath);
-	    }
-	    function access(path, a, b) {
-	        var mode, callback;
-	        if (typeof a === 'function') {
-	            callback = a;
-	            mode = F_OK;
-	        }
-	        else {
-	            mode = a;
-	            callback = b;
-	            validateCallback(callback);
-	        }
-	        var vpath = pathOrError(path);
-	        if (vpath instanceof TypeError)
-	            return callback(vpath);
-	        libjs.accessAsync(vpath, mode, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'access', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function appendFileSync(file, data, options) {
-	        if (!options)
-	            options = appendFileDefaults;
-	        else {
-	            var tipof = typeof options;
-	            switch (tipof) {
-	                case 'object':
-	                    options = extend({}, appendFileDefaults, options);
-	                    break;
-	                case 'string':
-	                    options = extend({ encoding: options }, appendFileDefaults);
-	                    break;
-	                default:
-	                    throw TypeError(ERRSTR_OPTS(tipof));
-	            }
-	        }
-	        var b;
-	        if (Buffer.isBuffer(data))
-	            b = data;
+	            callback(Error(formatError(res, 'access', vpath)));
 	        else
-	            b = new Buffer(String(data), options.encoding);
-	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
-	        var fd;
-	        var is_fd = typeof file === 'number';
-	        if (is_fd) {
-	            fd = file;
+	            callback(null);
+	    });
+	}
+	function appendFileSync(file, data, options) {
+	    if (!options)
+	        options = appendFileDefaults;
+	    else {
+	        var tipof = typeof options;
+	        switch (tipof) {
+	            case 'object':
+	                options = extend({}, appendFileDefaults, options);
+	                break;
+	            case 'string':
+	                options = extend({ encoding: options }, appendFileDefaults);
+	                break;
+	            default:
+	                throw TypeError(ERRSTR_OPTS(tipof));
 	        }
-	        else {
-	            var filename;
-	            if (Buffer.isBuffer(file))
-	                filename = file.toString();
-	            else if (typeof file === 'string')
-	                filename = file;
-	            else
-	                throw TypeError(ERRSTR.PATH_STR);
-	            var flags = flagsToFlagsValue(options.flag);
-	            if (typeof options.mode !== 'number')
-	                throw TypeError(ERRSTR.MODE_INT);
-	            fd = libjs.open(filename, flags, options.mode);
-	            if (fd < 0)
-	                throwError(fd, 'appendFile', filename);
+	    }
+	    var b;
+	    if (buffer_1.Buffer.isBuffer(data))
+	        b = data;
+	    else
+	        b = new buffer_1.Buffer(String(data), options.encoding);
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	    }
+	    else {
+	        var filename;
+	        if (buffer_1.Buffer.isBuffer(file))
+	            filename = file.toString();
+	        else if (typeof file === 'string')
+	            filename = file;
+	        else
+	            throw TypeError(ERRSTR.PATH_STR);
+	        var flags = flagsToFlagsValue(options.flag);
+	        if (typeof options.mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        fd = libjs.open(filename, flags, options.mode);
+	        if (fd < 0)
+	            throwError(fd, 'appendFile', filename);
+	    }
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'appendFile', String(file));
+	    if (!is_fd)
+	        libjs.close(fd);
+	}
+	function appendFile(file, data, options, callback) {
+	    var opts;
+	    if (typeof options === 'function') {
+	        callback = options;
+	        opts = appendFileDefaults;
+	    }
+	    else {
+	        var tipof = typeof options;
+	        switch (tipof) {
+	            case 'object':
+	                opts = extend({}, appendFileDefaults, options);
+	                break;
+	            case 'string':
+	                opts = extend({ encoding: options }, appendFileDefaults);
+	                break;
+	            default:
+	                throw TypeError(ERRSTR_OPTS(tipof));
 	        }
+	        validateCallback(callback);
+	    }
+	    var b;
+	    if (buffer_1.Buffer.isBuffer(data))
+	        b = data;
+	    else
+	        b = new buffer_1.Buffer(String(data), opts.encoding);
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
+	    function on_open(fd, is_fd) {
 	        var res = libjs.write(fd, sb);
 	        if (res < 0)
 	            throwError(res, 'appendFile', String(file));
 	        if (!is_fd)
-	            libjs.close(fd);
+	            libjs.closeAsync(fd, noop);
 	    }
-	    function appendFile(file, data, options, callback) {
-	        var opts;
-	        if (typeof options === 'function') {
-	            callback = options;
-	            opts = appendFileDefaults;
-	        }
-	        else {
-	            var tipof = typeof options;
-	            switch (tipof) {
-	                case 'object':
-	                    opts = extend({}, appendFileDefaults, options);
-	                    break;
-	                case 'string':
-	                    opts = extend({ encoding: options }, appendFileDefaults);
-	                    break;
-	                default:
-	                    throw TypeError(ERRSTR_OPTS(tipof));
-	            }
-	            validateCallback(callback);
-	        }
-	        var b;
-	        if (Buffer.isBuffer(data))
-	            b = data;
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	        on_open(fd, is_fd);
+	    }
+	    else {
+	        var filename;
+	        if (buffer_1.Buffer.isBuffer(file))
+	            filename = file.toString();
+	        else if (typeof file === 'string')
+	            filename = file;
 	        else
-	            b = new Buffer(String(data), opts.encoding);
-	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
-	        function on_open(fd, is_fd) {
-	            var res = libjs.write(fd, sb);
+	            throw TypeError(ERRSTR.PATH_STR);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        if (typeof opts.mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        libjs.openAsync(filename, flags, opts.mode, function (fd) {
+	            if (fd < 0)
+	                return callback(Error(formatError(fd, 'appendFile', filename)));
+	            on_open(fd, is_fd);
+	        });
+	    }
+	}
+	function chmodSync(path, mode) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var result = libjs.chmod(vpath, mode);
+	    if (result < 0)
+	        throwError(result, 'chmod', vpath);
+	}
+	function chmod(path, mode, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.chmodAsync(vpath, mode, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chmod', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function fchmodSync(fd, mode) {
+	    validateFd(fd);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var result = libjs.fchmod(fd, mode);
+	    if (result < 0)
+	        throwError(result, 'chmod');
+	}
+	function fchmod(fd, mode, callback) {
+	    validateFd(fd);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.fchmodAsync(fd, mode, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chmod')));
+	        else
+	            callback(null);
+	    });
+	}
+	function chownSync(path, uid, gid) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.chown(vpath, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'chown', vpath);
+	}
+	function chown(path, uid, gid, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.chownAsync(vpath, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'chown', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function fchownSync(fd, uid, gid) {
+	    validateFd(fd);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.fchown(fd, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'fchown');
+	}
+	function fchown(fd, uid, gid, callback) {
+	    validateFd(fd);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.fchownAsync(fd, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fchown')));
+	        else
+	            callback(null);
+	    });
+	}
+	function lchownSync(path, uid, gid) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    var result = libjs.lchown(vpath, uid, gid);
+	    if (result < 0)
+	        throwError(result, 'lchown', vpath);
+	}
+	function lchown(path, uid, gid, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof uid !== 'number')
+	        throw TypeError(ERRSTR.UID);
+	    if (typeof gid !== 'number')
+	        throw TypeError(ERRSTR.GID);
+	    libjs.lchownAsync(vpath, uid, gid, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'lchown', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function closeSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.close(fd);
+	    if (result < 0)
+	        throwError(result, 'close');
+	}
+	function close(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.closeAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'close')));
+	        else
+	            callback(null);
+	    });
+	}
+	function existsSync(path) {
+	    try {
+	        accessSync(path);
+	        return true;
+	    }
+	    catch (e) {
+	        return false;
+	    }
+	}
+	function exists(path, callback) {
+	    access(path, function (err) { callback(!err); });
+	}
+	function fsyncSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.fsync(fd);
+	    if (result < 0)
+	        throwError(result, 'fsync');
+	}
+	function fsync(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.fsyncAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fsync')));
+	        else
+	            callback(null);
+	    });
+	}
+	function fdatasyncSync(fd) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    var result = libjs.fdatasync(fd);
+	    if (result < 0)
+	        throwError(result, 'fdatasync');
+	}
+	function fdatasync(fd, callback) {
+	    if (typeof fd !== 'number')
+	        throw TypeError(ERRSTR.FD);
+	    libjs.fdatasyncAsync(fd, function (result) {
+	        if (result < 0)
+	            callback(Error(formatError(result, 'fdatasync')));
+	        else
+	            callback(null);
+	    });
+	}
+	function createStatsObject(res) {
+	    var stats = new Stats;
+	    stats.dev = res.dev;
+	    stats.mode = res.mode;
+	    stats.nlink = res.nlink;
+	    stats.uid = res.uid;
+	    stats.gid = res.gid;
+	    stats.rdev = res.rdev;
+	    stats.blksize = res.blksize;
+	    stats.ino = res.ino;
+	    stats.size = res.size;
+	    stats.blocks = res.blocks;
+	    stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
+	    stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
+	    stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
+	    stats.birthtime = stats.ctime;
+	    return stats;
+	}
+	function statSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    try {
+	        var res = libjs.stat(vpath);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'stat', vpath);
+	    }
+	}
+	function stat(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.statAsync(vpath, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'stat', vpath)));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	function fstatSync(fd) {
+	    validateFd(fd);
+	    try {
+	        var res = libjs.fstat(fd);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'fstat');
+	    }
+	}
+	function fstat(fd, callback) {
+	    validateFd(fd);
+	    libjs.fstatAsync(fd, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'fstat')));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	function lstatSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    try {
+	        var res = libjs.lstat(vpath);
+	        return createStatsObject(res);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'lstat', vpath);
+	    }
+	}
+	function lstat(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.lstatAsync(vpath, function (err, res) {
+	        if (err)
+	            callback(Error(formatError(err, 'lstat', vpath)));
+	        else
+	            callback(null, createStatsObject(res));
+	    });
+	}
+	function truncateSync(path, len) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    var res = libjs.truncate(vpath, len);
+	    if (res < 0)
+	        throwError(res, 'truncate', vpath);
+	}
+	function truncate(path, len, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    libjs.truncateAsync(vpath, len, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'truncate', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function ftruncateSync(fd, len) {
+	    validateFd(fd);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    var res = libjs.ftruncate(fd, len);
+	    if (res < 0)
+	        throwError(res, 'ftruncate');
+	}
+	function ftruncate(fd, len, callback) {
+	    validateFd(fd);
+	    if (typeof len !== 'number')
+	        throw TypeError(ERRSTR.LEN);
+	    libjs.ftruncateAsync(fd, len, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'ftruncate')));
+	        else
+	            callback(null);
+	    });
+	}
+	function utimesSync(path, atime, mtime) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof atime !== 'number')
+	        throw TypeError(ERRSTR.ATIME);
+	    if (typeof mtime !== 'number')
+	        throw TypeError(ERRSTR.MTIME);
+	    var vatime = atime;
+	    var vmtime = mtime;
+	    if (!isFinite(vatime))
+	        vatime = Date.now();
+	    if (!isFinite(vmtime))
+	        vmtime = Date.now();
+	    vatime = Math.round(vatime / 1000);
+	    vmtime = Math.round(vmtime / 1000);
+	    var times = {
+	        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	    };
+	    var res = libjs.utime(vpath, times);
+	    if (res < 0)
+	        throwError(res, 'utimes', vpath);
+	}
+	function utimes(path, atime, mtime, callback) {
+	    var vpath = validPathOrThrow(path);
+	    if (typeof atime !== 'number')
+	        throw TypeError(ERRSTR.ATIME);
+	    if (typeof mtime !== 'number')
+	        throw TypeError(ERRSTR.MTIME);
+	    var vatime = atime;
+	    var vmtime = mtime;
+	    if (!isFinite(vatime))
+	        vatime = Date.now();
+	    if (!isFinite(vmtime))
+	        vmtime = Date.now();
+	    vatime = Math.round(vatime / 1000);
+	    vmtime = Math.round(vmtime / 1000);
+	    var times = {
+	        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
+	        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
+	    };
+	    libjs.utimeAsync(vpath, times, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'utimes', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function linkSync(srcpath, dstpath) {
+	    var vsrcpath = validPathOrThrow(srcpath);
+	    var vdstpath = validPathOrThrow(dstpath);
+	    var res = libjs.link(vsrcpath, vdstpath);
+	    if (res < 0)
+	        throwError(res, 'link', vsrcpath, vdstpath);
+	}
+	function link(srcpath, dstpath, callback) {
+	    var vsrcpath = validPathOrThrow(srcpath);
+	    var vdstpath = validPathOrThrow(dstpath);
+	    libjs.linkAsync(vsrcpath, vdstpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function mkdirSync(path, mode) {
+	    if (mode === void 0) { mode = 511; }
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var res = libjs.mkdir(vpath, mode);
+	    if (res < 0)
+	        throwError(res, 'mkdir', vpath);
+	}
+	function mkdir(path, mode, callback) {
+	    if (mode === void 0) { mode = 511; }
+	    var vpath = validPathOrThrow(path);
+	    if (typeof mode === 'function') {
+	        callback = mode;
+	        mode = 511;
+	    }
+	    else {
+	        if (typeof mode !== 'number')
+	            throw TypeError(ERRSTR.MODE_INT);
+	        if (typeof callback !== 'function')
+	            throw TypeError(ERRSTR.CB);
+	    }
+	    libjs.mkdirAsync(vpath, mode, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'mkdir', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function rndStr6() {
+	    return (+new Date).toString(36).slice(-6);
+	}
+	function mkdtempSync(prefix) {
+	    if (!prefix || typeof prefix !== 'string')
+	        throw new TypeError(ERRSTR.PREFIX);
+	    var retries = 10;
+	    var fullname;
+	    var found_tmp_name = false;
+	    for (var i = 0; i < retries; i++) {
+	        fullname = prefix + rndStr6();
+	        try {
+	            accessSync(fullname);
+	        }
+	        catch (e) {
+	            found_tmp_name = true;
+	            break;
+	        }
+	    }
+	    if (found_tmp_name) {
+	        mkdirSync(fullname);
+	        return fullname;
+	    }
+	    else {
+	        throw Error("Could not find a new name, mkdtemp");
+	    }
+	}
+	function mkdtemp(prefix, callback) {
+	    if (!prefix || typeof prefix !== 'string')
+	        throw new TypeError(ERRSTR.PREFIX);
+	    var retries = 10;
+	    var fullname;
+	    function mk_dir() {
+	        mkdir(fullname, function (err) {
+	            if (err)
+	                callback(err);
+	            else
+	                callback(null, fullname);
+	        });
+	    }
+	    function name_loop() {
+	        if (retries < 1) {
+	            callback(Error('Could not find a new name, mkdtemp'));
+	            return;
+	        }
+	        retries--;
+	        fullname = prefix + rndStr6();
+	        access(fullname, function (err) {
+	            if (err)
+	                mk_dir();
+	            else
+	                name_loop();
+	        });
+	    }
+	    name_loop();
+	}
+	function openSync(path, flags, mode) {
+	    if (mode === void 0) { mode = 438; }
+	    var vpath = validPathOrThrow(path);
+	    var flagsval = flagsToFlagsValue(flags);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    var res = libjs.open(vpath, flagsval, mode);
+	    if (res < 0)
+	        throwError(res, 'open', vpath);
+	    return res;
+	}
+	function open(path, flags, mode, callback) {
+	    if (typeof mode === 'function') {
+	        callback = mode;
+	        mode = 438;
+	    }
+	    var vpath = validPathOrThrow(path);
+	    var flagsval = flagsToFlagsValue(flags);
+	    if (typeof mode !== 'number')
+	        throw TypeError(ERRSTR.MODE_INT);
+	    libjs.openAsync(vpath, flagsval, mode, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'open', vpath)));
+	        return callback(null, res);
+	    });
+	}
+	function readSync(fd, buffer, offset, length, position) {
+	    validateFd(fd);
+	    if (!(buffer instanceof buffer_1.Buffer))
+	        throw TypeError(ERRSTR.BUFFER);
+	    if (typeof offset !== 'number')
+	        throw TypeError(ERRSTR.OFFSET);
+	    if (typeof length !== 'number')
+	        throw TypeError(ERRSTR.LENGTH);
+	    if (position !== null) {
+	        if (typeof position !== 'number')
+	            throw TypeError(ERRSTR.POSITION);
+	        var seekres = libjs.lseek(fd, position, 0);
+	        if (seekres < 0)
+	            throwError(seekres, 'read');
+	    }
+	    var buf = buffer.slice(offset, offset + length);
+	    var res = libjs.read(fd, buf);
+	    if (res < 0)
+	        throwError(res, 'read');
+	    return res;
+	}
+	function read(fd, buffer, offset, length, position, callback) {
+	    validateFd(fd);
+	    if (!(buffer instanceof buffer_1.Buffer))
+	        throw TypeError(ERRSTR.BUFFER);
+	    if (typeof offset !== 'number')
+	        throw TypeError(ERRSTR.OFFSET);
+	    if (typeof length !== 'number')
+	        throw TypeError(ERRSTR.LENGTH);
+	    function do_read() {
+	        var buf = buffer.slice(offset, offset + length);
+	        libjs.readAsync(fd, buf, function (res) {
 	            if (res < 0)
-	                throwError(res, 'appendFile', String(file));
+	                callback(Error(formatError(res, 'read')));
+	            else
+	                callback(null, res, buffer);
+	        });
+	    }
+	    if (position !== null) {
+	        if (typeof position !== 'number')
+	            throw TypeError(ERRSTR.POSITION);
+	        libjs.lseekAsync(fd, position, 0, function (seekres) {
+	            if (seekres < 0)
+	                callback(Error(formatError(seekres, 'read')));
+	            else
+	                do_read();
+	        });
+	    }
+	    else {
+	        do_read();
+	    }
+	}
+	function optsEncoding(options) {
+	    if (!options)
+	        return optionsDefaults.encoding;
+	    else {
+	        var typeofopt = typeof options;
+	        switch (typeofopt) {
+	            case 'string': return options;
+	            case 'object':
+	                return options.encoding
+	                    ? options.encoding : optionsDefaults.encoding;
+	            default: throw TypeError(ERRSTR_OPTS(typeofopt));
+	        }
+	    }
+	}
+	function readdirSync(path, options) {
+	    var vpath = validPathOrThrow(path);
+	    var encoding = optsEncoding(options);
+	    return libjs.readdirList(vpath, encoding);
+	}
+	function readdir(path, options, callback) {
+	    var vpath = validPathOrThrow(path);
+	    var encoding;
+	    if (typeof options === 'function') {
+	        callback = options;
+	        encoding = optionsDefaults.encoding;
+	    }
+	    else {
+	        encoding = optsEncoding(options);
+	        validateCallback(callback);
+	    }
+	    options = extend(options, optionsDefaults);
+	    libjs.readdirListAsync(vpath, encoding, function (errno, list) {
+	        if (errno < 0)
+	            callback(Error(formatError(errno, 'readdir', vpath)));
+	        else
+	            callback(null, list);
+	    });
+	}
+	var getReadFileOptions = optionGenerator(readFileOptionsDefaults);
+	function readFileSync(file, options) {
+	    var opts = getReadFileOptions(options);
+	    var fd;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd)
+	        fd = file;
+	    else {
+	        var vfile = validPathOrThrow(file);
+	        var flag = flagsToFlagsValue(opts.flag);
+	        fd = libjs.open(vfile, flag, 438);
+	        if (fd < 0)
+	            throwError(fd, 'readFile', vfile);
+	    }
+	    var list = [];
+	    do {
+	        var buf = new buffer_1.Buffer(CHUNK);
+	        var res = libjs.read(fd, buf);
+	        if (res < 0)
+	            throwError(res, 'readFile');
+	        if (res < CHUNK)
+	            buf = buf.slice(0, res);
+	        list.push(buf);
+	    } while (res > 0);
+	    if (!is_fd)
+	        libjs.close(fd);
+	    var buffer = buffer_1.Buffer.concat(list);
+	    if (opts.encoding)
+	        return buffer.toString(opts.encoding);
+	    else
+	        return buffer;
+	}
+	var getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
+	function readFile(file, options, cb) {
+	    if (options === void 0) { options = {}; }
+	    var _a = getReadFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	    var is_fd = typeof file === 'number';
+	    function on_open(fd) {
+	        var list = [];
+	        function done() {
+	            var buffer = buffer_1.Buffer.concat(list);
+	            if (opts.encoding)
+	                callback(null, buffer.toString(opts.encoding));
+	            else
+	                callback(null, buffer);
 	            if (!is_fd)
 	                libjs.closeAsync(fd, noop);
 	        }
-	        var fd;
-	        var is_fd = typeof file === 'number';
-	        if (is_fd) {
-	            fd = file;
-	            on_open(fd, is_fd);
-	        }
-	        else {
-	            var filename;
-	            if (Buffer.isBuffer(file))
-	                filename = file.toString();
-	            else if (typeof file === 'string')
-	                filename = file;
-	            else
-	                throw TypeError(ERRSTR.PATH_STR);
-	            var flags = flagsToFlagsValue(opts.flag);
-	            if (typeof opts.mode !== 'number')
-	                throw TypeError(ERRSTR.MODE_INT);
-	            libjs.openAsync(filename, flags, opts.mode, function (fd) {
-	                if (fd < 0)
-	                    return callback(Error(formatError(fd, 'appendFile', filename)));
-	                on_open(fd, is_fd);
-	            });
-	        }
-	    }
-	    function chmodSync(path, mode) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        var result = libjs.chmod(vpath, mode);
-	        if (result < 0)
-	            throwError(result, 'chmod', vpath);
-	    }
-	    function chmod(path, mode, callback) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        libjs.chmodAsync(vpath, mode, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'chmod', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function fchmodSync(fd, mode) {
-	        validateFd(fd);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        var result = libjs.fchmod(fd, mode);
-	        if (result < 0)
-	            throwError(result, 'chmod');
-	    }
-	    function fchmod(fd, mode, callback) {
-	        validateFd(fd);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        libjs.fchmodAsync(fd, mode, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'chmod')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function chownSync(path, uid, gid) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        var result = libjs.chown(vpath, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'chown', vpath);
-	    }
-	    function chown(path, uid, gid, callback) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        libjs.chownAsync(vpath, uid, gid, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'chown', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function fchownSync(fd, uid, gid) {
-	        validateFd(fd);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        var result = libjs.fchown(fd, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'fchown');
-	    }
-	    function fchown(fd, uid, gid, callback) {
-	        validateFd(fd);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        libjs.fchownAsync(fd, uid, gid, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'fchown')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function lchownSync(path, uid, gid) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        var result = libjs.lchown(vpath, uid, gid);
-	        if (result < 0)
-	            throwError(result, 'lchown', vpath);
-	    }
-	    function lchown(path, uid, gid, callback) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof uid !== 'number')
-	            throw TypeError(ERRSTR.UID);
-	        if (typeof gid !== 'number')
-	            throw TypeError(ERRSTR.GID);
-	        libjs.lchownAsync(vpath, uid, gid, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'lchown', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function closeSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        var result = libjs.close(fd);
-	        if (result < 0)
-	            throwError(result, 'close');
-	    }
-	    function close(fd, callback) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        libjs.closeAsync(fd, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'close')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function existsSync(path) {
-	        try {
-	            accessSync(path);
-	            return true;
-	        }
-	        catch (e) {
-	            return false;
-	        }
-	    }
-	    function exists(path, callback) {
-	        access(path, function (err) { callback(!err); });
-	    }
-	    function fsyncSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        var result = libjs.fsync(fd);
-	        if (result < 0)
-	            throwError(result, 'fsync');
-	    }
-	    function fsync(fd, callback) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        libjs.fsyncAsync(fd, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'fsync')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function fdatasyncSync(fd) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        var result = libjs.fdatasync(fd);
-	        if (result < 0)
-	            throwError(result, 'fdatasync');
-	    }
-	    function fdatasync(fd, callback) {
-	        if (typeof fd !== 'number')
-	            throw TypeError(ERRSTR.FD);
-	        libjs.fdatasyncAsync(fd, function (result) {
-	            if (result < 0)
-	                callback(Error(formatError(result, 'fdatasync')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function createStatsObject(res) {
-	        var stats = new Stats;
-	        stats.dev = res.dev;
-	        stats.mode = res.mode;
-	        stats.nlink = res.nlink;
-	        stats.uid = res.uid;
-	        stats.gid = res.gid;
-	        stats.rdev = res.rdev;
-	        stats.blksize = res.blksize;
-	        stats.ino = res.ino;
-	        stats.size = res.size;
-	        stats.blocks = res.blocks;
-	        stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
-	        stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
-	        stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
-	        stats.birthtime = stats.ctime;
-	        return stats;
-	    }
-	    function statSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        try {
-	            var res = libjs.stat(vpath);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'stat', vpath);
-	        }
-	    }
-	    function stat(path, callback) {
-	        var vpath = validPathOrThrow(path);
-	        libjs.statAsync(vpath, function (err, res) {
-	            if (err)
-	                callback(Error(formatError(err, 'stat', vpath)));
-	            else
-	                callback(null, createStatsObject(res));
-	        });
-	    }
-	    function fstatSync(fd) {
-	        validateFd(fd);
-	        try {
-	            var res = libjs.fstat(fd);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'fstat');
-	        }
-	    }
-	    function fstat(fd, callback) {
-	        validateFd(fd);
-	        libjs.fstatAsync(fd, function (err, res) {
-	            if (err)
-	                callback(Error(formatError(err, 'fstat')));
-	            else
-	                callback(null, createStatsObject(res));
-	        });
-	    }
-	    function lstatSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        try {
-	            var res = libjs.lstat(vpath);
-	            return createStatsObject(res);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'lstat', vpath);
-	        }
-	    }
-	    function lstat(path, callback) {
-	        var vpath = validPathOrThrow(path);
-	        libjs.lstatAsync(vpath, function (err, res) {
-	            if (err)
-	                callback(Error(formatError(err, 'lstat', vpath)));
-	            else
-	                callback(null, createStatsObject(res));
-	        });
-	    }
-	    function truncateSync(path, len) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof len !== 'number')
-	            throw TypeError(ERRSTR.LEN);
-	        var res = libjs.truncate(vpath, len);
-	        if (res < 0)
-	            throwError(res, 'truncate', vpath);
-	    }
-	    function truncate(path, len, callback) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof len !== 'number')
-	            throw TypeError(ERRSTR.LEN);
-	        libjs.truncateAsync(vpath, len, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'truncate', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function ftruncateSync(fd, len) {
-	        validateFd(fd);
-	        if (typeof len !== 'number')
-	            throw TypeError(ERRSTR.LEN);
-	        var res = libjs.ftruncate(fd, len);
-	        if (res < 0)
-	            throwError(res, 'ftruncate');
-	    }
-	    function ftruncate(fd, len, callback) {
-	        validateFd(fd);
-	        if (typeof len !== 'number')
-	            throw TypeError(ERRSTR.LEN);
-	        libjs.ftruncateAsync(fd, len, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'ftruncate')));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function utimesSync(path, atime, mtime) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof atime !== 'number')
-	            throw TypeError(ERRSTR.ATIME);
-	        if (typeof mtime !== 'number')
-	            throw TypeError(ERRSTR.MTIME);
-	        var vatime = atime;
-	        var vmtime = mtime;
-	        if (!isFinite(vatime))
-	            vatime = Date.now();
-	        if (!isFinite(vmtime))
-	            vmtime = Date.now();
-	        vatime = Math.round(vatime / 1000);
-	        vmtime = Math.round(vmtime / 1000);
-	        var times = {
-	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
-	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
-	        };
-	        var res = libjs.utime(vpath, times);
-	        if (res < 0)
-	            throwError(res, 'utimes', vpath);
-	    }
-	    function utimes(path, atime, mtime, callback) {
-	        var vpath = validPathOrThrow(path);
-	        if (typeof atime !== 'number')
-	            throw TypeError(ERRSTR.ATIME);
-	        if (typeof mtime !== 'number')
-	            throw TypeError(ERRSTR.MTIME);
-	        var vatime = atime;
-	        var vmtime = mtime;
-	        if (!isFinite(vatime))
-	            vatime = Date.now();
-	        if (!isFinite(vmtime))
-	            vmtime = Date.now();
-	        vatime = Math.round(vatime / 1000);
-	        vmtime = Math.round(vmtime / 1000);
-	        var times = {
-	            actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
-	            modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
-	        };
-	        libjs.utimeAsync(vpath, times, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'utimes', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function linkSync(srcpath, dstpath) {
-	        var vsrcpath = validPathOrThrow(srcpath);
-	        var vdstpath = validPathOrThrow(dstpath);
-	        var res = libjs.link(vsrcpath, vdstpath);
-	        if (res < 0)
-	            throwError(res, 'link', vsrcpath, vdstpath);
-	    }
-	    function link(srcpath, dstpath, callback) {
-	        var vsrcpath = validPathOrThrow(srcpath);
-	        var vdstpath = validPathOrThrow(dstpath);
-	        libjs.linkAsync(vsrcpath, vdstpath, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function mkdirSync(path, mode) {
-	        if (mode === void 0) { mode = 511; }
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        var res = libjs.mkdir(vpath, mode);
-	        if (res < 0)
-	            throwError(res, 'mkdir', vpath);
-	    }
-	    function mkdir(path, mode, callback) {
-	        if (mode === void 0) { mode = 511; }
-	        var vpath = validPathOrThrow(path);
-	        if (typeof mode === 'function') {
-	            callback = mode;
-	            mode = 511;
-	        }
-	        else {
-	            if (typeof mode !== 'number')
-	                throw TypeError(ERRSTR.MODE_INT);
-	            if (typeof callback !== 'function')
-	                throw TypeError(ERRSTR.CB);
-	        }
-	        libjs.mkdirAsync(vpath, mode, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'mkdir', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function rndStr6() {
-	        return (+new Date).toString(36).slice(-6);
-	    }
-	    function mkdtempSync(prefix) {
-	        if (!prefix || typeof prefix !== 'string')
-	            throw new TypeError(ERRSTR.PREFIX);
-	        var retries = 10;
-	        var fullname;
-	        var found_tmp_name = false;
-	        for (var i = 0; i < retries; i++) {
-	            fullname = prefix + rndStr6();
-	            try {
-	                accessSync(fullname);
-	            }
-	            catch (e) {
-	                found_tmp_name = true;
-	                break;
-	            }
-	        }
-	        if (found_tmp_name) {
-	            mkdirSync(fullname);
-	            return fullname;
-	        }
-	        else {
-	            throw Error("Could not find a new name, mkdtemp");
-	        }
-	    }
-	    function mkdtemp(prefix, callback) {
-	        if (!prefix || typeof prefix !== 'string')
-	            throw new TypeError(ERRSTR.PREFIX);
-	        var retries = 10;
-	        var fullname;
-	        function mk_dir() {
-	            mkdir(fullname, function (err) {
-	                if (err)
-	                    callback(err);
-	                else
-	                    callback(null, fullname);
-	            });
-	        }
-	        function name_loop() {
-	            if (retries < 1) {
-	                callback(Error('Could not find a new name, mkdtemp'));
-	                return;
-	            }
-	            retries--;
-	            fullname = prefix + rndStr6();
-	            access(fullname, function (err) {
-	                if (err)
-	                    mk_dir();
-	                else
-	                    name_loop();
-	            });
-	        }
-	        name_loop();
-	    }
-	    function openSync(path, flags, mode) {
-	        if (mode === void 0) { mode = 438; }
-	        var vpath = validPathOrThrow(path);
-	        var flagsval = flagsToFlagsValue(flags);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        var res = libjs.open(vpath, flagsval, mode);
-	        if (res < 0)
-	            throwError(res, 'open', vpath);
-	        return res;
-	    }
-	    function open(path, flags, mode, callback) {
-	        if (typeof mode === 'function') {
-	            callback = mode;
-	            mode = 438;
-	        }
-	        var vpath = validPathOrThrow(path);
-	        var flagsval = flagsToFlagsValue(flags);
-	        if (typeof mode !== 'number')
-	            throw TypeError(ERRSTR.MODE_INT);
-	        libjs.openAsync(vpath, flagsval, mode, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'open', vpath)));
-	            return callback(null, res);
-	        });
-	    }
-	    function readSync(fd, buffer, offset, length, position) {
-	        validateFd(fd);
-	        if (!(buffer instanceof Buffer))
-	            throw TypeError(ERRSTR.BUFFER);
-	        if (typeof offset !== 'number')
-	            throw TypeError(ERRSTR.OFFSET);
-	        if (typeof length !== 'number')
-	            throw TypeError(ERRSTR.LENGTH);
-	        if (position !== null) {
-	            if (typeof position !== 'number')
-	                throw TypeError(ERRSTR.POSITION);
-	            var seekres = libjs.lseek(fd, position, 0);
-	            if (seekres < 0)
-	                throwError(seekres, 'read');
-	        }
-	        var buf = buffer.slice(offset, offset + length);
-	        var res = libjs.read(fd, buf);
-	        if (res < 0)
-	            throwError(res, 'read');
-	        return res;
-	    }
-	    function read(fd, buffer, offset, length, position, callback) {
-	        validateFd(fd);
-	        if (!(buffer instanceof Buffer))
-	            throw TypeError(ERRSTR.BUFFER);
-	        if (typeof offset !== 'number')
-	            throw TypeError(ERRSTR.OFFSET);
-	        if (typeof length !== 'number')
-	            throw TypeError(ERRSTR.LENGTH);
-	        function do_read() {
-	            var buf = buffer.slice(offset, offset + length);
+	        function loop() {
+	            var buf = new static_buffer_1.StaticBuffer(CHUNK);
 	            libjs.readAsync(fd, buf, function (res) {
 	                if (res < 0)
-	                    callback(Error(formatError(res, 'read')));
+	                    return callback(Error(formatError(res, 'readFile')));
+	                if (res < CHUNK)
+	                    buf = buf.slice(0, res);
+	                list.push(buf);
+	                if (res > 0)
+	                    loop();
 	                else
-	                    callback(null, res, buffer);
+	                    done();
 	            });
 	        }
-	        if (position !== null) {
-	            if (typeof position !== 'number')
-	                throw TypeError(ERRSTR.POSITION);
-	            libjs.lseekAsync(fd, position, 0, function (seekres) {
-	                if (seekres < 0)
-	                    callback(Error(formatError(seekres, 'read')));
-	                else
-	                    do_read();
-	            });
-	        }
-	        else {
-	            do_read();
-	        }
+	        loop();
 	    }
-	    function optsEncoding(options) {
-	        if (!options)
-	            return optionsDefaults.encoding;
-	        else {
-	            var typeofopt = typeof options;
-	            switch (typeofopt) {
-	                case 'string': return options;
-	                case 'object':
-	                    return options.encoding
-	                        ? options.encoding : optionsDefaults.encoding;
-	                default: throw TypeError(ERRSTR_OPTS(typeofopt));
-	            }
-	        }
-	    }
-	    function readdirSync(path, options) {
-	        var vpath = validPathOrThrow(path);
-	        var encoding = optsEncoding(options);
-	        return libjs.readdirList(vpath, encoding);
-	    }
-	    function readdir(path, options, callback) {
-	        var vpath = validPathOrThrow(path);
-	        var encoding;
-	        if (typeof options === 'function') {
-	            callback = options;
-	            encoding = optionsDefaults.encoding;
-	        }
-	        else {
-	            encoding = optsEncoding(options);
-	            validateCallback(callback);
-	        }
-	        options = extend(options, optionsDefaults);
-	        libjs.readdirListAsync(vpath, encoding, function (errno, list) {
-	            if (errno < 0)
-	                callback(Error(formatError(errno, 'readdir', vpath)));
-	            else
-	                callback(null, list);
-	        });
-	    }
-	    var getReadFileOptions = optionGenerator(readFileOptionsDefaults);
-	    function readFileSync(file, options) {
-	        var opts = getReadFileOptions(options);
-	        var fd;
-	        var is_fd = typeof file === 'number';
-	        if (is_fd)
-	            fd = file;
-	        else {
-	            var vfile = validPathOrThrow(file);
-	            var flag = flagsToFlagsValue(opts.flag);
-	            fd = libjs.open(vfile, flag, 438);
+	    if (is_fd)
+	        on_open(file);
+	    else {
+	        var vfile = validPathOrThrow(file);
+	        var flag = flagsToFlagsValue(opts.flag);
+	        libjs.openAsync(vfile, flag, 438, function (fd) {
 	            if (fd < 0)
-	                throwError(fd, 'readFile', vfile);
-	        }
-	        var list = [];
-	        do {
-	            var buf = new Buffer(CHUNK);
-	            var res = libjs.read(fd, buf);
-	            if (res < 0)
-	                throwError(res, 'readFile');
-	            if (res < CHUNK)
-	                buf = buf.slice(0, res);
-	            list.push(buf);
-	        } while (res > 0);
-	        if (!is_fd)
-	            libjs.close(fd);
-	        var buffer = Buffer.concat(list);
-	        if (opts.encoding)
-	            return buffer.toString(opts.encoding);
-	        else
-	            return buffer;
-	    }
-	    var getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
-	    function readFile(file, options, cb) {
-	        if (options === void 0) { options = {}; }
-	        var _a = getReadFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
-	        var is_fd = typeof file === 'number';
-	        function on_open(fd) {
-	            var list = [];
-	            function done() {
-	                var buffer = Buffer.concat(list);
-	                if (opts.encoding)
-	                    callback(null, buffer.toString(opts.encoding));
-	                else
-	                    callback(null, buffer);
-	                if (!is_fd)
-	                    libjs.closeAsync(fd, noop);
-	            }
-	            function loop() {
-	                var buf = new static_buffer_1.StaticBuffer(CHUNK);
-	                libjs.readAsync(fd, buf, function (res) {
-	                    if (res < 0)
-	                        return callback(Error(formatError(res, 'readFile')));
-	                    if (res < CHUNK)
-	                        buf = buf.slice(0, res);
-	                    list.push(buf);
-	                    if (res > 0)
-	                        loop();
-	                    else
-	                        done();
-	                });
-	            }
-	            loop();
-	        }
-	        if (is_fd)
-	            on_open(file);
-	        else {
-	            var vfile = validPathOrThrow(file);
-	            var flag = flagsToFlagsValue(opts.flag);
-	            libjs.openAsync(vfile, flag, 438, function (fd) {
-	                if (fd < 0)
-	                    callback(Error(formatError(fd, 'readFile', vfile)));
-	                else
-	                    on_open(fd);
-	            });
-	        }
-	    }
-	    function readlinkSync(path, options) {
-	        if (options === void 0) { options = null; }
-	        var vpath = validPathOrThrow(path);
-	        var encBuffer = false;
-	        var filename;
-	        if (typeof path === 'string') {
-	            filename = path;
-	        }
-	        else if (Buffer.isBuffer(path)) {
-	            var encoding = optsEncoding(options);
-	            if (encoding === 'buffer') {
-	                filename = path.toString();
-	                encBuffer = true;
-	            }
-	            else {
-	                filename = path.toString(encoding);
-	            }
-	        }
-	        else
-	            throw TypeError(ERRSTR.PATH_STR);
-	        try {
-	            var res = libjs.readlink(filename);
-	        }
-	        catch (errno) {
-	            throwError(errno, 'readlink', vpath);
-	        }
-	        return !encBuffer ? res : new Buffer(res);
-	    }
-	    function renameSync(oldPath, newPath) {
-	        var voldPath = validPathOrThrow(oldPath);
-	        var vnewPath = validPathOrThrow(newPath);
-	        var res = libjs.rename(voldPath, vnewPath);
-	        if (res < 0)
-	            throwError(res, 'rename', voldPath, vnewPath);
-	    }
-	    function rename(oldPath, newPath, callback) {
-	        var voldPath = validPathOrThrow(oldPath);
-	        var vnewPath = validPathOrThrow(newPath);
-	        libjs.renameAsync(voldPath, vnewPath, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'rename', voldPath, vnewPath)));
+	                callback(Error(formatError(fd, 'readFile', vfile)));
 	            else
-	                callback(null);
+	                on_open(fd);
 	        });
 	    }
-	    function rmdirSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.rmdir(vpath);
-	        if (res < 0)
-	            throwError(res, 'rmdir', vpath);
-	    }
-	    function rmdir(path, callback) {
-	        var vpath = validPathOrThrow(path);
-	        libjs.rmdirAsync(vpath, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'rmdir', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function symlinkSync(target, path) {
-	        var vtarget = validPathOrThrow(target);
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.symlink(vtarget, vpath);
-	        if (res < 0)
-	            throwError(res, 'symlink', vtarget, vpath);
-	    }
-	    function symlink(target, path, type, callback) {
-	        var vtarget = validPathOrThrow(target);
-	        var vpath = validPathOrThrow(path);
-	        if (typeof type === 'function') {
-	            callback = type;
-	        }
-	        validateCallback(callback);
-	        libjs.symlinkAsync(vtarget, vpath, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'symlink', vtarget, vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function unlinkSync(path) {
-	        var vpath = validPathOrThrow(path);
-	        var res = libjs.unlink(vpath);
-	        if (res < 0)
-	            throwError(res, 'unlink', vpath);
-	    }
-	    function unlink(path, callback) {
-	        var vpath = validPathOrThrow(path);
-	        libjs.unlinkAsync(vpath, function (res) {
-	            if (res < 0)
-	                callback(Error(formatError(res, 'unlink', vpath)));
-	            else
-	                callback(null);
-	        });
-	    }
-	    function createWriteStream(path, options) { }
-	    var FSWatcher = (function (_super) {
-	        __extends(FSWatcher, _super);
-	        function FSWatcher() {
-	            _super.apply(this, arguments);
-	            this.inotify = new inotify_1.Inotify;
-	        }
-	        FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
-	            var _this = this;
-	            this.inotify.encoding = encoding;
-	            this.inotify.onerror = noop;
-	            this.inotify.onevent = function (event) {
-	                var is_rename = (event.mask & 192) || (event.mask & 256);
-	                if (is_rename) {
-	                    _this.emit('change', 'rename', event.name);
-	                }
-	                else {
-	                    _this.emit('change', 'change', event.name);
-	                }
-	            };
-	            this.inotify.start();
-	            this.inotify.addPath(filename);
-	        };
-	        FSWatcher.prototype.close = function () {
-	            this.inotify.stop();
-	            this.inotify = null;
-	        };
-	        return FSWatcher;
-	    }(EE));
-	    var watchOptionsDefaults = {
-	        encoding: 'utf8',
-	        persistent: true,
-	        recursive: false
-	    };
-	    var StatWatcher = (function (_super) {
-	        __extends(StatWatcher, _super);
-	        function StatWatcher() {
-	            _super.apply(this, arguments);
-	            this.last = null;
-	        }
-	        StatWatcher.prototype.loop = function () {
-	            var _this = this;
-	            stat(this.filename, function (err, stats) {
-	                if (err)
-	                    return _this.emit('error', err);
-	                if (_this.last instanceof Stats) {
-	                    if (_this.last.atime.getTime() != stats.atime.getTime()) {
-	                        _this.emit('change', stats, _this.last);
-	                    }
-	                }
-	                _this.last = stats;
-	            });
-	        };
-	        StatWatcher.prototype.start = function (filename, persistent, interval) {
-	            var _this = this;
-	            this.filename = filename;
-	            stat(filename, function (err, stats) {
-	                if (err)
-	                    return _this.emit('error', err);
-	                _this.last = stats;
-	                _this.interval = setInterval(_this.loop.bind(_this), interval);
-	            });
-	        };
-	        StatWatcher.prototype.stop = function () {
-	            clearInterval(this.interval);
-	            this.last = null;
-	        };
-	        StatWatcher.map = {};
-	        return StatWatcher;
-	    }(EE));
-	    var watchFileOptionDefaults = {
-	        persistent: true,
-	        interval: 5007
-	    };
-	    function watchFile(filename, a, b) {
-	        if (a === void 0) { a = {}; }
-	        var vfilename = validPathOrThrow(filename);
-	        vfilename = pathModule.resolve(vfilename);
-	        var opts;
-	        var listener;
-	        if (typeof a !== 'object') {
-	            opts = watchFileOptionDefaults;
-	            listener = a;
-	        }
-	        else {
-	            opts = extend(a, watchFileOptionDefaults);
-	            listener = b;
-	        }
-	        if (typeof listener !== 'function')
-	            throw new Error('"watchFile()" requires a listener function');
-	        var watcher = StatWatcher.map[vfilename];
-	        if (!watcher) {
-	            watcher = new StatWatcher;
-	            watcher.start(vfilename, opts.persistent, opts.interval);
-	            StatWatcher.map[vfilename] = watcher;
-	        }
-	        watcher.on('change', listener);
-	        return watcher;
-	    }
-	    function unwatchFile(filename, listener) {
-	        var vfilename = validPathOrThrow(filename);
-	        vfilename = pathModule.resolve(vfilename);
-	        var watcher = StatWatcher.map[vfilename];
-	        if (!watcher)
-	            return;
-	        if (typeof listener === 'function')
-	            watcher.removeListener('change', listener);
-	        else
-	            watcher.removeAllListeners('change');
-	        if (watcher.listenerCount('change') === 0) {
-	            watcher.stop();
-	            delete StatWatcher.map[vfilename];
-	        }
-	    }
-	    function writeSync(fd, data, a, b, c) {
-	        validateFd(fd);
-	        var buf;
-	        var position;
-	        if (typeof b === 'number') {
-	            if (!(data instanceof Buffer))
-	                throw TypeError('buffer must be instance of Buffer.');
-	            var offset = a;
-	            if (typeof offset !== 'number')
-	                throw TypeError('offset must be an integer');
-	            var length = b;
-	            buf = data.slice(offset, offset + length);
-	            position = c;
-	        }
-	        else {
-	            var encoding = 'utf8';
-	            if (b) {
-	                if (typeof b !== 'string')
-	                    throw TypeError('encoding must be a string');
-	                encoding = b;
-	            }
-	            if (data instanceof Buffer)
-	                buf = data;
-	            else if (typeof data === 'string') {
-	                buf = new Buffer(data, encoding);
-	            }
-	            else
-	                throw TypeError('data must be a Buffer or a string.');
-	            position = a;
-	        }
-	        if (typeof position === 'number') {
-	            var sres = libjs.lseek(fd, position, 0);
-	            if (sres < 0)
-	                throwError(sres, 'write:lseek');
-	        }
-	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
-	            ? buf : static_buffer_1.StaticBuffer.from(buf);
-	        var res = libjs.write(fd, sb);
-	        if (res < 0)
-	            throwError(res, 'write');
-	    }
-	    var getWriteFileOptions = optionGenerator(writeFileDefaults);
-	    function writeFileSync(file, data, options) {
-	        var opts = getWriteFileOptions(options);
-	        var fd;
-	        var vpath;
-	        var is_fd = typeof file === 'number';
-	        if (is_fd) {
-	            fd = file;
-	        }
-	        else {
-	            vpath = validPathOrThrow(file);
-	            var flags = flagsToFlagsValue(opts.flag);
-	            fd = libjs.open(vpath, flags, opts.mode);
-	            if (fd < 0)
-	                throwError(fd, 'writeFile', vpath);
-	        }
-	        var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
-	        var res = libjs.write(fd, sb);
-	        if (res < 0)
-	            throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
-	        if (!is_fd)
-	            libjs.close(fd);
-	    }
-	    var getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
-	    function writeFile(file, data, options, cb) {
-	        var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
-	        var is_fd = typeof file === 'number';
-	        function on_write(fd) {
-	            var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
-	            libjs.writeAsync(fd, sb, function (res) {
-	                if (res < 0)
-	                    callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
-	                else
-	                    callback(null, sb);
-	                setTimeout(function () {
-	                    sb.print();
-	                }, 100);
-	                if (!is_fd)
-	                    libjs.closeAsync(fd, noop);
-	            });
-	        }
-	        if (is_fd)
-	            on_write(file);
-	        else {
-	            var vpath = validPathOrThrow(file);
-	            var flags = flagsToFlagsValue(opts.flag);
-	            libjs.openAsync(vpath, flags, opts.mode, function (fd) {
-	                if (fd < 0)
-	                    callback(Error(formatError(fd, 'writeFile', vpath)));
-	                else
-	                    on_write(fd);
-	            });
-	        }
-	    }
-	    return {
-	        flags: flags,
-	        F_OK: F_OK,
-	        R_OK: R_OK,
-	        W_OK: W_OK,
-	        X_OK: X_OK,
-	        accessSync: accessSync,
-	        appendFileSync: appendFileSync,
-	        chmodSync: chmodSync,
-	        chownSync: chownSync,
-	        closeSync: closeSync,
-	        existsSync: existsSync,
-	        fchmodSync: fchmodSync,
-	        fchownSync: fchownSync,
-	        fdatasyncSync: fdatasyncSync,
-	        fstatSync: fstatSync,
-	        fsyncSync: fsyncSync,
-	        ftruncateSync: ftruncateSync,
-	        utimesSync: utimesSync,
-	        lchownSync: lchownSync,
-	        linkSync: linkSync,
-	        lstatSync: lstatSync,
-	        mkdtempSync: mkdtempSync,
-	        mkdirSync: mkdirSync,
-	        openSync: openSync,
-	        readFileSync: readFileSync,
-	        readlinkSync: readlinkSync,
-	        symlinkSync: symlinkSync,
-	        statSync: statSync,
-	        truncateSync: truncateSync,
-	        renameSync: renameSync,
-	        readSync: readSync,
-	        writeSync: writeSync,
-	        writeFileSync: writeFileSync,
-	        unlinkSync: unlinkSync,
-	        rmdirSync: rmdirSync,
-	        readdirSync: readdirSync,
-	        access: access,
-	        appendFile: appendFile,
-	        chmod: chmod,
-	        fchmod: fchmod,
-	        chown: chown,
-	        fchown: fchown,
-	        lchown: lchown,
-	        close: close,
-	        exists: exists,
-	        fsync: fsync,
-	        fdatasync: fdatasync,
-	        stat: stat,
-	        fstat: fstat,
-	        lstat: lstat,
-	        ftruncate: ftruncate,
-	        truncate: truncate,
-	        utimes: utimes,
-	        link: link,
-	        mkdtemp: mkdtemp,
-	        mkdir: mkdir,
-	        open: open,
-	        read: read,
-	        readFile: readFile,
-	        readdir: readdir,
-	        rename: rename,
-	        rmdir: rmdir,
-	        symlink: symlink,
-	        unlink: unlink,
-	        writeFile: writeFile
-	    };
 	}
-	exports.build = build;
-
-
-/***/ },
-/* 39 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var libjs = __webpack_require__(6);
-	function noop() { }
-	var Inotify = (function () {
-	    function Inotify(poll_interval, buffer_size) {
-	        if (poll_interval === void 0) { poll_interval = 200; }
-	        if (buffer_size === void 0) { buffer_size = 4096; }
-	        this.onevent = noop;
-	        this.onerror = noop;
-	        this.wdCount = 0;
-	        this.wd = {};
-	        this.wdr = {};
-	        this.pollBound = this.poll.bind(this);
-	        this.encoding = 'utf8';
-	        this.pollInterval = poll_interval;
-	        this.bufSize = buffer_size;
+	function readlinkSync(path, options) {
+	    if (options === void 0) { options = null; }
+	    var vpath = validPathOrThrow(path);
+	    var encBuffer = false;
+	    var filename;
+	    if (typeof path === 'string') {
+	        filename = path;
 	    }
-	    Inotify.prototype.poll = function () {
-	        var res = libjs.read(this.fd, this.buf);
-	        if (res < 0) {
-	            if (-res == 11) {
+	    else if (buffer_1.Buffer.isBuffer(path)) {
+	        var encoding = optsEncoding(options);
+	        if (encoding === 'buffer') {
+	            filename = path.toString();
+	            encBuffer = true;
+	        }
+	        else {
+	            filename = path.toString(encoding);
+	        }
+	    }
+	    else
+	        throw TypeError(ERRSTR.PATH_STR);
+	    try {
+	        var res = libjs.readlink(filename);
+	    }
+	    catch (errno) {
+	        throwError(errno, 'readlink', vpath);
+	    }
+	    return !encBuffer ? res : new buffer_1.Buffer(res);
+	}
+	function renameSync(oldPath, newPath) {
+	    var voldPath = validPathOrThrow(oldPath);
+	    var vnewPath = validPathOrThrow(newPath);
+	    var res = libjs.rename(voldPath, vnewPath);
+	    if (res < 0)
+	        throwError(res, 'rename', voldPath, vnewPath);
+	}
+	function rename(oldPath, newPath, callback) {
+	    var voldPath = validPathOrThrow(oldPath);
+	    var vnewPath = validPathOrThrow(newPath);
+	    libjs.renameAsync(voldPath, vnewPath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'rename', voldPath, vnewPath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function rmdirSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.rmdir(vpath);
+	    if (res < 0)
+	        throwError(res, 'rmdir', vpath);
+	}
+	function rmdir(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.rmdirAsync(vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'rmdir', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function symlinkSync(target, path) {
+	    var vtarget = validPathOrThrow(target);
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.symlink(vtarget, vpath);
+	    if (res < 0)
+	        throwError(res, 'symlink', vtarget, vpath);
+	}
+	function symlink(target, path, type, callback) {
+	    var vtarget = validPathOrThrow(target);
+	    var vpath = validPathOrThrow(path);
+	    if (typeof type === 'function') {
+	        callback = type;
+	    }
+	    validateCallback(callback);
+	    libjs.symlinkAsync(vtarget, vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'symlink', vtarget, vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function unlinkSync(path) {
+	    var vpath = validPathOrThrow(path);
+	    var res = libjs.unlink(vpath);
+	    if (res < 0)
+	        throwError(res, 'unlink', vpath);
+	}
+	function unlink(path, callback) {
+	    var vpath = validPathOrThrow(path);
+	    libjs.unlinkAsync(vpath, function (res) {
+	        if (res < 0)
+	            callback(Error(formatError(res, 'unlink', vpath)));
+	        else
+	            callback(null);
+	    });
+	}
+	function createWriteStream(path, options) { }
+	var FSWatcher = (function (_super) {
+	    __extends(FSWatcher, _super);
+	    function FSWatcher() {
+	        _super.apply(this, arguments);
+	        this.inotify = new inotify_1.Inotify;
+	    }
+	    FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
+	        var _this = this;
+	        this.inotify.encoding = encoding;
+	        this.inotify.onerror = noop;
+	        this.inotify.onevent = function (event) {
+	            var is_rename = (event.mask & 192) || (event.mask & 256);
+	            if (is_rename) {
+	                _this.emit('change', 'rename', event.name);
 	            }
 	            else {
-	                this.onerror(Error("Could not poll for events: errno = " + res), res);
+	                _this.emit('change', 'change', event.name);
 	            }
-	            this.nextTick();
-	            return;
-	        }
-	        if (res > 0) {
-	            var offset = 0;
-	            var struct = libjs.inotify_event;
-	            while (offset < res) {
-	                var event = struct.unpack(this.buf, offset);
-	                var name_off = offset + struct.size;
-	                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
-	                name = name.substr(0, name.indexOf("\0"));
-	                event.name = name;
-	                event.path = this.wdr[event.wd];
-	                this.onevent(event);
-	                offset += struct.size + event.len;
+	        };
+	        this.inotify.start();
+	        this.inotify.addPath(filename);
+	    };
+	    FSWatcher.prototype.close = function () {
+	        this.inotify.stop();
+	        this.inotify = null;
+	    };
+	    return FSWatcher;
+	}(EE));
+	var watchOptionsDefaults = {
+	    encoding: 'utf8',
+	    persistent: true,
+	    recursive: false
+	};
+	var StatWatcher = (function (_super) {
+	    __extends(StatWatcher, _super);
+	    function StatWatcher() {
+	        _super.apply(this, arguments);
+	        this.last = null;
+	    }
+	    StatWatcher.prototype.loop = function () {
+	        var _this = this;
+	        stat(this.filename, function (err, stats) {
+	            if (err)
+	                return _this.emit('error', err);
+	            if (_this.last instanceof Stats) {
+	                if (_this.last.atime.getTime() != stats.atime.getTime()) {
+	                    _this.emit('change', stats, _this.last);
+	                }
 	            }
+	            _this.last = stats;
+	        });
+	    };
+	    StatWatcher.prototype.start = function (filename, persistent, interval) {
+	        var _this = this;
+	        this.filename = filename;
+	        stat(filename, function (err, stats) {
+	            if (err)
+	                return _this.emit('error', err);
+	            _this.last = stats;
+	            _this.interval = setInterval(_this.loop.bind(_this), interval);
+	        });
+	    };
+	    StatWatcher.prototype.stop = function () {
+	        clearInterval(this.interval);
+	        this.last = null;
+	    };
+	    StatWatcher.map = {};
+	    return StatWatcher;
+	}(EventEmitter));
+	var watchFileOptionDefaults = {
+	    persistent: true,
+	    interval: 5007
+	};
+	function watchFile(filename, a, b) {
+	    if (a === void 0) { a = {}; }
+	    var vfilename = validPathOrThrow(filename);
+	    vfilename = pathModule.resolve(vfilename);
+	    var opts;
+	    var listener;
+	    if (typeof a !== 'object') {
+	        opts = watchFileOptionDefaults;
+	        listener = a;
+	    }
+	    else {
+	        opts = extend(a, watchFileOptionDefaults);
+	        listener = b;
+	    }
+	    if (typeof listener !== 'function')
+	        throw new Error('"watchFile()" requires a listener function');
+	    var watcher = StatWatcher.map[vfilename];
+	    if (!watcher) {
+	        watcher = new StatWatcher;
+	        watcher.start(vfilename, opts.persistent, opts.interval);
+	        StatWatcher.map[vfilename] = watcher;
+	    }
+	    watcher.on('change', listener);
+	    return watcher;
+	}
+	function unwatchFile(filename, listener) {
+	    var vfilename = validPathOrThrow(filename);
+	    vfilename = pathModule.resolve(vfilename);
+	    var watcher = StatWatcher.map[vfilename];
+	    if (!watcher)
+	        return;
+	    if (typeof listener === 'function')
+	        watcher.removeListener('change', listener);
+	    else
+	        watcher.removeAllListeners('change');
+	    if (watcher.listenerCount('change') === 0) {
+	        watcher.stop();
+	        delete StatWatcher.map[vfilename];
+	    }
+	}
+	function writeSync(fd, data, a, b, c) {
+	    validateFd(fd);
+	    var buf;
+	    var position;
+	    if (typeof b === 'number') {
+	        if (!(data instanceof buffer_1.Buffer))
+	            throw TypeError('buffer must be instance of Buffer.');
+	        var offset = a;
+	        if (typeof offset !== 'number')
+	            throw TypeError('offset must be an integer');
+	        var length = b;
+	        buf = data.slice(offset, offset + length);
+	        position = c;
+	    }
+	    else {
+	        var encoding = 'utf8';
+	        if (b) {
+	            if (typeof b !== 'string')
+	                throw TypeError('encoding must be a string');
+	            encoding = b;
 	        }
-	        this.nextTick();
-	    };
-	    Inotify.prototype.nextTick = function () {
-	        if (this.hasStarted() && this.wdCount)
-	            this.timeout = setTimeout(this.pollBound, this.pollInterval);
-	    };
-	    Inotify.prototype.stopPolling = function () {
-	        clearTimeout(this.timeout);
-	        this.timeout = null;
-	    };
-	    Inotify.prototype.hasStarted = function () {
-	        return !!this.fd;
-	    };
-	    Inotify.prototype.start = function () {
-	        this.fd = libjs.inotify_init1(2048);
-	        if (this.fd < 0)
-	            throw Error("Could not init: errno = " + this.fd);
-	        this.buf = new Buffer(this.bufSize);
-	        return this.fd;
-	    };
-	    Inotify.prototype.stop = function () {
-	        this.stopPolling();
-	        for (var pathname in this.wd)
-	            this.removePath(pathname);
-	        var fd = this.fd;
-	        this.fd = 0;
-	        return libjs.close(fd);
-	    };
-	    Inotify.prototype.addPath = function (pathname, events) {
-	        if (events === void 0) { events = 4095; }
-	        if (!this.fd)
-	            throw Error("inotify file descriptor not initialized, call .init() first.");
-	        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
-	        if (wd < 0)
-	            throw Error("Could not add watch: errno = " + wd);
-	        this.wdCount++;
-	        this.wd[pathname] = wd;
-	        this.wdr[wd] = pathname;
-	        if (this.wdCount == 1)
-	            this.nextTick();
-	        return wd;
-	    };
-	    Inotify.prototype.removePath = function (pathname) {
-	        var wd = this.wd[pathname];
-	        if (!wd)
-	            return -1;
-	        delete this.wd[pathname];
-	        delete this.wdr[wd];
-	        this.wdCount--;
-	        return libjs.inotify_rm_watch(this.fd, wd);
-	    };
-	    return Inotify;
-	}());
-	exports.Inotify = Inotify;
+	        if (data instanceof buffer_1.Buffer)
+	            buf = data;
+	        else if (typeof data === 'string') {
+	            buf = new buffer_1.Buffer(data, encoding);
+	        }
+	        else
+	            throw TypeError('data must be a Buffer or a string.');
+	        position = a;
+	    }
+	    if (typeof position === 'number') {
+	        var sres = libjs.lseek(fd, position, 0);
+	        if (sres < 0)
+	            throwError(sres, 'write:lseek');
+	    }
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
+	        ? buf : static_buffer_1.StaticBuffer.from(buf);
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'write');
+	}
+	var getWriteFileOptions = optionGenerator(writeFileDefaults);
+	function writeFileSync(file, data, options) {
+	    var opts = getWriteFileOptions(options);
+	    var fd;
+	    var vpath;
+	    var is_fd = typeof file === 'number';
+	    if (is_fd) {
+	        fd = file;
+	    }
+	    else {
+	        vpath = validPathOrThrow(file);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        fd = libjs.open(vpath, flags, opts.mode);
+	        if (fd < 0)
+	            throwError(fd, 'writeFile', vpath);
+	    }
+	    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
+	    var res = libjs.write(fd, sb);
+	    if (res < 0)
+	        throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
+	    if (!is_fd)
+	        libjs.close(fd);
+	}
+	var getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
+	function writeFile(file, data, options, cb) {
+	    var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
+	    var is_fd = typeof file === 'number';
+	    function on_write(fd) {
+	        var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
+	        libjs.writeAsync(fd, sb, function (res) {
+	            if (res < 0)
+	                callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
+	            else
+	                callback(null, sb);
+	            setTimeout(function () {
+	                sb.print();
+	            }, 100);
+	            if (!is_fd)
+	                libjs.closeAsync(fd, noop);
+	        });
+	    }
+	    if (is_fd)
+	        on_write(file);
+	    else {
+	        var vpath = validPathOrThrow(file);
+	        var flags = flagsToFlagsValue(opts.flag);
+	        libjs.openAsync(vpath, flags, opts.mode, function (fd) {
+	            if (fd < 0)
+	                callback(Error(formatError(fd, 'writeFile', vpath)));
+	            else
+	                on_write(fd);
+	        });
+	    }
+	}
 
 
 /***/ },
-/* 40 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var require;'use strict';
@@ -12700,7 +13770,7 @@ var global = this;
 	    Object.defineProperty(object, name, {
 	            get: function() {
 	                var r = require;
-	            var lib = __webpack_require__(41)(name);
+	            var lib = __webpack_require__(38)(name);
 
 	    // Disable the current getter/setter and set up a new
 	    // non-enumerable property.
@@ -12723,14 +13793,14 @@ var global = this;
 
 
 /***/ },
-/* 41 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./module": 40,
-		"./streams/BufferList": 33,
-		"./streams/lazy_transform": 42,
-		"./util": 30
+		"./module": 37,
+		"./streams/BufferList": 30,
+		"./streams/lazy_transform": 39,
+		"./util": 27
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -12743,11 +13813,11 @@ var global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 41;
+	webpackContext.id = 38;
 
 
 /***/ },
-/* 42 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// LazyTransform is a special type of Transform stream that is lazily loaded.
@@ -12755,8 +13825,8 @@ var global = this;
 	// for the stream, one conventional and one non-conventional.
 	'use strict';
 
-	const stream = __webpack_require__(28);
-	const util = __webpack_require__(21);
+	const stream = __webpack_require__(25);
+	const util = __webpack_require__(18);
 
 	module.exports = LazyTransform;
 
@@ -12792,7 +13862,7 @@ var global = this;
 
 
 /***/ },
-/* 43 */
+/* 40 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -13309,7 +14379,7 @@ var global = this;
 
 
 /***/ },
-/* 44 */
+/* 41 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify
@@ -13470,6 +14540,186 @@ var global = this;
 	    script.runInThisContext();
 	};
 
+
+/***/ },
+/* 42 */
+/***/ function(module, exports, __webpack_require__) {
+
+	if (!process.asyscall) {
+	    if (process.hasBinaryUtils && (true)) {
+	        var Asyscall = __webpack_require__(43).Asyscall;
+	        var asyscall = new Asyscall;
+	        asyscall.build();
+	        process.asyscall = asyscall.exec.bind(asyscall);
+	        process.asyscall64 = asyscall.exec64.bind(asyscall);
+	    }
+	    else {
+	        process.asyscall = function () {
+	            var len = arguments.length - 1;
+	            var args = new Array(len);
+	            for (var i = 0; i < len; i++)
+	                args[i] = arguments[i];
+	            var res = process.syscall.apply(null, args);
+	            arguments[len](res);
+	        };
+	        process.asyscall64 = function () {
+	            var len = arguments.length - 1;
+	            var args = new Array(len);
+	            for (var i = 0; i < len; i++)
+	                args[i] = arguments[i];
+	            var res = process.syscall64.apply(null, args);
+	            arguments[len](res);
+	        };
+	    }
+	}
+
+
+/***/ },
+/* 43 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var static_buffer_1 = __webpack_require__(7);
+	function link(curr, next) {
+	    var _a = next.getAddress(), lo = _a[0], hi = _a[1];
+	    curr.writeInt32LE(lo, 72 - 8);
+	    curr.writeInt32LE(hi, 72 - 8 + 4);
+	}
+	var Asyscall = (function () {
+	    function Asyscall() {
+	        this.code = null;
+	        this.curr = null;
+	        this.next = null;
+	        this.usedFirst = null;
+	        this.usedLast = null;
+	    }
+	    Asyscall.prototype.build = function () {
+	        var bin = __webpack_require__(44);
+	        this.code = static_buffer_1.StaticBuffer.alloc(bin, 'rwe');
+	        this.curr = this.code.slice(this.code.length - 72);
+	        this.curr.writeInt32LE(0, 0);
+	        this.curr.writeInt32LE(0, 4);
+	        this.next = this.newBlock();
+	        link(this.curr, this.next);
+	        this.code.call();
+	    };
+	    Asyscall.prototype.recycleBlock = function (block) {
+	        console.log(block.getAddress());
+	        block._id = Asyscall._id;
+	        Asyscall._id++;
+	        if (!this.usedFirst) {
+	            this.usedFirst = this.usedLast = block;
+	        }
+	        else {
+	            block._next = this.usedLast;
+	            this.usedLast = block;
+	        }
+	    };
+	    Asyscall.prototype.newBlock = function () {
+	        var block = this.usedFirst;
+	        if (block && (block.readInt32LE(4) === 2)) {
+	            console.log('freeing memory');
+	            this.usedFirst = block._next;
+	        }
+	        block = static_buffer_1.StaticBuffer.alloc(72, 'rw');
+	        console.log(block.getAddress());
+	        block.writeInt32LE(0, 0);
+	        block.writeInt32LE(0, 4);
+	        return block;
+	    };
+	    Asyscall.prototype.writeArg = function (arg, slot) {
+	        var curr = this.curr;
+	        if (typeof arg === 'string') {
+	            var str = arg + '\0';
+	            arg = new static_buffer_1.StaticBuffer(str.length);
+	            for (var l = 0; l < str.length; l++)
+	                arg[l] = str.charCodeAt(l);
+	        }
+	        if (arg instanceof Buffer) {
+	            arg = arg.getAddress();
+	        }
+	        if (typeof arg === 'number') {
+	            curr.writeInt32LE(arg, slot * 8);
+	            curr.writeInt32LE(0, slot * 8 + 4);
+	        }
+	        else if (arg instanceof Array) {
+	            curr.writeInt32LE(arg[0], slot * 8);
+	            curr.writeInt32LE(arg[1], slot * 8 + 4);
+	        }
+	    };
+	    Asyscall.prototype.fillBlock = function () {
+	        var _a = this, curr = _a.curr, next = _a.next;
+	        var callback;
+	        for (var j = 0; j < arguments.length; j++) {
+	            var arg = arguments[j];
+	            if (typeof arg === 'function') {
+	                callback = arg;
+	                break;
+	            }
+	            else {
+	                this.writeArg(arg, j + 1);
+	            }
+	        }
+	        for (var j = arguments.length; j < 7; j++) {
+	            curr.writeInt32LE(0, (j + 1) * 8);
+	            curr.writeInt32LE(0, (j + 1) * 8 + 4);
+	        }
+	        curr[0] = 1;
+	        return callback;
+	    };
+	    Asyscall.prototype.pollBlock = function (callback, is64) {
+	        var _this = this;
+	        var curr = this.curr;
+	        var poll = function () {
+	            var lock = curr[0];
+	            if (lock === 3) {
+	                if (is64) {
+	                    callback([
+	                        curr.readInt32LE(8 * 7),
+	                        curr.readInt32LE(8 * 7 + 4)]);
+	                }
+	                else {
+	                    callback(curr.readInt32LE(8 * 7));
+	                }
+	                _this.recycleBlock(curr);
+	            }
+	            else
+	                setIOPoll(poll);
+	        };
+	        setIOPoll(poll);
+	    };
+	    Asyscall.prototype.exec = function () {
+	        var block = this.newBlock();
+	        link(this.next, block);
+	        var callback = this.fillBlock.apply(this, arguments);
+	        this.pollBlock(callback, false);
+	        this.curr = this.next;
+	        this.next = block;
+	    };
+	    Asyscall.prototype.exec64 = function () {
+	        var block = this.newBlock();
+	        link(this.next, block);
+	        var callback = this.fillBlock.apply(this, arguments);
+	        this.pollBlock(callback, true);
+	        this.curr = this.next;
+	        this.next = block;
+	    };
+	    Asyscall.prototype.stop = function () {
+	        this.curr.writeInt32LE(4, 0);
+	        this.next.writeInt32LE(4, 0);
+	        this.code.free();
+	    };
+	    Asyscall._id = 0;
+	    return Asyscall;
+	}());
+	exports.Asyscall = Asyscall;
+
+
+/***/ },
+/* 44 */
+/***/ function(module, exports) {
+
+	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,179,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,242,0,0,0,77,139,117,64,65,139,69,0,131,248,4,15,132,107,0,0,0,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,227,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,240,65,131,69,4,1,77,137,245,77,139,117,64,233,136,255,255,255,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,15,31,64,0,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
 /***/ }
 /******/ ]);

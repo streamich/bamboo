@@ -329,11 +329,11 @@ public:
 
     virtual void* AllocateUninitialized(size_t length) {
         void* ptr = malloc(length);
-        printf("malloc: %lli\n", ptr);
+//        printf("malloc: %lli\n", ptr);
         return ptr;
     }
     virtual void Free(void* data, size_t) {
-        printf("free: %lli\n", data);
+//        printf("free: %lli\n", data);
         free(data);
     }
 };

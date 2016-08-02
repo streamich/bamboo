@@ -11,7 +11,7 @@ var globals_plugin = new webpack.DefinePlugin({
 
 module.exports = {
     entry: {
-        app: './index'
+        app: './src/index'
     },
     output: {
         path: './dist',

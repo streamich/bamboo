@@ -1,3 +1,0 @@
-#! /bin/bash
-
-./runtime/node/full-node.js "$@"
