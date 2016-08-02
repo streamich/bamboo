@@ -150,7 +150,7 @@ global = this;
 	        // Eval the file specified in first argument `full app.js`
 	        if(process.argv[1]) {
 	            var path = __webpack_require__(20);
-	            var Module = __webpack_require__(37).Module;
+	            var Module = __webpack_require__(36).Module;
 	            process.argv = process.argv.splice(1);
 	            process.argv[1] = path.resolve(process.argv[1]);
 	            setImmediate(function() {
@@ -11739,8 +11739,7 @@ global = this;
 	module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,179,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,242,0,0,0,77,139,117,64,65,139,69,0,131,248,4,15,132,107,0,0,0,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,227,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,240,65,131,69,4,1,77,137,245,77,139,117,64,233,136,255,255,255,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,15,31,64,0,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
 /***/ },
-/* 36 */,
-/* 37 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -11756,11 +11755,11 @@ global = this;
 	// though it might not be 100% compatible with Node.js.
 
 
-	var NativeModule = __webpack_require__(38).NativeModule;
+	var NativeModule = __webpack_require__(37).NativeModule;
 	var util = __webpack_require__(18);
 	var internalModule = __webpack_require__(41);
 	var internalUtil = __webpack_require__(26);
-	var vm = __webpack_require__(48);
+	var vm = __webpack_require__(47);
 	var assert = __webpack_require__(31).ok;
 	var fs = __webpack_require__(16);
 	var path = __webpack_require__(20);
@@ -12467,7 +12466,7 @@ global = this;
 
 
 /***/ },
-/* 38 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function NativeModule(id) {
@@ -12497,6 +12496,12 @@ global = this;
 	    querystring: null,
 	    punycode: null,
 	    vm: null,
+	    dgram: null,
+	    dns: null,
+	    net: null,
+	    http: null,
+	    tls: null,
+	    https: null
 	};
 
 	NativeModule.require = function(id) {
@@ -12584,7 +12589,7 @@ global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(39)("./" + this.id);
+	        this.exports = __webpack_require__(38)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -12600,7 +12605,7 @@ global = this;
 
 
 /***/ },
-/* 39 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
@@ -12613,6 +12618,7 @@ global = this;
 		"./boot": 1,
 		"./buffer": 2,
 		"./console": 30,
+		"./dgram": 39,
 		"./eloop": 15,
 		"./events": 13,
 		"./fs": 16,
@@ -12621,19 +12627,19 @@ global = this;
 		"./internal/streams/BufferList": 23,
 		"./internal/streams/lazy_transform": 43,
 		"./internal/util": 26,
-		"./module": 37,
-		"./native_module": 38,
+		"./module": 36,
+		"./native_module": 37,
 		"./path": 20,
 		"./process": 12,
 		"./punycode": 44,
-		"./querystring": 49,
+		"./querystring": 45,
 		"./static-arraybuffer": 5,
 		"./static-buffer": 7,
 		"./stream": 21,
 		"./timers": 32,
-		"./url": 45,
+		"./url": 46,
 		"./util": 18,
-		"./vm": 48
+		"./vm": 47
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -12646,7 +12652,22 @@ global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 39;
+	webpackContext.id = 38;
+
+
+/***/ },
+/* 39 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var SocketDgram = __webpack_require__(48).SocketDgram;
+	var Buffer = __webpack_require__(2).Buffer;
+	console.log('dgram');
+	var dgram = new SocketDgram;
+	console.log(dgram);
+	dgram.start();
+	dgram.send(new Buffer('cool stuff'), '127.0.0.1', 1234);
+	dgram.send(new Buffer('yolo'), '127.0.0.1', 1234);
+	dgram.send(new Buffer('Hi, there'), '127.0.0.1', 1234);
 
 
 /***/ },
@@ -14579,6 +14600,424 @@ global = this;
 /* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
+	// Query String Utilities
+
+	'use strict';
+
+	const QueryString = exports;
+	const Buffer = __webpack_require__(2).Buffer;
+
+	// This constructor is used to store parsed query string values. Instantiating
+	// this is faster than explicitly calling `Object.create(null)` to get a
+	// "clean" empty object (tested with v8 v4.9).
+	function ParsedQueryString() {}
+	ParsedQueryString.prototype = Object.create(null);
+
+
+	// a safe fast alternative to decodeURIComponent
+	QueryString.unescapeBuffer = function(s, decodeSpaces) {
+	    var out = Buffer.allocUnsafe(s.length);
+	    var state = 0;
+	    var n, m, hexchar;
+
+	    for (var inIndex = 0, outIndex = 0; inIndex <= s.length; inIndex++) {
+	        var c = inIndex < s.length ? s.charCodeAt(inIndex) : NaN;
+	        switch (state) {
+	            case 0: // Any character
+	                switch (c) {
+	                    case 37: // '%'
+	                        n = 0;
+	                        m = 0;
+	                        state = 1;
+	                        break;
+	                    case 43: // '+'
+	                        if (decodeSpaces)
+	                            c = 32; // ' '
+	                    // falls through
+	                    default:
+	                        out[outIndex++] = c;
+	                        break;
+	                }
+	                break;
+
+	            case 1: // First hex digit
+	                hexchar = c;
+	                if (c >= 48/*0*/ && c <= 57/*9*/) {
+	                    n = c - 48/*0*/;
+	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
+	                    n = c - 65/*A*/ + 10;
+	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
+	                    n = c - 97/*a*/ + 10;
+	                } else {
+	                    out[outIndex++] = 37/*%*/;
+	                    out[outIndex++] = c;
+	                    state = 0;
+	                    break;
+	                }
+	                state = 2;
+	                break;
+
+	            case 2: // Second hex digit
+	                state = 0;
+	                if (c >= 48/*0*/ && c <= 57/*9*/) {
+	                    m = c - 48/*0*/;
+	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
+	                    m = c - 65/*A*/ + 10;
+	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
+	                    m = c - 97/*a*/ + 10;
+	                } else {
+	                    out[outIndex++] = 37/*%*/;
+	                    out[outIndex++] = hexchar;
+	                    out[outIndex++] = c;
+	                    break;
+	                }
+	                out[outIndex++] = 16 * n + m;
+	                break;
+	        }
+	    }
+
+	    // TODO support returning arbitrary buffers.
+
+	    return out.slice(0, outIndex - 1);
+	};
+
+
+	function qsUnescape(s, decodeSpaces) {
+	    try {
+	        return decodeURIComponent(s);
+	    } catch (e) {
+	        return QueryString.unescapeBuffer(s, decodeSpaces).toString();
+	    }
+	}
+	QueryString.unescape = qsUnescape;
+
+
+	var hexTable = new Array(256);
+	for (var i = 0; i < 256; ++i)
+	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
+	QueryString.escape = function(str) {
+	    // replaces encodeURIComponent
+	    // http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3.4
+	    if (typeof str !== 'string') {
+	        if (typeof str === 'object')
+	            str = String(str);
+	        else
+	            str += '';
+	    }
+	    var out = '';
+	    var lastPos = 0;
+
+	    for (var i = 0; i < str.length; ++i) {
+	        var c = str.charCodeAt(i);
+
+	        // These characters do not need escaping (in order):
+	        // ! - . _ ~
+	        // ' ( ) *
+	        // digits
+	        // alpha (uppercase)
+	        // alpha (lowercase)
+	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
+	            (c >= 0x27 && c <= 0x2A) ||
+	            (c >= 0x30 && c <= 0x39) ||
+	            (c >= 0x41 && c <= 0x5A) ||
+	            (c >= 0x61 && c <= 0x7A)) {
+	            continue;
+	        }
+
+	        if (i - lastPos > 0)
+	            out += str.slice(lastPos, i);
+
+	        // Other ASCII characters
+	        if (c < 0x80) {
+	            lastPos = i + 1;
+	            out += hexTable[c];
+	            continue;
+	        }
+
+	        // Multi-byte characters ...
+	        if (c < 0x800) {
+	            lastPos = i + 1;
+	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        if (c < 0xD800 || c >= 0xE000) {
+	            lastPos = i + 1;
+	            out += hexTable[0xE0 | (c >> 12)] +
+	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	                hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        // Surrogate pair
+	        ++i;
+	        var c2;
+	        if (i < str.length)
+	            c2 = str.charCodeAt(i) & 0x3FF;
+	        else
+	            throw new URIError('URI malformed');
+	        lastPos = i + 1;
+	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
+	        out += hexTable[0xF0 | (c >> 18)] +
+	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
+	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	            hexTable[0x80 | (c & 0x3F)];
+	    }
+	    if (lastPos === 0)
+	        return str;
+	    if (lastPos < str.length)
+	        return out + str.slice(lastPos);
+	    return out;
+	};
+
+	var stringifyPrimitive = function(v) {
+	    if (typeof v === 'string')
+	        return v;
+	    if (typeof v === 'number' && isFinite(v))
+	        return '' + v;
+	    if (typeof v === 'boolean')
+	        return v ? 'true' : 'false';
+	    return '';
+	};
+
+
+	QueryString.stringify = QueryString.encode = function(obj, sep, eq, options) {
+	    sep = sep || '&';
+	    eq = eq || '=';
+
+	    var encode = QueryString.escape;
+	    if (options && typeof options.encodeURIComponent === 'function') {
+	        encode = options.encodeURIComponent;
+	    }
+
+	    if (obj !== null && typeof obj === 'object') {
+	        var keys = Object.keys(obj);
+	        var len = keys.length;
+	        var flast = len - 1;
+	        var fields = '';
+	        for (var i = 0; i < len; ++i) {
+	            var k = keys[i];
+	            var v = obj[k];
+	            var ks = encode(stringifyPrimitive(k)) + eq;
+
+	            if (Array.isArray(v)) {
+	                var vlen = v.length;
+	                var vlast = vlen - 1;
+	                for (var j = 0; j < vlen; ++j) {
+	                    fields += ks + encode(stringifyPrimitive(v[j]));
+	                    if (j < vlast)
+	                        fields += sep;
+	                }
+	                if (vlen && i < flast)
+	                    fields += sep;
+	            } else {
+	                fields += ks + encode(stringifyPrimitive(v));
+	                if (i < flast)
+	                    fields += sep;
+	            }
+	        }
+	        return fields;
+	    }
+	    return '';
+	};
+
+	// Parse a key/val string.
+	QueryString.parse = QueryString.decode = function(qs, sep, eq, options) {
+	    sep = sep || '&';
+	    eq = eq || '=';
+
+	    const obj = new ParsedQueryString();
+
+	    if (typeof qs !== 'string' || qs.length === 0) {
+	        return obj;
+	    }
+
+	    if (typeof sep !== 'string')
+	        sep += '';
+
+	    const eqLen = eq.length;
+	    const sepLen = sep.length;
+
+	    var maxKeys = 1000;
+	    if (options && typeof options.maxKeys === 'number') {
+	        maxKeys = options.maxKeys;
+	    }
+
+	    var pairs = Infinity;
+	    if (maxKeys > 0)
+	        pairs = maxKeys;
+
+	    var decode = QueryString.unescape;
+	    if (options && typeof options.decodeURIComponent === 'function') {
+	        decode = options.decodeURIComponent;
+	    }
+	    const customDecode = (decode !== qsUnescape);
+
+	    const keys = [];
+	    var lastPos = 0;
+	    var sepIdx = 0;
+	    var eqIdx = 0;
+	    var key = '';
+	    var value = '';
+	    var keyEncoded = customDecode;
+	    var valEncoded = customDecode;
+	    var encodeCheck = 0;
+	    for (var i = 0; i < qs.length; ++i) {
+	        const code = qs.charCodeAt(i);
+
+	        // Try matching key/value pair separator (e.g. '&')
+	        if (code === sep.charCodeAt(sepIdx)) {
+	            if (++sepIdx === sepLen) {
+	                // Key/value pair separator match!
+	                const end = i - sepIdx + 1;
+	                if (eqIdx < eqLen) {
+	                    // If we didn't find the key/value separator, treat the substring as
+	                    // part of the key instead of the value
+	                    if (lastPos < end)
+	                        key += qs.slice(lastPos, end);
+	                } else if (lastPos < end)
+	                    value += qs.slice(lastPos, end);
+	                if (keyEncoded)
+	                    key = decodeStr(key, decode);
+	                if (valEncoded)
+	                    value = decodeStr(value, decode);
+	                // Use a key array lookup instead of using hasOwnProperty(), which is
+	                // slower
+	                if (keys.indexOf(key) === -1) {
+	                    obj[key] = value;
+	                    keys[keys.length] = key;
+	                } else {
+	                    const curValue = obj[key];
+	                    // `instanceof Array` is used instead of Array.isArray() because it
+	                    // is ~15-20% faster with v8 4.7 and is safe to use because we are
+	                    // using it with values being created within this function
+	                    if (curValue instanceof Array)
+	                        curValue[curValue.length] = value;
+	                    else
+	                        obj[key] = [curValue, value];
+	                }
+	                if (--pairs === 0)
+	                    break;
+	                keyEncoded = valEncoded = customDecode;
+	                encodeCheck = 0;
+	                key = value = '';
+	                lastPos = i + 1;
+	                sepIdx = eqIdx = 0;
+	            }
+	            continue;
+	        } else {
+	            sepIdx = 0;
+	            if (!valEncoded) {
+	                // Try to match an (valid) encoded byte (once) to minimize unnecessary
+	                // calls to string decoding functions
+	                if (code === 37/*%*/) {
+	                    encodeCheck = 1;
+	                } else if (encodeCheck > 0 &&
+	                    ((code >= 48/*0*/ && code <= 57/*9*/) ||
+	                    (code >= 65/*A*/ && code <= 70/*F*/) ||
+	                    (code >= 97/*a*/ && code <= 102/*f*/))) {
+	                    if (++encodeCheck === 3)
+	                        valEncoded = true;
+	                } else {
+	                    encodeCheck = 0;
+	                }
+	            }
+	        }
+
+	        // Try matching key/value separator (e.g. '=') if we haven't already
+	        if (eqIdx < eqLen) {
+	            if (code === eq.charCodeAt(eqIdx)) {
+	                if (++eqIdx === eqLen) {
+	                    // Key/value separator match!
+	                    const end = i - eqIdx + 1;
+	                    if (lastPos < end)
+	                        key += qs.slice(lastPos, end);
+	                    encodeCheck = 0;
+	                    lastPos = i + 1;
+	                }
+	                continue;
+	            } else {
+	                eqIdx = 0;
+	                if (!keyEncoded) {
+	                    // Try to match an (valid) encoded byte once to minimize unnecessary
+	                    // calls to string decoding functions
+	                    if (code === 37/*%*/) {
+	                        encodeCheck = 1;
+	                    } else if (encodeCheck > 0 &&
+	                        ((code >= 48/*0*/ && code <= 57/*9*/) ||
+	                        (code >= 65/*A*/ && code <= 70/*F*/) ||
+	                        (code >= 97/*a*/ && code <= 102/*f*/))) {
+	                        if (++encodeCheck === 3)
+	                            keyEncoded = true;
+	                    } else {
+	                        encodeCheck = 0;
+	                    }
+	                }
+	            }
+	        }
+
+	        if (code === 43/*+*/) {
+	            if (eqIdx < eqLen) {
+	                if (i - lastPos > 0)
+	                    key += qs.slice(lastPos, i);
+	                key += '%20';
+	                keyEncoded = true;
+	            } else {
+	                if (i - lastPos > 0)
+	                    value += qs.slice(lastPos, i);
+	                value += '%20';
+	                valEncoded = true;
+	            }
+	            lastPos = i + 1;
+	        }
+	    }
+
+	    // Check if we have leftover key or value data
+	    if (pairs > 0 && (lastPos < qs.length || eqIdx > 0)) {
+	        if (lastPos < qs.length) {
+	            if (eqIdx < eqLen)
+	                key += qs.slice(lastPos);
+	            else if (sepIdx < sepLen)
+	                value += qs.slice(lastPos);
+	        }
+	        if (keyEncoded)
+	            key = decodeStr(key, decode);
+	        if (valEncoded)
+	            value = decodeStr(value, decode);
+	        // Use a key array lookup instead of using hasOwnProperty(), which is
+	        // slower
+	        if (keys.indexOf(key) === -1) {
+	            obj[key] = value;
+	            keys[keys.length] = key;
+	        } else {
+	            const curValue = obj[key];
+	            // `instanceof Array` is used instead of Array.isArray() because it
+	            // is ~15-20% faster with v8 4.7 and is safe to use because we are
+	            // using it with values being created within this function
+	            if (curValue instanceof Array)
+	                curValue[curValue.length] = value;
+	            else
+	                obj[key] = [curValue, value];
+	        }
+	    }
+
+	    return obj;
+	};
+
+
+	// v8 does not optimize functions with try-catch blocks, so we isolate them here
+	// to minimize the damage
+	function decodeStr(s, decoder) {
+	    try {
+	        return decoder(s);
+	    } catch (e) {
+	        return QueryString.unescape(s, true);
+	    }
+	}
+
+
+/***/ },
+/* 46 */
+/***/ function(module, exports, __webpack_require__) {
+
 	// 'use strict';
 
 
@@ -14641,7 +15080,7 @@ global = this;
 	    'file:': true
 	};
 
-	var querystring = __webpack_require__(49);
+	var querystring = __webpack_require__(45);
 
 	// This constructor is used to store parsed query string values. Instantiating
 	// this is faster than explicitly calling `Object.create(null)` to get a
@@ -15585,9 +16024,7 @@ global = this;
 
 
 /***/ },
-/* 46 */,
-/* 47 */,
-/* 48 */
+/* 47 */
 /***/ function(module, exports) {
 
 	// Taken from https://github.com/substack/vm-browserify
@@ -15750,421 +16187,205 @@ global = this;
 
 
 /***/ },
-/* 49 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
-	// Query String Utilities
-
-	'use strict';
-
-	const QueryString = exports;
-	const Buffer = __webpack_require__(2).Buffer;
-
-	// This constructor is used to store parsed query string values. Instantiating
-	// this is faster than explicitly calling `Object.create(null)` to get a
-	// "clean" empty object (tested with v8 v4.9).
-	function ParsedQueryString() {}
-	ParsedQueryString.prototype = Object.create(null);
-
-
-	// a safe fast alternative to decodeURIComponent
-	QueryString.unescapeBuffer = function(s, decodeSpaces) {
-	    var out = Buffer.allocUnsafe(s.length);
-	    var state = 0;
-	    var n, m, hexchar;
-
-	    for (var inIndex = 0, outIndex = 0; inIndex <= s.length; inIndex++) {
-	        var c = inIndex < s.length ? s.charCodeAt(inIndex) : NaN;
-	        switch (state) {
-	            case 0: // Any character
-	                switch (c) {
-	                    case 37: // '%'
-	                        n = 0;
-	                        m = 0;
-	                        state = 1;
-	                        break;
-	                    case 43: // '+'
-	                        if (decodeSpaces)
-	                            c = 32; // ' '
-	                    // falls through
-	                    default:
-	                        out[outIndex++] = c;
-	                        break;
-	                }
-	                break;
-
-	            case 1: // First hex digit
-	                hexchar = c;
-	                if (c >= 48/*0*/ && c <= 57/*9*/) {
-	                    n = c - 48/*0*/;
-	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
-	                    n = c - 65/*A*/ + 10;
-	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
-	                    n = c - 97/*a*/ + 10;
-	                } else {
-	                    out[outIndex++] = 37/*%*/;
-	                    out[outIndex++] = c;
-	                    state = 0;
-	                    break;
-	                }
-	                state = 2;
-	                break;
-
-	            case 2: // Second hex digit
-	                state = 0;
-	                if (c >= 48/*0*/ && c <= 57/*9*/) {
-	                    m = c - 48/*0*/;
-	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
-	                    m = c - 65/*A*/ + 10;
-	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
-	                    m = c - 97/*a*/ + 10;
-	                } else {
-	                    out[outIndex++] = 37/*%*/;
-	                    out[outIndex++] = hexchar;
-	                    out[outIndex++] = c;
-	                    break;
-	                }
-	                out[outIndex++] = 16 * n + m;
-	                break;
-	        }
-	    }
-
-	    // TODO support returning arbitrary buffers.
-
-	    return out.slice(0, outIndex - 1);
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-
-
-	function qsUnescape(s, decodeSpaces) {
-	    try {
-	        return decodeURIComponent(s);
-	    } catch (e) {
-	        return QueryString.unescapeBuffer(s, decodeSpaces).toString();
+	var libjs = __webpack_require__(6);
+	var buffer_1 = __webpack_require__(2);
+	var static_buffer_1 = __webpack_require__(7);
+	console.log('here');
+	function noop() { }
+	var Socket = (function () {
+	    function Socket() {
+	        this.fd = 0;
+	        this.epfd = 0;
+	        this.onstart = noop;
+	        this.onstop = noop;
+	        this.ondata = noop;
+	        this.onerror = noop;
+	        this.created = false;
 	    }
-	}
-	QueryString.unescape = qsUnescape;
-
-
-	var hexTable = new Array(256);
-	for (var i = 0; i < 256; ++i)
-	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
-	QueryString.escape = function(str) {
-	    // replaces encodeURIComponent
-	    // http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3.4
-	    if (typeof str !== 'string') {
-	        if (typeof str === 'object')
-	            str = String(str);
-	        else
-	            str += '';
+	    Socket.prototype.start = function () {
+	        this.fd = libjs.socket(2, this.type, 0);
+	        if (this.fd < 0)
+	            throw Error("Could not create scoket: errno = " + this.fd);
+	        var fcntl = libjs.fcntl(this.fd, 4, 2048);
+	        if (fcntl < 0)
+	            throw Error("Could not make socket non-blocking: errno = " + fcntl);
+	        this.epfd = libjs.epoll_create1(0);
+	        if (this.epfd < 0)
+	            throw Error("Could create epoll: errno = " + this.epfd);
+	        var event = {
+	            events: 1 | 4,
+	            data: [this.fd, 0]
+	        };
+	        var ctl = libjs.epoll_ctl(this.epfd, 1, this.fd, event);
+	        if (ctl < 0)
+	            throw Error("Could not add epoll events: errno = " + ctl);
+	    };
+	    Socket.prototype.stop = function () {
+	        if (this.epfd) {
+	            libjs.close(this.epfd);
+	            this.fd = 0;
+	        }
+	        if (this.fd) {
+	            libjs.close(this.fd);
+	            this.fd = 0;
+	        }
+	    };
+	    return Socket;
+	}());
+	exports.Socket = Socket;
+	var SocketDgram = (function (_super) {
+	    __extends(SocketDgram, _super);
+	    function SocketDgram() {
+	        _super.apply(this, arguments);
+	        this.type = 2;
 	    }
-	    var out = '';
-	    var lastPos = 0;
-
-	    for (var i = 0; i < str.length; ++i) {
-	        var c = str.charCodeAt(i);
-
-	        // These characters do not need escaping (in order):
-	        // ! - . _ ~
-	        // ' ( ) *
-	        // digits
-	        // alpha (uppercase)
-	        // alpha (lowercase)
-	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
-	            (c >= 0x27 && c <= 0x2A) ||
-	            (c >= 0x30 && c <= 0x39) ||
-	            (c >= 0x41 && c <= 0x5A) ||
-	            (c >= 0x61 && c <= 0x7A)) {
-	            continue;
-	        }
-
-	        if (i - lastPos > 0)
-	            out += str.slice(lastPos, i);
-
-	        // Other ASCII characters
-	        if (c < 0x80) {
-	            lastPos = i + 1;
-	            out += hexTable[c];
-	            continue;
-	        }
-
-	        // Multi-byte characters ...
-	        if (c < 0x800) {
-	            lastPos = i + 1;
-	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        if (c < 0xD800 || c >= 0xE000) {
-	            lastPos = i + 1;
-	            out += hexTable[0xE0 | (c >> 12)] +
-	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	                hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        // Surrogate pair
-	        ++i;
-	        var c2;
-	        if (i < str.length)
-	            c2 = str.charCodeAt(i) & 0x3FF;
-	        else
-	            throw new URIError('URI malformed');
-	        lastPos = i + 1;
-	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
-	        out += hexTable[0xF0 | (c >> 18)] +
-	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
-	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	            hexTable[0x80 | (c & 0x3F)];
-	    }
-	    if (lastPos === 0)
-	        return str;
-	    if (lastPos < str.length)
-	        return out + str.slice(lastPos);
-	    return out;
-	};
-
-	var stringifyPrimitive = function(v) {
-	    if (typeof v === 'string')
-	        return v;
-	    if (typeof v === 'number' && isFinite(v))
-	        return '' + v;
-	    if (typeof v === 'boolean')
-	        return v ? 'true' : 'false';
-	    return '';
-	};
-
-
-	QueryString.stringify = QueryString.encode = function(obj, sep, eq, options) {
-	    sep = sep || '&';
-	    eq = eq || '=';
-
-	    var encode = QueryString.escape;
-	    if (options && typeof options.encodeURIComponent === 'function') {
-	        encode = options.encodeURIComponent;
-	    }
-
-	    if (obj !== null && typeof obj === 'object') {
-	        var keys = Object.keys(obj);
-	        var len = keys.length;
-	        var flast = len - 1;
-	        var fields = '';
-	        for (var i = 0; i < len; ++i) {
-	            var k = keys[i];
-	            var v = obj[k];
-	            var ks = encode(stringifyPrimitive(k)) + eq;
-
-	            if (Array.isArray(v)) {
-	                var vlen = v.length;
-	                var vlast = vlen - 1;
-	                for (var j = 0; j < vlen; ++j) {
-	                    fields += ks + encode(stringifyPrimitive(v[j]));
-	                    if (j < vlast)
-	                        fields += sep;
-	                }
-	                if (vlen && i < flast)
-	                    fields += sep;
-	            } else {
-	                fields += ks + encode(stringifyPrimitive(v));
-	                if (i < flast)
-	                    fields += sep;
+	    SocketDgram.prototype.send = function (buf, ip, port) {
+	        var addr = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(ip)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        var flags = 64 | 16384;
+	        var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
+	        if (res < 0) {
+	            if (-res == 11) {
+	                return 0;
+	            }
+	            else {
+	                return res;
 	            }
 	        }
-	        return fields;
+	    };
+	    SocketDgram.prototype.bind = function (port, ip) {
+	        if (port === void 0) { port = 0; }
+	        if (ip === void 0) { ip = '0.0.0.0'; }
+	        var addr = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(ip)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        return libjs.bind(this.fd, addr, libjs.sockaddr_in);
+	    };
+	    SocketDgram.prototype.listen = function () {
+	    };
+	    return SocketDgram;
+	}(Socket));
+	exports.SocketDgram = SocketDgram;
+	var SocketTcp = (function (_super) {
+	    __extends(SocketTcp, _super);
+	    function SocketTcp() {
+	        _super.apply(this, arguments);
+	        this.type = 1;
+	        this.connected = false;
+	        this.onconnect = function () { };
+	        this.ondata = function () { };
+	        this.onerror = function () { };
+	        this.pollBound = this.poll.bind(this);
 	    }
-	    return '';
-	};
-
-	// Parse a key/val string.
-	QueryString.parse = QueryString.decode = function(qs, sep, eq, options) {
-	    sep = sep || '&';
-	    eq = eq || '=';
-
-	    const obj = new ParsedQueryString();
-
-	    if (typeof qs !== 'string' || qs.length === 0) {
-	        return obj;
-	    }
-
-	    if (typeof sep !== 'string')
-	        sep += '';
-
-	    const eqLen = eq.length;
-	    const sepLen = sep.length;
-
-	    var maxKeys = 1000;
-	    if (options && typeof options.maxKeys === 'number') {
-	        maxKeys = options.maxKeys;
-	    }
-
-	    var pairs = Infinity;
-	    if (maxKeys > 0)
-	        pairs = maxKeys;
-
-	    var decode = QueryString.unescape;
-	    if (options && typeof options.decodeURIComponent === 'function') {
-	        decode = options.decodeURIComponent;
-	    }
-	    const customDecode = (decode !== qsUnescape);
-
-	    const keys = [];
-	    var lastPos = 0;
-	    var sepIdx = 0;
-	    var eqIdx = 0;
-	    var key = '';
-	    var value = '';
-	    var keyEncoded = customDecode;
-	    var valEncoded = customDecode;
-	    var encodeCheck = 0;
-	    for (var i = 0; i < qs.length; ++i) {
-	        const code = qs.charCodeAt(i);
-
-	        // Try matching key/value pair separator (e.g. '&')
-	        if (code === sep.charCodeAt(sepIdx)) {
-	            if (++sepIdx === sepLen) {
-	                // Key/value pair separator match!
-	                const end = i - sepIdx + 1;
-	                if (eqIdx < eqLen) {
-	                    // If we didn't find the key/value separator, treat the substring as
-	                    // part of the key instead of the value
-	                    if (lastPos < end)
-	                        key += qs.slice(lastPos, end);
-	                } else if (lastPos < end)
-	                    value += qs.slice(lastPos, end);
-	                if (keyEncoded)
-	                    key = decodeStr(key, decode);
-	                if (valEncoded)
-	                    value = decodeStr(value, decode);
-	                // Use a key array lookup instead of using hasOwnProperty(), which is
-	                // slower
-	                if (keys.indexOf(key) === -1) {
-	                    obj[key] = value;
-	                    keys[keys.length] = key;
-	                } else {
-	                    const curValue = obj[key];
-	                    // `instanceof Array` is used instead of Array.isArray() because it
-	                    // is ~15-20% faster with v8 4.7 and is safe to use because we are
-	                    // using it with values being created within this function
-	                    if (curValue instanceof Array)
-	                        curValue[curValue.length] = value;
-	                    else
-	                        obj[key] = [curValue, value];
-	                }
-	                if (--pairs === 0)
-	                    break;
-	                keyEncoded = valEncoded = customDecode;
-	                encodeCheck = 0;
-	                key = value = '';
-	                lastPos = i + 1;
-	                sepIdx = eqIdx = 0;
-	            }
-	            continue;
-	        } else {
-	            sepIdx = 0;
-	            if (!valEncoded) {
-	                // Try to match an (valid) encoded byte (once) to minimize unnecessary
-	                // calls to string decoding functions
-	                if (code === 37/*%*/) {
-	                    encodeCheck = 1;
-	                } else if (encodeCheck > 0 &&
-	                    ((code >= 48/*0*/ && code <= 57/*9*/) ||
-	                    (code >= 65/*A*/ && code <= 70/*F*/) ||
-	                    (code >= 97/*a*/ && code <= 102/*f*/))) {
-	                    if (++encodeCheck === 3)
-	                        valEncoded = true;
-	                } else {
-	                    encodeCheck = 0;
+	    SocketTcp.prototype.poll = function () {
+	        var evbuf = new buffer_1.Buffer(libjs.epoll_event.size);
+	        var waitres = libjs.epoll_wait(this.epfd, evbuf, 1, 0);
+	        if (waitres > 0) {
+	            var event = libjs.epoll_event.unpack(evbuf);
+	            if (!this.connected) {
+	                if ((event.events & 4) > 0) {
+	                    this.connected = true;
+	                    this.onconnect();
 	                }
 	            }
-	        }
-
-	        // Try matching key/value separator (e.g. '=') if we haven't already
-	        if (eqIdx < eqLen) {
-	            if (code === eq.charCodeAt(eqIdx)) {
-	                if (++eqIdx === eqLen) {
-	                    // Key/value separator match!
-	                    const end = i - eqIdx + 1;
-	                    if (lastPos < end)
-	                        key += qs.slice(lastPos, end);
-	                    encodeCheck = 0;
-	                    lastPos = i + 1;
+	            if ((event.events & 1) > 0) {
+	                var buf = new static_buffer_1.StaticBuffer(1000);
+	                var bytes = libjs.read(this.fd, buf);
+	                if (bytes < -1) {
+	                    this.onerror(Error("Error reading data: " + bytes));
 	                }
-	                continue;
-	            } else {
-	                eqIdx = 0;
-	                if (!keyEncoded) {
-	                    // Try to match an (valid) encoded byte once to minimize unnecessary
-	                    // calls to string decoding functions
-	                    if (code === 37/*%*/) {
-	                        encodeCheck = 1;
-	                    } else if (encodeCheck > 0 &&
-	                        ((code >= 48/*0*/ && code <= 57/*9*/) ||
-	                        (code >= 65/*A*/ && code <= 70/*F*/) ||
-	                        (code >= 97/*a*/ && code <= 102/*f*/))) {
-	                        if (++encodeCheck === 3)
-	                            keyEncoded = true;
-	                    } else {
-	                        encodeCheck = 0;
-	                    }
+	                if (bytes > 0) {
+	                    var data = buf.toString().substr(0, bytes);
+	                    this.ondata(data);
 	                }
 	            }
-	        }
-
-	        if (code === 43/*+*/) {
-	            if (eqIdx < eqLen) {
-	                if (i - lastPos > 0)
-	                    key += qs.slice(lastPos, i);
-	                key += '%20';
-	                keyEncoded = true;
-	            } else {
-	                if (i - lastPos > 0)
-	                    value += qs.slice(lastPos, i);
-	                value += '%20';
-	                valEncoded = true;
+	            if ((event.events & 8) > 0) {
 	            }
-	            lastPos = i + 1;
 	        }
-	    }
-
-	    // Check if we have leftover key or value data
-	    if (pairs > 0 && (lastPos < qs.length || eqIdx > 0)) {
-	        if (lastPos < qs.length) {
-	            if (eqIdx < eqLen)
-	                key += qs.slice(lastPos);
-	            else if (sepIdx < sepLen)
-	                value += qs.slice(lastPos);
+	        if (waitres < 0) {
+	            this.onerror(Error("Error while waiting for connection: " + waitres));
 	        }
-	        if (keyEncoded)
-	            key = decodeStr(key, decode);
-	        if (valEncoded)
-	            value = decodeStr(value, decode);
-	        // Use a key array lookup instead of using hasOwnProperty(), which is
-	        // slower
-	        if (keys.indexOf(key) === -1) {
-	            obj[key] = value;
-	            keys[keys.length] = key;
-	        } else {
-	            const curValue = obj[key];
-	            // `instanceof Array` is used instead of Array.isArray() because it
-	            // is ~15-20% faster with v8 4.7 and is safe to use because we are
-	            // using it with values being created within this function
-	            if (curValue instanceof Array)
-	                curValue[curValue.length] = value;
-	            else
-	                obj[key] = [curValue, value];
+	        process.nextTick(this.pollBound);
+	    };
+	    SocketTcp.prototype.connect = function (opts) {
+	        var addr_in = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(opts.port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(opts.host)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        var res = libjs.connect(this.fd, addr_in);
+	        if (res == -115) {
+	            this.poll();
+	            return;
 	        }
+	        if (res < 0)
+	            throw Error("Could no connect: " + res);
+	        throw Error('Something went not according to plan.');
+	    };
+	    SocketTcp.prototype.onRead = function () {
+	    };
+	    SocketTcp.prototype.write = function (data) {
+	        var sb = static_buffer_1.StaticBuffer.from(data + '\0');
+	        var res = libjs.write(this.fd, sb);
+	        return res;
+	    };
+	    return SocketTcp;
+	}(Socket));
+	exports.SocketTcp = SocketTcp;
+	var Pool = (function () {
+	    function Pool() {
+	        this.epfd = 0;
+	        this.socks = [];
+	        this.epfd = libjs.epoll_create1(0);
+	        if (this.epfd < 0)
+	            throw Error("Could not create epoll fd: errno = " + this.epfd);
 	    }
-
-	    return obj;
-	};
-
-
-	// v8 does not optimize functions with try-catch blocks, so we isolate them here
-	// to minimize the damage
-	function decodeStr(s, decoder) {
-	    try {
-	        return decoder(s);
-	    } catch (e) {
-	        return QueryString.unescape(s, true);
-	    }
-	}
+	    Pool.prototype.nextTick = function () {
+	    };
+	    Pool.prototype.wait = function (timeout) {
+	    };
+	    Pool.prototype.createDgramSocket = function () {
+	        var sock = new SocketDgram;
+	        sock.start();
+	        this.addSocket(sock);
+	        return sock;
+	    };
+	    Pool.prototype.addSocket = function (sock) {
+	        var event = {
+	            events: 1 | 4,
+	            data: [sock.fd, 0]
+	        };
+	        var ctl = libjs.epoll_ctl(this.epfd, 1, sock.fd, event);
+	        if (ctl < 0)
+	            throw Error("Could not add epoll events: errno = " + ctl);
+	        this.socks[sock.fd] = sock;
+	    };
+	    return Pool;
+	}());
+	exports.Pool = Pool;
 
 
 /***/ }

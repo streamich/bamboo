@@ -25,6 +25,12 @@ NativeModule._cache = {
     querystring: null,
     punycode: null,
     vm: null,
+    dgram: null,
+    dns: null,
+    net: null,
+    http: null,
+    tls: null,
+    https: null
 };
 
 NativeModule.require = function(id) {

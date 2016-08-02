@@ -7,6 +7,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = require('../libjs/index');
 var buffer_1 = require('../lib/buffer');
 var static_buffer_1 = require('../lib/static-buffer');
+console.log('here');
 function noop() { }
 var Socket = (function () {
     function Socket() {
@@ -171,6 +172,8 @@ var Pool = (function () {
             throw Error("Could not create epoll fd: errno = " + this.epfd);
     }
     Pool.prototype.nextTick = function () {
+    };
+    Pool.prototype.wait = function (timeout) {
     };
     Pool.prototype.createDgramSocket = function () {
         var sock = new SocketDgram;

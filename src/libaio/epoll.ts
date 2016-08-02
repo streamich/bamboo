@@ -1,13 +1,15 @@
 import * as libjs from '../libjs/index';
 import {Buffer} from '../lib/buffer';
 import {StaticBuffer} from '../lib/static-buffer';
+import {IEventPoll} from "./event";
 
-
+console.log('here');
 export type c_onStart   = () => void;
 export type c_onStop    = () => void;
 export type c_onData    = (data: Buffer) => void;
 export type c_onError   = (err: Error, errno?: number) => void;
 export type c_callback  = (err?: Error, data?: any) => void;
+
 
 function noop() {}
 
@@ -200,7 +202,7 @@ export class SocketTcp extends Socket {
 // }
 
 // export class EpollPool extends Pool {
-export class Pool {
+export class Pool implements IEventPoll {
     protected epfd: number = 0;    /* `epoll` file descriptor */
     protected socks: {[n: number]: Socket} = [];
 
@@ -210,6 +212,10 @@ export class Pool {
     }
 
     protected nextTick() {
+
+    }
+
+    wait(timeout: number) {
 
     }
 

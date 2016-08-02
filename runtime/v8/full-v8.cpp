@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
         // Nice to have.
         process->Set(String::NewFromUtf8(isolate, "errno"), FunctionTemplate::New(isolate, FULL::Process::err));
 
-        // Create global
+        // Create globals
         Local<ObjectTemplate> superGlobal = ObjectTemplate::New(isolate);
         superGlobal->Set(String::NewFromUtf8(isolate, "process"), process);
         superGlobal->Set(String::NewFromUtf8(isolate, "global"), global);
@@ -395,6 +395,7 @@ int main(int argc, char* argv[]) {
 
         // Create `argv` global array, after context is ready, otherwise any `new Array` would segfault.
         // Later we set it on `process.argv`.
+        // TODO: the below is very ugly, need to prettify...
         Local<Array> _argv = Array::New(isolate);
         uint32_t i = 0;
         for(i = 0; i < argc; i++)

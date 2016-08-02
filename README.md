@@ -441,8 +441,8 @@ Other:
  - [X] `punycode.toASCII(domain)`
  - [X] `punycode.toUnicode(domain)`
  - [X] `punycode.ucs2`
- - [X] `punycode.ucs2.decode(string)`
- - [X] `punycode.ucs2.encode(codePoints)`
+     - [X] `punycode.ucs2.decode(string)`
+     - [X] `punycode.ucs2.encode(codePoints)`
  - [X] `punycode.version`
 
 
@@ -595,19 +595,6 @@ Other:
  - [ ] `net.isIPv6(input)`
 
 
-### [`punycode`](https://nodejs.org/api/punycode.html)
-
-*Depends on:* no dependencies.
-
- - [X] `punycode.decode(string)`
- - [X] `punycode.encode(string)`
- - [X] `punycode.toASCII(domain)`
- - [X] `punycode.toUnicode(domain)`
- - [X] `punycode.ucs2`
-     - [X] `punycode.ucs2.decode(string)`
-     - [X] `punycode.ucs2.encode(codePoints)`
- - [X] `punycode.version`
-
 ### [Globals](https://nodejs.org/api/globals.html)
 
  - [X] `Class: Buffer`
@@ -616,7 +603,7 @@ Other:
  - [X] `clearImmediate(immediateObject)`
  - [X] `clearInterval(intervalObject)`
  - [X] `clearTimeout(timeoutObject)`
- - [ ] `console`
+ - [X] `console`
  - [X] `exports`
  - [X] `global`
  - [X] `module`

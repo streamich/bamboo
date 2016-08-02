@@ -7,9 +7,11 @@ watcher.onerror = (err, errno) => {
     console.log('err', err, errno);
 };
 
+
 watcher.onevent = (event) => {
     console.log('event', event);
 };
+
 
 watcher.start();
 var path = __dirname + '/watch/test.txt';
