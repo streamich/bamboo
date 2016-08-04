@@ -11,6 +11,9 @@ var errnoException = util._errnoException;
 function lookup4(address, callback) {
     callback();
 }
+function lookup6(address, callback) {
+    callback();
+}
 function sliceBuffer(buffer, offset, length) {
     if (typeof buffer === 'string')
         buffer = buffer_1.Buffer.from(buffer);
@@ -35,11 +38,16 @@ function fixBufferList(list) {
 }
 var Socket = (function (_super) {
     __extends(Socket, _super);
-    function Socket() {
+    function Socket(type, listener) {
+        var _this = this;
         _super.call(this);
-        this.sock = process.loop.poll.createUdpSocket();
-        this.lookup = lookup4;
-        this.sock.ondata = function () {
+        var isIP6 = type === 'udp6';
+        this.sock = process.loop.poll.createUdpSocket(isIP6);
+        this.lookup = isIP6 ? lookup6 : lookup4;
+        if (listener)
+            this.on('message', listener);
+        this.sock.ondata = function (msg, from) {
+            _this.emit('message', msg, from);
         };
         this.sock.onstart = function () {
         };
@@ -144,8 +152,8 @@ var Socket = (function (_super) {
     return Socket;
 }(events_1.EventEmitter));
 exports.Socket = Socket;
-function createSocket(type) {
-    var socket = new Socket;
+function createSocket(type, callback) {
+    var socket = new Socket(type, callback);
     return socket;
 }
 exports.createSocket = createSocket;

@@ -51,7 +51,7 @@ export abstract class Socket implements ISocket {
 }
 
 
-export class SocketUdp extends Socket {
+export class SocketUdp4 extends Socket {
     type = libjs.SOCK.DGRAM;
     isIPv4 = true;
 
@@ -125,8 +125,8 @@ export class SocketUdp extends Socket {
                 events: libjs.EPOLL_EVENTS.EPOLLIN,
                 data: [this.fd, 0],
             };
-            var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event)
-            // TODO: check `res`
+            var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event);
+            if(res < 0) this.onerror(Error(`Could not remove write listener: ${res}`));
 
             this.onstart();
         }
@@ -137,13 +137,17 @@ export class SocketUdp extends Socket {
             var err = null;
             do {
                 // var buf = new StaticBuffer(CHUNK);
-                var buf = new Buffer(CHUNK);
-                var bytes = libjs.read(this.fd, buf as any as StaticBuffer);
+                var buf = new StaticBuffer(CHUNK + libjs.sockaddr_in.size + 4);
+                var data = buf.slice(0, CHUNK);
+                var addr = buf.slice(CHUNK, libjs.sockaddr_in.size);
+                var addrlen = buf.slice(CHUNK + libjs.sockaddr_in.size);
+                var bytes = libjs.recvfrom(this.fd, buf, CHUNK, 0, addr, addrlen);
                 if(bytes < -1) {
-                    err = Error(`Error reading data: ${bytes}`);
+                    this.onerror(Error(`Error reading data: ${bytes}`));
                     break;
                 } else {
-                    this.ondata(buf.slice(0, bytes));
+                    var from = [libjs.sockaddr_in.unpack(addr), libjs.int32.unpack(addrlen)];
+                    this.ondata(buf.slice(0, bytes), from);
                 }
             } while (bytes === CHUNK);
         }
@@ -160,55 +164,47 @@ export class SocketUdp extends Socket {
         if(events & libjs.EPOLL_EVENTS.EPOLLHUP) {
             console.log(this.fd, 'EPOLLHUP');
         }
-        // if(!this.connected) {
-        //     if((event.events & libjs.EPOLL_EVENTS.EPOLLOUT) > 0) { // Socket to send data.
-        //         clearInterval(polli);
-        // this.connected = true;
-        // this.onconnect();
-        // }
-        // }
-        // if((event.events & libjs.EPOLL_EVENTS.EPOLLIN) > 0) { // Socket received data.
-        //     var buf = new StaticBuffer(1000);
-        //     var bytes = libjs.read(this.fd, buf);
-        //     if(bytes < -1) {
-        //         this.onerror(Error(`Error reading data: ${bytes}`));
-        //     }
-        //     if(bytes > 0) {
-        //         var data = buf.toString().substr(0, bytes);
-        //         this.ondata(data);
-        //     }
-        // }
-        // if((event.events & libjs.EPOLL_EVENTS.EPOLLERR) > 0) { // Check for errors.
-        // }
     }
 
     setTtl(ttl: number) {
         if (ttl < 1 || ttl > 255) return -libjs.ERROR.EINVAL;
         var buf = libjs.optval_t.pack(ttl);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.TTL, buf)
-            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.UNICAST_HOPS, buf);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.TTL, buf);
     }
 
     setMulticastTtl(ttl: number) {
         var buf = libjs.optval_t.pack(ttl);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_TTL, buf)
-            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_HOPS, buf);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_TTL, buf);
     }
 
     setMulticastLoop(on: boolean) {
         var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_LOOP, buf)
-            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_LOOP, buf);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_LOOP, buf);
     }
 
     setBroadcast(on: boolean) {
         var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.SOL.SOCKET, buf)
-            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.SO.BROADCAST, buf);
+        return libjs.setsockopt(this.fd, libjs.SOL.SOCKET, libjs.SO.BROADCAST, buf);
+    }
+}
+
+export class SocketUdp6 extends SocketUdp4 {
+    isIPv4 = false;
+
+    setTtl(ttl: number) {
+        if (ttl < 1 || ttl > 255) return -libjs.ERROR.EINVAL;
+        var buf = libjs.optval_t.pack(ttl);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.UNICAST_HOPS, buf);
+    }
+
+    setMulticastTtl(ttl: number) {
+        var buf = libjs.optval_t.pack(ttl);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_HOPS, buf);
+    }
+
+    setMulticastLoop(on: boolean) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_LOOP, buf);
     }
 }
 
@@ -311,8 +307,8 @@ export class Poll implements IEventPoll {
         return !!this.refs;
     }
 
-    createUdpSocket(): SocketUdp|Error {
-        var sock = new SocketUdp;
+    createUdpSocket(udp6?): SocketUdp4|SocketUdp6|Error {
+        var sock = !udp6 ? new SocketUdp4 : new SocketUdp6;
         sock.poll = this;
         var err = sock.start();
         this.socks[sock.fd] = sock;

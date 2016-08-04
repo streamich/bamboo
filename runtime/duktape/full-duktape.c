@@ -34,13 +34,15 @@ intptr_t fulljs_get_buffer_address(duk_context *ctx, int index) {
 intptr_t fulljs_arg_to_int(duk_context *ctx, int index) {
     if(duk_is_number(ctx, index)) {
         // printf("number\n");
-
         return (t_int) duk_get_int(ctx, index);
+    } else if(duk_is_buffer(ctx, index)) {
+        // ArrayBuffer, StaticArrayBuffer, Uint8Array, Buffer, StaticBuffer
+        // printf("buf: %lli\n", fulljs_get_buffer_address(ctx, index));
+        return fulljs_get_buffer_address(ctx, index);
     } else if(duk_is_string(ctx, index)) {
         // printf("string\n");
-
         return (t_int) duk_get_string(ctx, index);
-    } else if(duk_is_array(ctx, index)) {
+    } else if(duk_is_array(ctx, index)) { // [lo, hi, offset]
         // printf("array\n");
 
         duk_get_prop_index(ctx, index, 0);
@@ -62,11 +64,8 @@ intptr_t fulljs_arg_to_int(duk_context *ctx, int index) {
 
         // printf("addr: %lli\n", addr);
         return addr;
-    } else { // assume buffer
-        // printf("buf: %lli\n", fulljs_get_buffer_address(ctx, index));
-
-        return fulljs_get_buffer_address(ctx, index);
-    }
+    } else
+        return 0; // == NULL, for example, JavaScript may send `null` argument (or undefined).
 }
 
 
@@ -351,7 +350,10 @@ void fulljs_load_main(duk_context* ctx, char* filename) {
         printf("Could not load file: %s\n", filename);
         return;
     }
-    duk_eval_string(ctx, str);    
+
+    if (duk_peval_string(ctx, str) != 0) {
+        printf("eval failed: %s\n", duk_safe_to_string(ctx, -1));
+    }
 }
 
 

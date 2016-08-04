@@ -66,8 +66,7 @@ namespace FULL {
         } else if (arg->IsArray()) { // [lo, hi, offset]
             return tupleToInt(arg.As<Array>());
         } else
-            // Maybe throw error here?
-            return 0; // == NULL
+            return 0;
     }
 
     int64_t execSyscall(const FunctionCallbackInfo<Value>& args) {

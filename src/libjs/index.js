@@ -531,34 +531,13 @@ function sendtoAsync(fd, buf, flags, addr, addr_type, callback) {
 exports.sendtoAsync = sendtoAsync;
 function recv(sockfd, buf, flags) {
     if (flags === void 0) { flags = 0; }
-    return recvfrom(sockfd, buf, flags);
+    return recvfrom(sockfd, buf, buf.length, flags, 0, 0);
 }
 exports.recv = recv;
-function recvAsync(sockfd, buf, flags, callback) {
-    if (flags === void 0) { flags = 0; }
-    recvfromAsync(sockfd, buf, flags, null, null, callback);
-}
-exports.recvAsync = recvAsync;
-function recvfrom(sockfd, buf, flags, addr, addr_type) {
-    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0];
-    if (addr) {
-        var addrbuf = addr_type.pack(addr);
-        args[5] = addrbuf;
-        args[6] = addrbuf.length;
-    }
-    return syscall.apply(null, args);
+function recvfrom(sockfd, buf, len, flags, addr, addrlen) {
+    return syscall(x86_64_linux_1.SYS.recvfrom, sockfd, buf, len, flags, addr, addrlen);
 }
 exports.recvfrom = recvfrom;
-function recvfromAsync(sockfd, buf, flags, addr, addr_type, callback) {
-    var args = [x86_64_linux_1.SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0, callback];
-    if (addr) {
-        var addrbuf = addr_type.pack(addr);
-        args[5] = addrbuf;
-        args[6] = addrbuf.length;
-    }
-    p.asyscall.apply(null, args);
-}
-exports.recvfromAsync = recvfromAsync;
 function setsockopt(sockfd, level, optname, optval) {
     return syscall(x86_64_linux_1.SYS.setsockopt, sockfd, level, optname, optval, optval.length);
 }

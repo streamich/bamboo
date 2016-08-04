@@ -5,7 +5,6 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var libjs = require('../libjs/index');
-var buffer_1 = require('../lib/buffer');
 var static_buffer_1 = require('../lib/static-buffer');
 var event_1 = require("./event");
 var CHUNK = 8192;
@@ -38,14 +37,14 @@ var Socket = (function () {
     return Socket;
 }());
 exports.Socket = Socket;
-var SocketUdp = (function (_super) {
-    __extends(SocketUdp, _super);
-    function SocketUdp() {
+var SocketUdp4 = (function (_super) {
+    __extends(SocketUdp4, _super);
+    function SocketUdp4() {
         _super.apply(this, arguments);
         this.type = 2;
         this.isIPv4 = true;
     }
-    SocketUdp.prototype.start = function () {
+    SocketUdp4.prototype.start = function () {
         var err = _super.prototype.start.call(this);
         if (err)
             return err;
@@ -58,7 +57,7 @@ var SocketUdp = (function (_super) {
         if (ctl < 0)
             return Error("Could not add epoll events: errno = " + ctl);
     };
-    SocketUdp.prototype.send = function (buf, ip, port) {
+    SocketUdp4.prototype.send = function (buf, ip, port) {
         var addr = {
             sin_family: 2,
             sin_port: libjs.hton16(port),
@@ -78,7 +77,7 @@ var SocketUdp = (function (_super) {
             }
         }
     };
-    SocketUdp.prototype.bind = function (port, ip) {
+    SocketUdp4.prototype.bind = function (port, ip) {
         if (ip === void 0) { ip = '0.0.0.0'; }
         var addr = {
             sin_family: 2,
@@ -94,7 +93,7 @@ var SocketUdp = (function (_super) {
         this.reffed = true;
         this.poll.refs++;
     };
-    SocketUdp.prototype.update = function (events) {
+    SocketUdp4.prototype.update = function (events) {
         console.log('events', events);
         if (events & 4) {
             console.log(this.fd, 'EPOLLOUT');
@@ -104,20 +103,26 @@ var SocketUdp = (function (_super) {
                 data: [this.fd, 0]
             };
             var res = libjs.epoll_ctl(this.poll.epfd, 3, this.fd, event);
+            if (res < 0)
+                this.onerror(Error("Could not remove write listener: " + res));
             this.onstart();
         }
         if ((events & 1) || (events & 2)) {
             console.log(this.fd, 'EPOLLIN');
             var err = null;
             do {
-                var buf = new buffer_1.Buffer(CHUNK);
-                var bytes = libjs.read(this.fd, buf);
+                var buf = new static_buffer_1.StaticBuffer(CHUNK + libjs.sockaddr_in.size + 4);
+                var data = buf.slice(0, CHUNK);
+                var addr = buf.slice(CHUNK, libjs.sockaddr_in.size);
+                var addrlen = buf.slice(CHUNK + libjs.sockaddr_in.size);
+                var bytes = libjs.recvfrom(this.fd, buf, CHUNK, 0, addr, addrlen);
                 if (bytes < -1) {
-                    err = Error("Error reading data: " + bytes);
+                    this.onerror(Error("Error reading data: " + bytes));
                     break;
                 }
                 else {
-                    this.ondata(buf.slice(0, bytes));
+                    var from = [libjs.sockaddr_in.unpack(addr), libjs.int32.unpack(addrlen)];
+                    this.ondata(buf.slice(0, bytes), from);
                 }
             } while (bytes === CHUNK);
         }
@@ -132,35 +137,50 @@ var SocketUdp = (function (_super) {
             console.log(this.fd, 'EPOLLHUP');
         }
     };
-    SocketUdp.prototype.setTtl = function (ttl) {
+    SocketUdp4.prototype.setTtl = function (ttl) {
         if (ttl < 1 || ttl > 255)
             return -22;
         var buf = libjs.optval_t.pack(ttl);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, 0, 2, buf)
-            : libjs.setsockopt(this.fd, 41, 16, buf);
+        return libjs.setsockopt(this.fd, 0, 2, buf);
     };
-    SocketUdp.prototype.setMulticastTtl = function (ttl) {
+    SocketUdp4.prototype.setMulticastTtl = function (ttl) {
         var buf = libjs.optval_t.pack(ttl);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, 0, 33, buf)
-            : libjs.setsockopt(this.fd, 41, 18, buf);
+        return libjs.setsockopt(this.fd, 0, 33, buf);
     };
-    SocketUdp.prototype.setMulticastLoop = function (on) {
+    SocketUdp4.prototype.setMulticastLoop = function (on) {
         var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, 0, 34, buf)
-            : libjs.setsockopt(this.fd, 41, 19, buf);
+        return libjs.setsockopt(this.fd, 0, 34, buf);
     };
-    SocketUdp.prototype.setBroadcast = function (on) {
+    SocketUdp4.prototype.setBroadcast = function (on) {
         var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return this.isIPv4
-            ? libjs.setsockopt(this.fd, 0, libjs.SOL.SOCKET, buf)
-            : libjs.setsockopt(this.fd, 41, libjs.SO.BROADCAST, buf);
+        return libjs.setsockopt(this.fd, 65535, 32, buf);
     };
-    return SocketUdp;
+    return SocketUdp4;
 }(Socket));
-exports.SocketUdp = SocketUdp;
+exports.SocketUdp4 = SocketUdp4;
+var SocketUdp6 = (function (_super) {
+    __extends(SocketUdp6, _super);
+    function SocketUdp6() {
+        _super.apply(this, arguments);
+        this.isIPv4 = false;
+    }
+    SocketUdp6.prototype.setTtl = function (ttl) {
+        if (ttl < 1 || ttl > 255)
+            return -22;
+        var buf = libjs.optval_t.pack(ttl);
+        return libjs.setsockopt(this.fd, 41, 16, buf);
+    };
+    SocketUdp6.prototype.setMulticastTtl = function (ttl) {
+        var buf = libjs.optval_t.pack(ttl);
+        return libjs.setsockopt(this.fd, 41, 18, buf);
+    };
+    SocketUdp6.prototype.setMulticastLoop = function (on) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return libjs.setsockopt(this.fd, 41, 19, buf);
+    };
+    return SocketUdp6;
+}(SocketUdp4));
+exports.SocketUdp6 = SocketUdp6;
 var SocketTcp = (function (_super) {
     __extends(SocketTcp, _super);
     function SocketTcp() {
@@ -233,8 +253,8 @@ var Poll = (function () {
     Poll.prototype.hasRefs = function () {
         return !!this.refs;
     };
-    Poll.prototype.createUdpSocket = function () {
-        var sock = new SocketUdp;
+    Poll.prototype.createUdpSocket = function (udp6) {
+        var sock = !udp6 ? new SocketUdp4 : new SocketUdp6;
         sock.poll = this;
         var err = sock.start();
         this.socks[sock.fd] = sock;

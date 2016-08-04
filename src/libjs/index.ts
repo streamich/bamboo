@@ -74,7 +74,7 @@ export * from './socket';
 
 
 export type number64 = [number, number];
-export type Taddr = Buffer|ArrayBuffer|Uint8Array;
+export type Taddr = number|number64|Buffer|StaticBuffer|ArrayBuffer|Uint8Array;
 export type TcallbackTyped <T> = (result: T) => void;
 export type TcallbackErrTyped <E, T> = (err?: E, result?: T) => void;
 export type Tcallback = TcallbackTyped <number>;
@@ -1019,33 +1019,17 @@ export function sendtoAsync(fd: number, buf: Buffer, flags: types.MSG = 0, addr:
 
 export function recv(sockfd: number, buf: Buffer, flags: number = 0): number {
     // debug('recv', sockfd, buf.length, flags);
-    return recvfrom(sockfd, buf, flags);
+    return recvfrom(sockfd, buf, buf.length, flags, 0, 0);
 }
 
-export function recvAsync(sockfd: number, buf: Buffer, flags: number = 0, callback: Tcallback) {
-    recvfromAsync(sockfd, buf, flags, null, null, callback);
+//     ssize_t recvfrom(int s, void *buf, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen);
+export function recvfrom(sockfd: number, buf: Taddr, len: number, flags: number, addr: Taddr, addrlen: Taddr): number {
+    return syscall(SYS.recvfrom, sockfd, buf, len, flags, addr, addrlen);
 }
 
-export function recvfrom(sockfd: number, buf: Buffer, flags: number, addr?: types.sockaddr_in, addr_type?: Struct): number {
-    // debug('recvfrom', sockfd, buf.length, flags, addr);
-    var args = [SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0];
-    if(addr) {
-        var addrbuf = addr_type.pack(addr);
-        args[5] = addrbuf;
-        args[6] = addrbuf.length;
-    }
-    return syscall.apply(null, args);
-}
-
-export function recvfromAsync(sockfd: number, buf: Buffer, flags: number, addr: types.sockaddr_in, addr_type: Struct, callback: Tcallback) {
-    var args = [SYS.recvfrom, sockfd, buf, buf.length, flags, 0, 0, callback];
-    if(addr) {
-        var addrbuf = addr_type.pack(addr);
-        args[5] = addrbuf;
-        args[6] = addrbuf.length;
-    }
-    p.asyscall.apply(null, args);
-}
+// export function receiveFrom(sockfd: number, buf_size: number, flags: number = 0) {
+//
+// }
 
 
 // ### setsockopt and getsockopt
@@ -1055,7 +1039,7 @@ export function recvfromAsync(sockfd: number, buf: Buffer, flags: number, addr: 
 //     int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 //     int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
 
-export function setsockopt(sockfd: number, level: number, optname: types.IP|types.IPV6, optval: Buffer): number {
+export function setsockopt(sockfd: number, level: number, optname: types.IP|types.IPV6|types.SO, optval: Buffer): number {
     // debug('setsockopt', sockfd, level, optname, optval.toString(), optval.length);
     return syscall(SYS.setsockopt, sockfd, level, optname, optval, optval.length);
 }

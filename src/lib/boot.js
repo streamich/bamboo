@@ -63,7 +63,9 @@ setMicroTask = process.nextTick = timers.setMicroTask;
 
 
 // First task in the event loop.
+console.log(1);
 var task = new Task;
+console.log(2);
 task.callback = function() {
 
     // !IMPORTANT: everything that uses `process.nextTick()` must
@@ -72,9 +74,10 @@ task.callback = function() {
 
 
     // Create `process.asyscall` and `process.asyscall64`
-    require('../libasyscall/create');
 
+    // require('../libasyscall/create');
 
+/*
     try {
         // Eval the file specified in first argument `full app.js`
         if(process.argv[1]) {
@@ -94,7 +97,7 @@ task.callback = function() {
     } catch(e) {
         console.log(e);
         console.log(e.stack);
-    }
+    }*/
 
 };
 loop.insert(task);

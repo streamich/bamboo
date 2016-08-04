@@ -5,7 +5,7 @@ server.on('error', function (err) {
     server.close();
 });
 server.on('message', function (msg, rinfo) {
-    console.log("server got: " + msg + " from " + rinfo.address + ":" + rinfo.port);
+    console.log("server got: " + msg + " from " + rinfo.address + ":" + rinfo.port + " fam: " + rinfo.family);
 });
 server.on('listening', function () {
     var address = server.address();
