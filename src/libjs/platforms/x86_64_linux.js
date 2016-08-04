@@ -15,6 +15,7 @@ exports.uint64 = typebase_1.Arr.define(exports.uint32, 2);
 exports.size_t = exports.uint64;
 exports.time_t = exports.uint64;
 exports.pid_t = exports.uint32;
+exports.optval_t = exports.int32;
 exports.ipv4 = typebase_1.Type.define(4, function (offset) {
     if (offset === void 0) { offset = 0; }
     var buf = this;
@@ -27,7 +28,7 @@ exports.ipv4 = typebase_1.Type.define(4, function (offset) {
     data.toBuffer().copy(buf, offset);
 });
 exports.pointer_t = exports.uint64;
-exports.stat = typebase_1.Struct.define(31 * 4, [
+exports.stat = typebase_1.Struct.define(32 * 4, [
     [0, exports.uint32, 'dev'],
     [2 * 4, exports.uint32, 'ino'],
     [4 * 4, exports.uint32, 'nlink'],

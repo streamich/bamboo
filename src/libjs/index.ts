@@ -1055,7 +1055,7 @@ export function recvfromAsync(sockfd: number, buf: Buffer, flags: number, addr: 
 //     int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 //     int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
 
-export function setsockopt(sockfd: number, level: number, optname: number, optval: Buffer): number {
+export function setsockopt(sockfd: number, level: number, optname: types.IP|types.IPV6, optval: Buffer): number {
     // debug('setsockopt', sockfd, level, optname, optval.toString(), optval.length);
     return syscall(SYS.setsockopt, sockfd, level, optname, optval, optval.length);
 }

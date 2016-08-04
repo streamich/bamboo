@@ -1,70 +1,76 @@
 import * as libjs from '../libjs/index';
 import {Buffer} from '../lib/buffer';
 import {StaticBuffer} from '../lib/static-buffer';
-import {IEventPoll} from "./event";
-
-console.log('here');
-export type c_onStart   = () => void;
-export type c_onStop    = () => void;
-export type c_onData    = (data: Buffer) => void;
-export type c_onError   = (err: Error, errno?: number) => void;
-export type c_callback  = (err?: Error, data?: any) => void;
+import {IEventPoll, ISocket, noop, TonData, TonError, TonStart, TonStop, Tcallback} from "./event";
+import {setMicroTask} from "../lib/timers";
 
 
-function noop() {}
+const CHUNK = 8192;
 
 
-export abstract class Socket {
-    fd: number      = 0;    /* `socket` file descriptor */
-    epfd: number    = 0;    /* `epoll` file descriptor */
+export abstract class Socket implements ISocket {
+    poll: Poll = null;
+    fd: number = 0;    // socket` file descriptor
     type: libjs.SOCK;
+    connected = false;
+    reffed = false;
 
-    onstart: c_onStart  = noop as any as c_onStart;
-    onstop: c_onStop    = noop as any as c_onStop;
-    ondata: c_onData    = noop as any as c_onData;
-    onerror: c_onError  = noop as any as c_onError;
+    onstart:    TonStart    = noop as any as TonStart;  // Maps to "listening" event.
+    onstop:     TonStop     = noop as any as TonStop;   // Maps to "close" event.
+    ondata:     TonData     = noop as any as TonData;   // Maps to "message" event.
 
-    created = false;
+    // TODO: Synchronous first level errors: do we (1) `return`, (2) `throw`, or (3) `.onerror()` them?
+    onerror:    TonError    = noop as any as TonError;  // Maps to "error" event.
 
 
-    start() {
+    // Events that come from `Poll`.
+    abstract update(events: number);
+
+    start(): Error {
         this.fd = libjs.socket(libjs.AF.INET, this.type, 0);
-        if(this.fd < 0) throw Error(`Could not create scoket: errno = ${this.fd}`);
+        if(this.fd < 0) return Error(`Could not create scoket: errno = ${this.fd}`);
 
         // Socket is not a file, we just created the file descriptor for it, flags
         // for this file descriptor are set to 0 anyways, so we just overwrite 'em,
         // no need to fetch them and OR'em.
         var fcntl = libjs.fcntl(this.fd, libjs.FCNTL.SETFL, libjs.FLAG.O_NONBLOCK);
-        if(fcntl < 0) throw Error(`Could not make socket non-blocking: errno = ${fcntl}`);
-
-        this.epfd = libjs.epoll_create1(0);
-        if(this.epfd < 0) throw Error(`Could create epoll: errno = ${this.epfd}`);
-
-        var event: libjs.epoll_event = {
-            events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
-            data: [this.fd, 0],
-        };
-        var ctl = libjs.epoll_ctl(this.epfd, libjs.EPOLL_CTL.ADD, this.fd, event);
-        if(ctl < 0) throw Error(`Could not add epoll events: errno = ${ctl}`);
+        if(fcntl < 0) return Error(`Could not make socket non-blocking: errno = ${fcntl}`);
     }
 
     stop() {
-        if(this.epfd) {
-            libjs.close(this.epfd);
-            this.fd = 0;
-        }
+        // TODO: When closing fd, it gets removed from `epoll` automatically, right?
         if(this.fd) {
+            // TODO: Is socket `close` non-blocking, so we just use `close`.
             libjs.close(this.fd);
+            // libjs.closeAsync(this.fd, noop);
             this.fd = 0;
         }
+
+        this.onstop();
     }
 }
 
 
-export class SocketDgram extends Socket {
+export class SocketUdp extends Socket {
     type = libjs.SOCK.DGRAM;
+    isIPv4 = true;
 
-    send(buf: Buffer, ip: string, port: number) {
+    start(): Error {
+        var err = super.start();
+        if(err) return err;
+
+        var fd = this.fd;
+        var event: libjs.epoll_event = {
+            // TODO: Do we need `EPOLLOUT` for dgram sockets, or they are ready for writing immediately?
+            events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
+            data: [fd, 0],
+        };
+
+        var ctl = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.ADD, fd, event);
+        if(ctl < 0) return Error(`Could not add epoll events: errno = ${ctl}`);
+    }
+
+    send(buf: Buffer|StaticBuffer, ip: string, port: number) {
         var addr: libjs.sockaddr_in = {
             sin_family: libjs.AF.INET,
             sin_port: libjs.hton16(port),
@@ -74,21 +80,21 @@ export class SocketDgram extends Socket {
             sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
         };
 
-        // Make sure socket is non-blocking and don't rise `SIGPIPE` signal if the othe end is not receiving.
-        var flags = libjs.MSG.DONTWAIT | libjs.MSG.NOSIGNAL;
+        // Make sure socket is non-blocking and don't rise `SIGPIPE` signal if the other end is not receiving.
+        const flags = libjs.MSG.DONTWAIT | libjs.MSG.NOSIGNAL;
         var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
         if(res < 0) {
             if(-res == libjs.ERROR.EAGAIN) {
                 // This just means, we executed the send *asynchronously*, so no worries.
-                return 0;
+                return;
             } else {
-                // throw Error(`sendto error, errno = ${res}`);
-                return res;
+                return Error(`sendto error, errno = ${res}`);
+                // return res;
             }
         }
     }
 
-    bind(port: number = 0, ip: string = '0.0.0.0') {
+    bind(port: number, ip: string = '0.0.0.0'): Error {
         var addr: libjs.sockaddr_in = {
             sin_family: libjs.AF.INET,
             sin_port: libjs.hton16(port),
@@ -98,15 +104,111 @@ export class SocketDgram extends Socket {
             sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
         };
 
-        return libjs.bind(this.fd, addr, libjs.sockaddr_in);
-        // if(res < 0) {
-        //     throw Error(`bind error, errno = ${res}`)
+        var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
+        if(res < 0)
+            return Error(`bind error, errno = ${res}`);
+
+        this.reffed = true;
+        this.poll.refs++;
+    }
+
+    update(events: number) {
+        console.log('events', events);
+
+        // TODO: Do we need this or UDP sockets are automatically writable after `bind()`.
+        if(events & libjs.EPOLL_EVENTS.EPOLLOUT) {
+            console.log(this.fd, 'EPOLLOUT');
+
+            this.connected = true;
+
+            var event: libjs.epoll_event = {
+                events: libjs.EPOLL_EVENTS.EPOLLIN,
+                data: [this.fd, 0],
+            };
+            var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event)
+            // TODO: check `res`
+
+            this.onstart();
+        }
+
+        if((events & libjs.EPOLL_EVENTS.EPOLLIN) || (events & libjs.EPOLL_EVENTS.EPOLLPRI)) {
+            console.log(this.fd, 'EPOLLIN');
+
+            var err = null;
+            do {
+                // var buf = new StaticBuffer(CHUNK);
+                var buf = new Buffer(CHUNK);
+                var bytes = libjs.read(this.fd, buf as any as StaticBuffer);
+                if(bytes < -1) {
+                    err = Error(`Error reading data: ${bytes}`);
+                    break;
+                } else {
+                    this.ondata(buf.slice(0, bytes));
+                }
+            } while (bytes === CHUNK);
+        }
+
+        if(events & libjs.EPOLL_EVENTS.EPOLLERR) {
+            console.log(this.fd, 'EPOLLERR');
+            this.onerror(Error(`Some error on ${this.fd}`));
+        }
+
+        if(events & libjs.EPOLL_EVENTS.EPOLLRDHUP) {
+            console.log(this.fd, 'EPOLLRDHUP');
+        }
+
+        if(events & libjs.EPOLL_EVENTS.EPOLLHUP) {
+            console.log(this.fd, 'EPOLLHUP');
+        }
+        // if(!this.connected) {
+        //     if((event.events & libjs.EPOLL_EVENTS.EPOLLOUT) > 0) { // Socket to send data.
+        //         clearInterval(polli);
+        // this.connected = true;
+        // this.onconnect();
+        // }
+        // }
+        // if((event.events & libjs.EPOLL_EVENTS.EPOLLIN) > 0) { // Socket received data.
+        //     var buf = new StaticBuffer(1000);
+        //     var bytes = libjs.read(this.fd, buf);
+        //     if(bytes < -1) {
+        //         this.onerror(Error(`Error reading data: ${bytes}`));
+        //     }
+        //     if(bytes > 0) {
+        //         var data = buf.toString().substr(0, bytes);
+        //         this.ondata(data);
+        //     }
+        // }
+        // if((event.events & libjs.EPOLL_EVENTS.EPOLLERR) > 0) { // Check for errors.
         // }
     }
 
-    listen() {
+    setTtl(ttl: number) {
+        if (ttl < 1 || ttl > 255) return -libjs.ERROR.EINVAL;
+        var buf = libjs.optval_t.pack(ttl);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.TTL, buf)
+            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.UNICAST_HOPS, buf);
+    }
 
-        // var res = libjs.recv(this.fd, buf, );
+    setMulticastTtl(ttl: number) {
+        var buf = libjs.optval_t.pack(ttl);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_TTL, buf)
+            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_HOPS, buf);
+    }
+
+    setMulticastLoop(on: boolean) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_LOOP, buf)
+            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_LOOP, buf);
+    }
+
+    setBroadcast(on: boolean) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.SOL.SOCKET, buf)
+            : libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.SO.BROADCAST, buf);
     }
 }
 
@@ -115,46 +217,6 @@ export class SocketTcp extends Socket {
     type = libjs.SOCK.STREAM;
 
     connected = false;
-
-    onconnect: () => void = () => {};
-    ondata: (err, data?) => void = () => {};
-    onerror: (err) => void = () => {};
-
-    protected pollBound = this.poll.bind(this);
-
-    protected poll() { // Executes on every event loop cycle.
-        var evbuf = new Buffer(libjs.epoll_event.size);
-        var waitres = libjs.epoll_wait(this.epfd, evbuf, 1, 0);
-        if(waitres > 0) { // New events arrived.
-            var event = libjs.epoll_event.unpack(evbuf);
-            if(!this.connected) {
-                if((event.events & libjs.EPOLL_EVENTS.EPOLLOUT) > 0) { // Socket to send data.
-                    // clearInterval(polli);
-                    this.connected = true;
-                    this.onconnect();
-                }
-            }
-            if((event.events & libjs.EPOLL_EVENTS.EPOLLIN) > 0) { // Socket received data.
-                var buf = new StaticBuffer(1000);
-                var bytes = libjs.read(this.fd, buf);
-                if(bytes < -1) {
-                    this.onerror(Error(`Error reading data: ${bytes}`));
-                }
-                if(bytes > 0) {
-                    var data = buf.toString().substr(0, bytes);
-                    this.ondata(data);
-                }
-            }
-            if((event.events & libjs.EPOLL_EVENTS.EPOLLERR) > 0) { // Check for errors.
-            }
-        }
-        if(waitres < 0) {
-            this.onerror(Error(`Error while waiting for connection: ${waitres}`));
-        }
-
-        // Hook to the global event loop.
-        process.nextTick(this.pollBound);
-    }
 
     connect(opts: {host: string, port: number}) {
 
@@ -197,44 +259,65 @@ export class SocketTcp extends Socket {
 }
 
 
-// export abstract class Pool {
-//
-// }
-
 // export class EpollPool extends Pool {
-export class Pool implements IEventPoll {
-    protected epfd: number = 0;    /* `epoll` file descriptor */
-    protected socks: {[n: number]: Socket} = [];
+export class Poll implements IEventPoll {
+
+    protected socks: {[n: number]: Socket} = {};
+
+    refs: number = 0;
+
+    // `epoll` file descriptor
+    epfd: number = 0;
+
+    onerror: TonError = noop as TonError;
+
+    maxEvents = 10;
+    bufSize = libjs.epoll_event.size;
 
     constructor() {
         this.epfd = libjs.epoll_create1(0);
         if(this.epfd < 0) throw Error(`Could not create epoll fd: errno = ${this.epfd}`);
     }
 
-    protected nextTick() {
-
-    }
-
     wait(timeout: number) {
+        const EVENT_SIZE = this.bufSize;
+        var evbuf = new StaticBuffer(this.maxEvents * EVENT_SIZE);
+        var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
 
+        if(waitres > 0) { // New events arrived.
+            // console.log(waitres);
+            // evbuf.print();
+            // console.log(this.socks);
+            for(var i = 0; i < waitres; i++) {
+                var event = libjs.epoll_event.unpack(evbuf, i * EVENT_SIZE);
+                // console.log(event);
+                var [fd,] = event.data;
+                var socket = this.socks[fd];
+                if(socket) {
+                    socket.update(event.events);
+                } else {
+                    this.onerror(Error(`Socket not in pool: ${fd}`));
+                }
+            }
+        } else if(waitres < 0) {
+            this.onerror(Error(`Error while waiting for connection: ${waitres}`));
+        }
+
+        // Hook to the global event loop.
+        setTimeout(this.wait.bind(this), 1000);
     }
 
-    createDgramSocket(): SocketDgram {
-        var sock = new SocketDgram;
-        sock.start();
-        this.addSocket(sock);
-        return sock;
+    hasRefs() {
+        return !!this.refs;
     }
 
-    addSocket(sock: Socket) {
-        var event: libjs.epoll_event = {
-            events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
-            data: [sock.fd, 0],
-        };
-        var ctl = libjs.epoll_ctl(this.epfd, libjs.EPOLL_CTL.ADD, sock.fd, event);
-        if(ctl < 0) throw Error(`Could not add epoll events: errno = ${ctl}`);
-
+    createUdpSocket(): SocketUdp|Error {
+        var sock = new SocketUdp;
+        sock.poll = this;
+        var err = sock.start();
         this.socks[sock.fd] = sock;
+
+        if(err) return err;
+        else return sock;
     }
 }
-

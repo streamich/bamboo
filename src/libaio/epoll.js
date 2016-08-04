@@ -7,56 +7,58 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = require('../libjs/index');
 var buffer_1 = require('../lib/buffer');
 var static_buffer_1 = require('../lib/static-buffer');
-console.log('here');
-function noop() { }
+var event_1 = require("./event");
+var CHUNK = 8192;
 var Socket = (function () {
     function Socket() {
+        this.poll = null;
         this.fd = 0;
-        this.epfd = 0;
-        this.onstart = noop;
-        this.onstop = noop;
-        this.ondata = noop;
-        this.onerror = noop;
-        this.created = false;
+        this.connected = false;
+        this.reffed = false;
+        this.onstart = event_1.noop;
+        this.onstop = event_1.noop;
+        this.ondata = event_1.noop;
+        this.onerror = event_1.noop;
     }
     Socket.prototype.start = function () {
         this.fd = libjs.socket(2, this.type, 0);
         if (this.fd < 0)
-            throw Error("Could not create scoket: errno = " + this.fd);
+            return Error("Could not create scoket: errno = " + this.fd);
         var fcntl = libjs.fcntl(this.fd, 4, 2048);
         if (fcntl < 0)
-            throw Error("Could not make socket non-blocking: errno = " + fcntl);
-        this.epfd = libjs.epoll_create1(0);
-        if (this.epfd < 0)
-            throw Error("Could create epoll: errno = " + this.epfd);
-        var event = {
-            events: 1 | 4,
-            data: [this.fd, 0]
-        };
-        var ctl = libjs.epoll_ctl(this.epfd, 1, this.fd, event);
-        if (ctl < 0)
-            throw Error("Could not add epoll events: errno = " + ctl);
+            return Error("Could not make socket non-blocking: errno = " + fcntl);
     };
     Socket.prototype.stop = function () {
-        if (this.epfd) {
-            libjs.close(this.epfd);
-            this.fd = 0;
-        }
         if (this.fd) {
             libjs.close(this.fd);
             this.fd = 0;
         }
+        this.onstop();
     };
     return Socket;
 }());
 exports.Socket = Socket;
-var SocketDgram = (function (_super) {
-    __extends(SocketDgram, _super);
-    function SocketDgram() {
+var SocketUdp = (function (_super) {
+    __extends(SocketUdp, _super);
+    function SocketUdp() {
         _super.apply(this, arguments);
         this.type = 2;
+        this.isIPv4 = true;
     }
-    SocketDgram.prototype.send = function (buf, ip, port) {
+    SocketUdp.prototype.start = function () {
+        var err = _super.prototype.start.call(this);
+        if (err)
+            return err;
+        var fd = this.fd;
+        var event = {
+            events: 1 | 4,
+            data: [fd, 0]
+        };
+        var ctl = libjs.epoll_ctl(this.poll.epfd, 1, fd, event);
+        if (ctl < 0)
+            return Error("Could not add epoll events: errno = " + ctl);
+    };
+    SocketUdp.prototype.send = function (buf, ip, port) {
         var addr = {
             sin_family: 2,
             sin_port: libjs.hton16(port),
@@ -69,15 +71,14 @@ var SocketDgram = (function (_super) {
         var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
         if (res < 0) {
             if (-res == 11) {
-                return 0;
+                return;
             }
             else {
-                return res;
+                return Error("sendto error, errno = " + res);
             }
         }
     };
-    SocketDgram.prototype.bind = function (port, ip) {
-        if (port === void 0) { port = 0; }
+    SocketUdp.prototype.bind = function (port, ip) {
         if (ip === void 0) { ip = '0.0.0.0'; }
         var addr = {
             sin_family: 2,
@@ -87,54 +88,86 @@ var SocketDgram = (function (_super) {
             },
             sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
         };
-        return libjs.bind(this.fd, addr, libjs.sockaddr_in);
+        var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
+        if (res < 0)
+            return Error("bind error, errno = " + res);
+        this.reffed = true;
+        this.poll.refs++;
     };
-    SocketDgram.prototype.listen = function () {
+    SocketUdp.prototype.update = function (events) {
+        console.log('events', events);
+        if (events & 4) {
+            console.log(this.fd, 'EPOLLOUT');
+            this.connected = true;
+            var event = {
+                events: 1,
+                data: [this.fd, 0]
+            };
+            var res = libjs.epoll_ctl(this.poll.epfd, 3, this.fd, event);
+            this.onstart();
+        }
+        if ((events & 1) || (events & 2)) {
+            console.log(this.fd, 'EPOLLIN');
+            var err = null;
+            do {
+                var buf = new buffer_1.Buffer(CHUNK);
+                var bytes = libjs.read(this.fd, buf);
+                if (bytes < -1) {
+                    err = Error("Error reading data: " + bytes);
+                    break;
+                }
+                else {
+                    this.ondata(buf.slice(0, bytes));
+                }
+            } while (bytes === CHUNK);
+        }
+        if (events & 8) {
+            console.log(this.fd, 'EPOLLERR');
+            this.onerror(Error("Some error on " + this.fd));
+        }
+        if (events & 8192) {
+            console.log(this.fd, 'EPOLLRDHUP');
+        }
+        if (events & 16) {
+            console.log(this.fd, 'EPOLLHUP');
+        }
     };
-    return SocketDgram;
+    SocketUdp.prototype.setTtl = function (ttl) {
+        if (ttl < 1 || ttl > 255)
+            return -22;
+        var buf = libjs.optval_t.pack(ttl);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, 0, 2, buf)
+            : libjs.setsockopt(this.fd, 41, 16, buf);
+    };
+    SocketUdp.prototype.setMulticastTtl = function (ttl) {
+        var buf = libjs.optval_t.pack(ttl);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, 0, 33, buf)
+            : libjs.setsockopt(this.fd, 41, 18, buf);
+    };
+    SocketUdp.prototype.setMulticastLoop = function (on) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, 0, 34, buf)
+            : libjs.setsockopt(this.fd, 41, 19, buf);
+    };
+    SocketUdp.prototype.setBroadcast = function (on) {
+        var buf = libjs.optval_t.pack(on ? 1 : 0);
+        return this.isIPv4
+            ? libjs.setsockopt(this.fd, 0, libjs.SOL.SOCKET, buf)
+            : libjs.setsockopt(this.fd, 41, libjs.SO.BROADCAST, buf);
+    };
+    return SocketUdp;
 }(Socket));
-exports.SocketDgram = SocketDgram;
+exports.SocketUdp = SocketUdp;
 var SocketTcp = (function (_super) {
     __extends(SocketTcp, _super);
     function SocketTcp() {
         _super.apply(this, arguments);
         this.type = 1;
         this.connected = false;
-        this.onconnect = function () { };
-        this.ondata = function () { };
-        this.onerror = function () { };
-        this.pollBound = this.poll.bind(this);
     }
-    SocketTcp.prototype.poll = function () {
-        var evbuf = new buffer_1.Buffer(libjs.epoll_event.size);
-        var waitres = libjs.epoll_wait(this.epfd, evbuf, 1, 0);
-        if (waitres > 0) {
-            var event = libjs.epoll_event.unpack(evbuf);
-            if (!this.connected) {
-                if ((event.events & 4) > 0) {
-                    this.connected = true;
-                    this.onconnect();
-                }
-            }
-            if ((event.events & 1) > 0) {
-                var buf = new static_buffer_1.StaticBuffer(1000);
-                var bytes = libjs.read(this.fd, buf);
-                if (bytes < -1) {
-                    this.onerror(Error("Error reading data: " + bytes));
-                }
-                if (bytes > 0) {
-                    var data = buf.toString().substr(0, bytes);
-                    this.ondata(data);
-                }
-            }
-            if ((event.events & 8) > 0) {
-            }
-        }
-        if (waitres < 0) {
-            this.onerror(Error("Error while waiting for connection: " + waitres));
-        }
-        process.nextTick(this.pollBound);
-    };
     SocketTcp.prototype.connect = function (opts) {
         var addr_in = {
             sin_family: 2,
@@ -163,34 +196,53 @@ var SocketTcp = (function (_super) {
     return SocketTcp;
 }(Socket));
 exports.SocketTcp = SocketTcp;
-var Pool = (function () {
-    function Pool() {
+var Poll = (function () {
+    function Poll() {
+        this.socks = {};
+        this.refs = 0;
         this.epfd = 0;
-        this.socks = [];
+        this.onerror = event_1.noop;
+        this.maxEvents = 10;
+        this.bufSize = libjs.epoll_event.size;
         this.epfd = libjs.epoll_create1(0);
         if (this.epfd < 0)
             throw Error("Could not create epoll fd: errno = " + this.epfd);
     }
-    Pool.prototype.nextTick = function () {
+    Poll.prototype.wait = function (timeout) {
+        var EVENT_SIZE = this.bufSize;
+        var evbuf = new static_buffer_1.StaticBuffer(this.maxEvents * EVENT_SIZE);
+        var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
+        if (waitres > 0) {
+            for (var i = 0; i < waitres; i++) {
+                var event = libjs.epoll_event.unpack(evbuf, i * EVENT_SIZE);
+                var fd = event.data[0];
+                var socket = this.socks[fd];
+                if (socket) {
+                    socket.update(event.events);
+                }
+                else {
+                    this.onerror(Error("Socket not in pool: " + fd));
+                }
+            }
+        }
+        else if (waitres < 0) {
+            this.onerror(Error("Error while waiting for connection: " + waitres));
+        }
+        setTimeout(this.wait.bind(this), 1000);
     };
-    Pool.prototype.wait = function (timeout) {
+    Poll.prototype.hasRefs = function () {
+        return !!this.refs;
     };
-    Pool.prototype.createDgramSocket = function () {
-        var sock = new SocketDgram;
-        sock.start();
-        this.addSocket(sock);
-        return sock;
-    };
-    Pool.prototype.addSocket = function (sock) {
-        var event = {
-            events: 1 | 4,
-            data: [sock.fd, 0]
-        };
-        var ctl = libjs.epoll_ctl(this.epfd, 1, sock.fd, event);
-        if (ctl < 0)
-            throw Error("Could not add epoll events: errno = " + ctl);
+    Poll.prototype.createUdpSocket = function () {
+        var sock = new SocketUdp;
+        sock.poll = this;
+        var err = sock.start();
         this.socks[sock.fd] = sock;
+        if (err)
+            return err;
+        else
+            return sock;
     };
-    return Pool;
+    return Poll;
 }());
-exports.Pool = Pool;
+exports.Poll = Poll;

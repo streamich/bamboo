@@ -135,7 +135,7 @@ function emitMany(handler, isFn, self, args) {
 
 EventEmitter.prototype.emit = function emit(type) {
     var er, handler, len, args, i, events, domain;
-    var needDomainExit = false;
+    // var needDomainExit = false;
     var doError = (type === 'error');
 
     events = this._events;
@@ -144,7 +144,8 @@ EventEmitter.prototype.emit = function emit(type) {
     else if (!doError)
         return false;
 
-    domain = this.domain;
+    // domain = this.domain;
+    domain = null;
 
     // If there is no 'error' event listener then throw.
     if (doError) {
@@ -172,10 +173,10 @@ EventEmitter.prototype.emit = function emit(type) {
     if (!handler)
         return false;
 
-    if (domain && this !== process) {
-        domain.enter();
-        needDomainExit = true;
-    }
+    // if (domain && this !== process) {
+    //     domain.enter();
+    //     needDomainExit = true;
+    // }
 
     var isFn = typeof handler === 'function';
     len = arguments.length;
@@ -201,8 +202,8 @@ EventEmitter.prototype.emit = function emit(type) {
             emitMany(handler, isFn, this, args);
     }
 
-    if (needDomainExit)
-        domain.exit();
+    // if (needDomainExit)
+    //     domain.exit();
 
     return true;
 };

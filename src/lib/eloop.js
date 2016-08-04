@@ -5,6 +5,15 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var index_1 = require('../libjs/index');
+var Poll;
+var platform = process.platform;
+switch (platform) {
+    case 'linux':
+        Poll = require('../libaio/epoll').Poll;
+        break;
+    default:
+        throw Error("Platform not supported: " + platform);
+}
 var POINTER_NONE = -1;
 var DELAYS = [
     -2,
@@ -36,11 +45,11 @@ function findDelayIndex(delay) {
             return i;
 }
 var MicroTask = (function () {
-    function MicroTask() {
+    function MicroTask(callback, args) {
         this.next = null;
         this.prev = null;
-        this.callback = null;
-        this.args = null;
+        this.callback = callback || null;
+        this.args = args || null;
     }
     MicroTask.prototype.exec = function () {
         var args = this.args, callback = this.callback;
@@ -257,6 +266,7 @@ var EventLoop = (function () {
         this.microQueueEnd = null;
         this.refQueue = new EventQueue;
         this.unrefQueue = new EventQueue;
+        this.poll = new Poll;
     }
     EventLoop.prototype.shouldStop = function () {
         if (!this.refQueue.start)
@@ -336,18 +346,22 @@ var EventLoop = (function () {
                 else
                     unrefTask = this.unrefQueue.pop();
             }
-            if (this.shouldStop())
+            var havePollEvents = this.poll.hasRefs();
+            if (this.shouldStop() && !havePollEvents)
                 break;
             var ref_ms = this.refQueue.msNextTask();
             var unref_ms = this.unrefQueue.msNextTask();
-            var ms = Math.min(ref_ms, unref_ms);
-            if (ms > 10) {
-                if (ms > 10000)
-                    ms = 10000;
-                ms -= 5;
-                var seconds = Math.floor(ms / 1000);
-                var nanoseconds = (ms % 1000) * 1000000;
-                index_1.nanosleep(seconds, nanoseconds);
+            var CAP = 1000000;
+            var ms = Math.min(ref_ms, unref_ms, CAP);
+            if (ms > 0) {
+                if (havePollEvents) {
+                    this.poll.wait(ms);
+                }
+                else {
+                    var seconds = Math.floor(ms / 1000);
+                    var nanoseconds = (ms % 1000) * 1000000;
+                    index_1.nanosleep(seconds, nanoseconds);
+                }
             }
             else {
                 if (ms > 1) {

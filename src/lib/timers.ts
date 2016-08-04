@@ -1,4 +1,4 @@
-import {Task, DELAY} from './eloop';
+import {Task, MicroTask, DELAY} from './eloop';
 
 
 // TODO: We can relax this to 53 bits, right?
@@ -6,7 +6,11 @@ const TIMEOUT_MAX = 2147483647; // 2^31-1
 
 
 export class Timeout {
-    task: Task = new Task;
+    task: Task;
+
+    constructor(callback?, args?) {
+        this.task = new Task(callback, args);
+    }
 
     ref() {
         this.task.ref();
@@ -34,10 +38,9 @@ export function setTimeout(callback, after, arg1, arg2, arg3) {
         after = 1; // schedule on next tick, follows browser behaviour
     }
 
-    var timer = new Timeout;
+    var timer = new Timeout(callback);
     var task = timer.task;
     task.delay = after;
-    task.callback = callback;
     var length = arguments.length;
 
     switch (length) {
@@ -108,11 +111,7 @@ function createImm(callback, arg1, arg2, arg3) {
             break;
     }
 
-    var timer = new Immediate;
-    timer.callback = callback;
-    timer.args = args;
-
-    return timer;
+    return new Immediate(callback, args);
 }
 
 
@@ -141,4 +140,16 @@ export function setIOPoll(callback, arg1, arg2, arg3) {
 
 export function clearIOPoll(poll) {
     if(poll) poll.cancel();
+}
+
+
+export function setMicroTask(callback) {
+    var args;
+    if (arguments.length > 1) {
+        args = new Array(arguments.length - 1);
+        for (var i = 1; i < arguments.length; i++)
+            args[i - 1] = arguments[i];
+    }
+
+    process.loop.insertMicrotask(new MicroTask(callback, args));
 }

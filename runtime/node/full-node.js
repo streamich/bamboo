@@ -16,6 +16,8 @@ node_require = require;
 
 
 process.runtime = 'node.js';
+process.platform = 'linux';
+process.arch = 'x64';
 
 
 // Remove first argument

@@ -66,23 +66,6 @@ process.config = {};
 // reallyExit: [Function: reallyExit],
 
 
-
-process.nextTick = function(callback) {
-    var task = new eloop.MicroTask;
-    task.callback = callback;
-
-    var args;
-    if (arguments.length > 1) {
-        args = new Array(arguments.length - 1);
-        for (var i = 1; i < arguments.length; i++)
-            args[i - 1] = arguments[i];
-        task.args = args;
-    }
-
-    process.loop.insertMicrotask(task);
-};
-
-
 var libjs = require('../libjs/index');
 
 process.pid = libjs.getpid();

@@ -78,6 +78,10 @@ StaticBuffer.frame = function(address, size) {
     return new StaticBuffer(sab);
 };
 
+StaticBuffer.concat = function(list) {
+    
+}
+
 // StaticBuffer.from([1, 2, 3]);
 // StaticBuffer.from(new StaticArrayBuffer(100));
 // StaticBuffer.from(new ArrayBuffer(100));

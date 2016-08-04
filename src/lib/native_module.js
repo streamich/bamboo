@@ -118,6 +118,33 @@ NativeModule.prototype.compile = function() {
         // });
         // fn(this.exports, NativeModule.require, this, this.filename);
 
+        // var exports;
+        // switch(this.id) {
+        //     case 'assert': exports = require('./assert'); break;
+        //     case 'buffer': exports = require('./buffer'); break;
+        //     case 'console': exports = require('./console'); break;
+        //     case 'eloop': exports = require('./eloop'); break;
+        //     case 'events': exports = require('./events'); break;
+        //     case 'fs': exports = require('./fs'); break;
+        //     case 'module': exports = require('./module'); break;
+        //     case 'path': exports = require('./path'); break;
+        //     case 'static-arraybuffer': exports = require('./static-arraybuffer'); break;
+        //     case 'static-buffer': exports = require('./static-buffer'); break;
+        //     case 'stream': exports = require('./stream'); break;
+        //     case 'timers': exports = require('./timers'); break;
+        //     case 'util': exports = require('./util'); break;
+        //     case 'url': exports = require('./url'); break;
+        //     case 'querystring': exports = require('./querystring'); break;
+        //     case 'punycode': exports = require('./punycode'); break;
+        //     case 'vm': exports = require('./vm'); break;
+        //     case 'dgram': exports = require('./dgram'); break;
+        //     case 'dns': exports = require('./dns'); break;
+        //     case 'net': exports = require('./net'); break;
+        //     case 'http': exports = require('./http'); break;
+        //     case 'tls': exports = require('./tls'); break;
+        //     case 'https': exports = require('./https'); break;
+        // }
+        // this.exports = exports;
         this.exports = require('./' + this.id);
 
         this.loaded = true;

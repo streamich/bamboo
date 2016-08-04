@@ -125,6 +125,7 @@ global = this;
 	clearImmediate = timers.clearImmediate;
 	setIOPoll = timers.setIOPoll;
 	clearIOPoll = timers.clearIOPoll;
+	setMicroTask = process.nextTick = timers.setMicroTask;
 
 
 	// First task in the event loop.
@@ -138,12 +139,6 @@ global = this;
 
 	    // Create `process.asyscall` and `process.asyscall64`
 	    __webpack_require__(33);
-
-
-	    // Includ in distribution bundle all `/lib/*` files.
-	    // function a(a) {
-	    //     require('./' + a + '.js');
-	    // }
 
 
 	    try {
@@ -3087,6 +3082,10 @@ global = this;
 	    return new StaticBuffer(sab);
 	};
 
+	StaticBuffer.concat = function(list) {
+	    
+	}
+
 	// StaticBuffer.from([1, 2, 3]);
 	// StaticBuffer.from(new StaticArrayBuffer(100));
 	// StaticBuffer.from(new ArrayBuffer(100));
@@ -3214,6 +3213,7 @@ global = this;
 	exports.size_t = exports.uint64;
 	exports.time_t = exports.uint64;
 	exports.pid_t = exports.uint32;
+	exports.optval_t = exports.int32;
 	exports.ipv4 = typebase_1.Type.define(4, function (offset) {
 	    if (offset === void 0) { offset = 0; }
 	    var buf = this;
@@ -3226,7 +3226,7 @@ global = this;
 	    data.toBuffer().copy(buf, offset);
 	});
 	exports.pointer_t = exports.uint64;
-	exports.stat = typebase_1.Struct.define(31 * 4, [
+	exports.stat = typebase_1.Struct.define(32 * 4, [
 	    [0, exports.uint32, 'dev'],
 	    [2 * 4, exports.uint32, 'ino'],
 	    [4 * 4, exports.uint32, 'nlink'],
@@ -3718,23 +3718,6 @@ global = this;
 	// reallyExit: [Function: reallyExit],
 
 
-
-	process.nextTick = function(callback) {
-	    var task = new eloop.MicroTask;
-	    task.callback = callback;
-
-	    var args;
-	    if (arguments.length > 1) {
-	        args = new Array(arguments.length - 1);
-	        for (var i = 1; i < arguments.length; i++)
-	            args[i - 1] = arguments[i];
-	        task.args = args;
-	    }
-
-	    process.loop.insertMicrotask(task);
-	};
-
-
 	var libjs = __webpack_require__(6);
 
 	process.pid = libjs.getpid();
@@ -4026,7 +4009,7 @@ global = this;
 
 	EventEmitter.prototype.emit = function emit(type) {
 	    var er, handler, len, args, i, events, domain;
-	    var needDomainExit = false;
+	    // var needDomainExit = false;
 	    var doError = (type === 'error');
 
 	    events = this._events;
@@ -4035,7 +4018,8 @@ global = this;
 	    else if (!doError)
 	        return false;
 
-	    domain = this.domain;
+	    // domain = this.domain;
+	    domain = null;
 
 	    // If there is no 'error' event listener then throw.
 	    if (doError) {
@@ -4063,10 +4047,10 @@ global = this;
 	    if (!handler)
 	        return false;
 
-	    if (domain && this !== process) {
-	        domain.enter();
-	        needDomainExit = true;
-	    }
+	    // if (domain && this !== process) {
+	    //     domain.enter();
+	    //     needDomainExit = true;
+	    // }
 
 	    var isFn = typeof handler === 'function';
 	    len = arguments.length;
@@ -4092,8 +4076,8 @@ global = this;
 	            emitMany(handler, isFn, this, args);
 	    }
 
-	    if (needDomainExit)
-	        domain.exit();
+	    // if (needDomainExit)
+	    //     domain.exit();
 
 	    return true;
 	};
@@ -4385,6 +4369,15 @@ global = this;
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var index_1 = __webpack_require__(6);
+	var Poll;
+	var platform = process.platform;
+	switch (platform) {
+	    case 'linux':
+	        Poll = __webpack_require__(43).Poll;
+	        break;
+	    default:
+	        throw Error("Platform not supported: " + platform);
+	}
 	var POINTER_NONE = -1;
 	var DELAYS = [
 	    -2,
@@ -4416,11 +4409,11 @@ global = this;
 	            return i;
 	}
 	var MicroTask = (function () {
-	    function MicroTask() {
+	    function MicroTask(callback, args) {
 	        this.next = null;
 	        this.prev = null;
-	        this.callback = null;
-	        this.args = null;
+	        this.callback = callback || null;
+	        this.args = args || null;
 	    }
 	    MicroTask.prototype.exec = function () {
 	        var args = this.args, callback = this.callback;
@@ -4637,6 +4630,7 @@ global = this;
 	        this.microQueueEnd = null;
 	        this.refQueue = new EventQueue;
 	        this.unrefQueue = new EventQueue;
+	        this.poll = new Poll;
 	    }
 	    EventLoop.prototype.shouldStop = function () {
 	        if (!this.refQueue.start)
@@ -4716,18 +4710,22 @@ global = this;
 	                else
 	                    unrefTask = this.unrefQueue.pop();
 	            }
-	            if (this.shouldStop())
+	            var havePollEvents = this.poll.hasRefs();
+	            if (this.shouldStop() && !havePollEvents)
 	                break;
 	            var ref_ms = this.refQueue.msNextTask();
 	            var unref_ms = this.unrefQueue.msNextTask();
-	            var ms = Math.min(ref_ms, unref_ms);
-	            if (ms > 10) {
-	                if (ms > 10000)
-	                    ms = 10000;
-	                ms -= 5;
-	                var seconds = Math.floor(ms / 1000);
-	                var nanoseconds = (ms % 1000) * 1000000;
-	                index_1.nanosleep(seconds, nanoseconds);
+	            var CAP = 1000000;
+	            var ms = Math.min(ref_ms, unref_ms, CAP);
+	            if (ms > 0) {
+	                if (havePollEvents) {
+	                    this.poll.wait(ms);
+	                }
+	                else {
+	                    var seconds = Math.floor(ms / 1000);
+	                    var nanoseconds = (ms % 1000) * 1000000;
+	                    index_1.nanosleep(seconds, nanoseconds);
+	                }
 	            }
 	            else {
 	                if (ms > 1) {
@@ -11433,8 +11431,8 @@ global = this;
 	var eloop_1 = __webpack_require__(15);
 	var TIMEOUT_MAX = 2147483647;
 	var Timeout = (function () {
-	    function Timeout() {
-	        this.task = new eloop_1.Task;
+	    function Timeout(callback, args) {
+	        this.task = new eloop_1.Task(callback, args);
 	    }
 	    Timeout.prototype.ref = function () {
 	        this.task.ref();
@@ -11461,10 +11459,9 @@ global = this;
 	    if (!(after >= 1 && after <= TIMEOUT_MAX)) {
 	        after = 1;
 	    }
-	    var timer = new Timeout;
+	    var timer = new Timeout(callback);
 	    var task = timer.task;
 	    task.delay = after;
-	    task.callback = callback;
 	    var length = arguments.length;
 	    switch (length) {
 	        case 0:
@@ -11527,10 +11524,7 @@ global = this;
 	                args[i - 1] = arguments[i];
 	            break;
 	    }
-	    var timer = new Immediate;
-	    timer.callback = callback;
-	    timer.args = args;
-	    return timer;
+	    return new Immediate(callback, args);
 	}
 	function setImmediate(callback, arg1, arg2, arg3) {
 	    var timer = createImm(callback, arg1, arg2, arg3);
@@ -11556,6 +11550,16 @@ global = this;
 	        poll.cancel();
 	}
 	exports.clearIOPoll = clearIOPoll;
+	function setMicroTask(callback) {
+	    var args;
+	    if (arguments.length > 1) {
+	        args = new Array(arguments.length - 1);
+	        for (var i = 1; i < arguments.length; i++)
+	            args[i - 1] = arguments[i];
+	    }
+	    process.loop.insertMicrotask(new eloop_1.MicroTask(callback, args));
+	}
+	exports.setMicroTask = setMicroTask;
 
 
 /***/ },
@@ -11744,6 +11748,7 @@ global = this;
 
 	'use strict';
 
+	console.log('m')
 	// Note: in general `module.js` needs 2 system calls to get `require` working:
 	//  1. `fs.readFileSync()`
 	//  2. `fs.statSync()`
@@ -11757,9 +11762,9 @@ global = this;
 
 	var NativeModule = __webpack_require__(37).NativeModule;
 	var util = __webpack_require__(18);
-	var internalModule = __webpack_require__(41);
+	var internalModule = __webpack_require__(45);
 	var internalUtil = __webpack_require__(26);
-	var vm = __webpack_require__(47);
+	var vm = __webpack_require__(41);
 	var assert = __webpack_require__(31).ok;
 	var fs = __webpack_require__(16);
 	var path = __webpack_require__(20);
@@ -12589,7 +12594,34 @@ global = this;
 	        // });
 	        // fn(this.exports, NativeModule.require, this, this.filename);
 
-	        this.exports = __webpack_require__(38)("./" + this.id);
+	        // var exports;
+	        // switch(this.id) {
+	        //     case 'assert': exports = require('./assert'); break;
+	        //     case 'buffer': exports = require('./buffer'); break;
+	        //     case 'console': exports = require('./console'); break;
+	        //     case 'eloop': exports = require('./eloop'); break;
+	        //     case 'events': exports = require('./events'); break;
+	        //     case 'fs': exports = require('./fs'); break;
+	        //     case 'module': exports = require('./module'); break;
+	        //     case 'path': exports = require('./path'); break;
+	        //     case 'static-arraybuffer': exports = require('./static-arraybuffer'); break;
+	        //     case 'static-buffer': exports = require('./static-buffer'); break;
+	        //     case 'stream': exports = require('./stream'); break;
+	        //     case 'timers': exports = require('./timers'); break;
+	        //     case 'util': exports = require('./util'); break;
+	        //     case 'url': exports = require('./url'); break;
+	        //     case 'querystring': exports = require('./querystring'); break;
+	        //     case 'punycode': exports = require('./punycode'); break;
+	        //     case 'vm': exports = require('./vm'); break;
+	        //     case 'dgram': exports = require('./dgram'); break;
+	        //     case 'dns': exports = require('./dns'); break;
+	        //     case 'net': exports = require('./net'); break;
+	        //     case 'http': exports = require('./http'); break;
+	        //     case 'tls': exports = require('./tls'); break;
+	        //     case 'https': exports = require('./https'); break;
+	        // }
+	        // this.exports = exports;
+	        this.exports = __webpack_require__(48)("./" + this.id);
 
 	        this.loaded = true;
 	    } finally {
@@ -12608,38 +12640,2641 @@ global = this;
 /* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
+	// 'use strict';
+
+
+	var toASCII = __webpack_require__(39).toASCII;
+
+	exports.parse = urlParse;
+	exports.resolve = urlResolve;
+	exports.resolveObject = urlResolveObject;
+	exports.format = urlFormat;
+
+	exports.Url = Url;
+
+	function Url() {
+	    this.protocol = null;
+	    this.slashes = null;
+	    this.auth = null;
+	    this.host = null;
+	    this.port = null;
+	    this.hostname = null;
+	    this.hash = null;
+	    this.search = null;
+	    this.query = null;
+	    this.pathname = null;
+	    this.path = null;
+	    this.href = null;
+	}
+
+	// Reference: RFC 3986, RFC 1808, RFC 2396
+
+	// define these here so at least they only have to be
+	// compiled once on the first module load.
+	var protocolPattern = /^([a-z0-9.+-]+:)/i;
+	var portPattern = /:[0-9]*$/;
+
+	// Special case for a simple path URL
+	var simplePathPattern = /^(\/\/?(?!\/)[^\?\s]*)(\?[^\s]*)?$/;
+
+	var hostnameMaxLen = 255;
+	// protocols that can allow "unsafe" and "unwise" chars.
+	var unsafeProtocol = {
+	    'javascript': true,
+	    'javascript:': true
+	};
+	// protocols that never have a hostname.
+	var hostlessProtocol = {
+	    'javascript': true,
+	    'javascript:': true
+	};
+	// protocols that always contain a // bit.
+	var slashedProtocol = {
+	    'http': true,
+	    'http:': true,
+	    'https': true,
+	    'https:': true,
+	    'ftp': true,
+	    'ftp:': true,
+	    'gopher': true,
+	    'gopher:': true,
+	    'file': true,
+	    'file:': true
+	};
+
+	var querystring = __webpack_require__(40);
+
+	// This constructor is used to store parsed query string values. Instantiating
+	// this is faster than explicitly calling `Object.create(null)` to get a
+	// "clean" empty object (tested with v8 v4.9).
+	function ParsedQueryString() {}
+	ParsedQueryString.prototype = Object.create(null);
+
+	function urlParse(url, parseQueryString, slashesDenoteHost) {
+	    if (url instanceof Url) return url;
+
+	    var u = new Url();
+	    u.parse(url, parseQueryString, slashesDenoteHost);
+	    return u;
+	}
+
+	Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
+	    if (typeof url !== 'string') {
+	        throw new TypeError('Parameter "url" must be a string, not ' + typeof url);
+	    }
+
+	    // Copy chrome, IE, opera backslash-handling behavior.
+	    // Back slashes before the query string get converted to forward slashes
+	    // See: https://code.google.com/p/chromium/issues/detail?id=25916
+	    var hasHash = false;
+	    var start = -1;
+	    var end = -1;
+	    var rest = '';
+	    var lastPos = 0;
+	    var i = 0;
+	    for (var inWs = false, split = false; i < url.length; ++i) {
+	        const code = url.charCodeAt(i);
+
+	        // Find first and last non-whitespace characters for trimming
+	        const isWs = code === 32/* */ ||
+	            code === 9/*\t*/ ||
+	            code === 13/*\r*/ ||
+	            code === 10/*\n*/ ||
+	            code === 12/*\f*/ ||
+	            code === 160/*\u00A0*/ ||
+	            code === 65279/*\uFEFF*/;
+	        if (start === -1) {
+	            if (isWs)
+	                continue;
+	            lastPos = start = i;
+	        } else {
+	            if (inWs) {
+	                if (!isWs) {
+	                    end = -1;
+	                    inWs = false;
+	                }
+	            } else if (isWs) {
+	                end = i;
+	                inWs = true;
+	            }
+	        }
+
+	        // Only convert backslashes while we haven't seen a split character
+	        if (!split) {
+	            switch (code) {
+	                case 35: // '#'
+	                    hasHash = true;
+	                // Fall through
+	                case 63: // '?'
+	                    split = true;
+	                    break;
+	                case 92: // '\\'
+	                    if (i - lastPos > 0)
+	                        rest += url.slice(lastPos, i);
+	                    rest += '/';
+	                    lastPos = i + 1;
+	                    break;
+	            }
+	        } else if (!hasHash && code === 35/*#*/) {
+	            hasHash = true;
+	        }
+	    }
+
+	    // Check if string was non-empty (including strings with only whitespace)
+	    if (start !== -1) {
+	        if (lastPos === start) {
+	            // We didn't convert any backslashes
+
+	            if (end === -1) {
+	                if (start === 0)
+	                    rest = url;
+	                else
+	                    rest = url.slice(start);
+	            } else {
+	                rest = url.slice(start, end);
+	            }
+	        } else if (end === -1 && lastPos < url.length) {
+	            // We converted some backslashes and have only part of the entire string
+	            rest += url.slice(lastPos);
+	        } else if (end !== -1 && lastPos < end) {
+	            // We converted some backslashes and have only part of the entire string
+	            rest += url.slice(lastPos, end);
+	        }
+	    }
+
+	    if (!slashesDenoteHost && !hasHash) {
+	        // Try fast path regexp
+	        const simplePath = simplePathPattern.exec(rest);
+	        if (simplePath) {
+	            this.path = rest;
+	            this.href = rest;
+	            this.pathname = simplePath[1];
+	            if (simplePath[2]) {
+	                this.search = simplePath[2];
+	                if (parseQueryString) {
+	                    this.query = querystring.parse(this.search.slice(1));
+	                } else {
+	                    this.query = this.search.slice(1);
+	                }
+	            } else if (parseQueryString) {
+	                this.search = '';
+	                this.query = new ParsedQueryString();
+	            }
+	            return this;
+	        }
+	    }
+
+	    var proto = protocolPattern.exec(rest);
+	    if (proto) {
+	        proto = proto[0];
+	        var lowerProto = proto.toLowerCase();
+	        this.protocol = lowerProto;
+	        rest = rest.slice(proto.length);
+	    }
+
+	    // figure out if it's got a host
+	    // user@server is *always* interpreted as a hostname, and url
+	    // resolution will treat //foo/bar as host=foo,path=bar because that's
+	    // how the browser resolves relative URLs.
+	    if (slashesDenoteHost || proto || /^\/\/[^@\/]+@[^@\/]+/.test(rest)) {
+	        var slashes = rest.charCodeAt(0) === 47/*/*/ &&
+	            rest.charCodeAt(1) === 47/*/*/;
+	        if (slashes && !(proto && hostlessProtocol[proto])) {
+	            rest = rest.slice(2);
+	            this.slashes = true;
+	        }
+	    }
+
+	    if (!hostlessProtocol[proto] &&
+	        (slashes || (proto && !slashedProtocol[proto]))) {
+
+	        // there's a hostname.
+	        // the first instance of /, ?, ;, or # ends the host.
+	        //
+	        // If there is an @ in the hostname, then non-host chars *are* allowed
+	        // to the left of the last @ sign, unless some host-ending character
+	        // comes *before* the @-sign.
+	        // URLs are obnoxious.
+	        //
+	        // ex:
+	        // http://a@b@c/ => user:a@b host:c
+	        // http://a@b?@c => user:a host:b path:/?@c
+
+	        // v0.12 TODO(isaacs): This is not quite how Chrome does things.
+	        // Review our test case against browsers more comprehensively.
+
+	        var hostEnd = -1;
+	        var atSign = -1;
+	        var nonHost = -1;
+	        for (i = 0; i < rest.length; ++i) {
+	            switch (rest.charCodeAt(i)) {
+	                case 9:   // '\t'
+	                case 10:  // '\n'
+	                case 13:  // '\r'
+	                case 32:  // ' '
+	                case 34:  // '"'
+	                case 37:  // '%'
+	                case 39:  // '\''
+	                case 59:  // ';'
+	                case 60:  // '<'
+	                case 62:  // '>'
+	                case 92:  // '\\'
+	                case 94:  // '^'
+	                case 96:  // '`'
+	                case 123: // '{'
+	                case 124: // '|'
+	                case 125: // '}'
+	                          // Characters that are never ever allowed in a hostname from RFC 2396
+	                    if (nonHost === -1)
+	                        nonHost = i;
+	                    break;
+	                case 35: // '#'
+	                case 47: // '/'
+	                case 63: // '?'
+	                    // Find the first instance of any host-ending characters
+	                    if (nonHost === -1)
+	                        nonHost = i;
+	                    hostEnd = i;
+	                    break;
+	                case 64: // '@'
+	                    // At this point, either we have an explicit point where the
+	                    // auth portion cannot go past, or the last @ char is the decider.
+	                    atSign = i;
+	                    nonHost = -1;
+	                    break;
+	            }
+	            if (hostEnd !== -1)
+	                break;
+	        }
+	        start = 0;
+	        if (atSign !== -1) {
+	            this.auth = decodeURIComponent(rest.slice(0, atSign));
+	            start = atSign + 1;
+	        }
+	        if (nonHost === -1) {
+	            this.host = rest.slice(start);
+	            rest = '';
+	        } else {
+	            this.host = rest.slice(start, nonHost);
+	            rest = rest.slice(nonHost);
+	        }
+
+	        // pull out port.
+	        this.parseHost();
+
+	        // we've indicated that there is a hostname,
+	        // so even if it's empty, it has to be present.
+	        if (typeof this.hostname !== 'string')
+	            this.hostname = '';
+
+	        var hostname = this.hostname;
+
+	        // if hostname begins with [ and ends with ]
+	        // assume that it's an IPv6 address.
+	        var ipv6Hostname = hostname.charCodeAt(0) === 91/*[*/ &&
+	            hostname.charCodeAt(hostname.length - 1) === 93/*]*/;
+
+	        // validate a little.
+	        if (!ipv6Hostname) {
+	            const result = validateHostname(this, rest, hostname);
+	            if (result !== undefined)
+	                rest = result;
+	        }
+
+	        if (this.hostname.length > hostnameMaxLen) {
+	            this.hostname = '';
+	        } else {
+	            // hostnames are always lower case.
+	            this.hostname = this.hostname.toLowerCase();
+	        }
+
+	        if (!ipv6Hostname) {
+	            // IDNA Support: Returns a punycoded representation of "domain".
+	            // It only converts parts of the domain name that
+	            // have non-ASCII characters, i.e. it doesn't matter if
+	            // you call it with a domain that already is ASCII-only.
+	            this.hostname = toASCII(this.hostname);
+	        }
+
+	        var p = this.port ? ':' + this.port : '';
+	        var h = this.hostname || '';
+	        this.host = h + p;
+
+	        // strip [ and ] from the hostname
+	        // the host field still retains them, though
+	        if (ipv6Hostname) {
+	            this.hostname = this.hostname.slice(1, -1);
+	            if (rest[0] !== '/') {
+	                rest = '/' + rest;
+	            }
+	        }
+	    }
+
+	    // now rest is set to the post-host stuff.
+	    // chop off any delim chars.
+	    if (!unsafeProtocol[lowerProto]) {
+	        // First, make 100% sure that any "autoEscape" chars get
+	        // escaped, even if encodeURIComponent doesn't think they
+	        // need to be.
+	        const result = autoEscapeStr(rest);
+	        if (result !== undefined)
+	            rest = result;
+	    }
+
+	    var questionIdx = -1;
+	    var hashIdx = -1;
+	    for (i = 0; i < rest.length; ++i) {
+	        const code = rest.charCodeAt(i);
+	        if (code === 35/*#*/) {
+	            this.hash = rest.slice(i);
+	            hashIdx = i;
+	            break;
+	        } else if (code === 63/*?*/ && questionIdx === -1) {
+	            questionIdx = i;
+	        }
+	    }
+
+	    if (questionIdx !== -1) {
+	        if (hashIdx === -1) {
+	            this.search = rest.slice(questionIdx);
+	            this.query = rest.slice(questionIdx + 1);
+	        } else {
+	            this.search = rest.slice(questionIdx, hashIdx);
+	            this.query = rest.slice(questionIdx + 1, hashIdx);
+	        }
+	        if (parseQueryString) {
+	            this.query = querystring.parse(this.query);
+	        }
+	    } else if (parseQueryString) {
+	        // no query string, but parseQueryString still requested
+	        this.search = '';
+	        this.query = new ParsedQueryString();
+	    }
+
+	    var firstIdx = (questionIdx !== -1 &&
+	    (hashIdx === -1 || questionIdx < hashIdx)
+	        ? questionIdx
+	        : hashIdx);
+	    if (firstIdx === -1) {
+	        if (rest.length > 0)
+	            this.pathname = rest;
+	    } else if (firstIdx > 0) {
+	        this.pathname = rest.slice(0, firstIdx);
+	    }
+	    if (slashedProtocol[lowerProto] &&
+	        this.hostname && !this.pathname) {
+	        this.pathname = '/';
+	    }
+
+	    // to support http.request
+	    if (this.pathname || this.search) {
+	        const p = this.pathname || '';
+	        const s = this.search || '';
+	        this.path = p + s;
+	    }
+
+	    // finally, reconstruct the href based on what has been validated.
+	    this.href = this.format();
+	    return this;
+	};
+
+	function validateHostname(self, rest, hostname) {
+	    for (var i = 0, lastPos; i <= hostname.length; ++i) {
+	        var code;
+	        if (i < hostname.length)
+	            code = hostname.charCodeAt(i);
+	        if (code === 46/*.*/ || i === hostname.length) {
+	            if (i - lastPos > 0) {
+	                if (i - lastPos > 63) {
+	                    self.hostname = hostname.slice(0, lastPos + 63);
+	                    return '/' + hostname.slice(lastPos + 63) + rest;
+	                }
+	            }
+	            lastPos = i + 1;
+	            continue;
+	        } else if ((code >= 48/*0*/ && code <= 57/*9*/) ||
+	            (code >= 97/*a*/ && code <= 122/*z*/) ||
+	            code === 45/*-*/ ||
+	            (code >= 65/*A*/ && code <= 90/*Z*/) ||
+	            code === 43/*+*/ ||
+	            code === 95/*_*/ ||
+	            code > 127) {
+	            continue;
+	        }
+	        // Invalid host character
+	        self.hostname = hostname.slice(0, i);
+	        if (i < hostname.length)
+	            return '/' + hostname.slice(i) + rest;
+	        break;
+	    }
+	}
+
+	function autoEscapeStr(rest) {
+	    var newRest = '';
+	    var lastPos = 0;
+	    for (var i = 0; i < rest.length; ++i) {
+	        // Automatically escape all delimiters and unwise characters from RFC 2396
+	        // Also escape single quotes in case of an XSS attack
+	        switch (rest.charCodeAt(i)) {
+	            case 9:   // '\t'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%09';
+	                lastPos = i + 1;
+	                break;
+	            case 10:  // '\n'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%0A';
+	                lastPos = i + 1;
+	                break;
+	            case 13:  // '\r'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%0D';
+	                lastPos = i + 1;
+	                break;
+	            case 32:  // ' '
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%20';
+	                lastPos = i + 1;
+	                break;
+	            case 34:  // '"'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%22';
+	                lastPos = i + 1;
+	                break;
+	            case 39:  // '\''
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%27';
+	                lastPos = i + 1;
+	                break;
+	            case 60:  // '<'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%3C';
+	                lastPos = i + 1;
+	                break;
+	            case 62:  // '>'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%3E';
+	                lastPos = i + 1;
+	                break;
+	            case 92:  // '\\'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%5C';
+	                lastPos = i + 1;
+	                break;
+	            case 94:  // '^'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%5E';
+	                lastPos = i + 1;
+	                break;
+	            case 96:  // '`'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%60';
+	                lastPos = i + 1;
+	                break;
+	            case 123: // '{'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%7B';
+	                lastPos = i + 1;
+	                break;
+	            case 124: // '|'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%7C';
+	                lastPos = i + 1;
+	                break;
+	            case 125: // '}'
+	                if (i - lastPos > 0)
+	                    newRest += rest.slice(lastPos, i);
+	                newRest += '%7D';
+	                lastPos = i + 1;
+	                break;
+	        }
+	    }
+	    if (lastPos === 0)
+	        return;
+	    if (lastPos < rest.length)
+	        return newRest + rest.slice(lastPos);
+	    else
+	        return newRest;
+	}
+
+	// format a parsed object into a url string
+	function urlFormat(obj) {
+	    // ensure it's an object, and not a string url.
+	    // If it's an obj, this is a no-op.
+	    // this way, you can call url_format() on strings
+	    // to clean up potentially wonky urls.
+	    if (typeof obj === 'string') obj = urlParse(obj);
+
+	    else if (typeof obj !== 'object' || obj === null)
+	        throw new TypeError('Parameter "urlObj" must be an object, not ' +
+	        obj === null ? 'null' : typeof obj);
+
+	    else if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
+
+	    return obj.format();
+	}
+
+	Url.prototype.format = function() {
+	    var auth = this.auth || '';
+	    if (auth) {
+	        auth = encodeAuth(auth);
+	        auth += '@';
+	    }
+
+	    var protocol = this.protocol || '';
+	    var pathname = this.pathname || '';
+	    var hash = this.hash || '';
+	    var host = '';
+	    var query = '';
+
+	    if (this.host) {
+	        host = auth + this.host;
+	    } else if (this.hostname) {
+	        host = auth + (this.hostname.indexOf(':') === -1 ?
+	                this.hostname :
+	            '[' + this.hostname + ']');
+	        if (this.port) {
+	            host += ':' + this.port;
+	        }
+	    }
+
+	    if (this.query !== null && typeof this.query === 'object')
+	        query = querystring.stringify(this.query);
+
+	    var search = this.search || (query && ('?' + query)) || '';
+
+	    if (protocol && protocol.charCodeAt(protocol.length - 1) !== 58/*:*/)
+	        protocol += ':';
+
+	    var newPathname = '';
+	    var lastPos = 0;
+	    for (var i = 0; i < pathname.length; ++i) {
+	        switch (pathname.charCodeAt(i)) {
+	            case 35: // '#'
+	                if (i - lastPos > 0)
+	                    newPathname += pathname.slice(lastPos, i);
+	                newPathname += '%23';
+	                lastPos = i + 1;
+	                break;
+	            case 63: // '?'
+	                if (i - lastPos > 0)
+	                    newPathname += pathname.slice(lastPos, i);
+	                newPathname += '%3F';
+	                lastPos = i + 1;
+	                break;
+	        }
+	    }
+	    if (lastPos > 0) {
+	        if (lastPos !== pathname.length)
+	            pathname = newPathname + pathname.slice(lastPos);
+	        else
+	            pathname = newPathname;
+	    }
+
+	    // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
+	    // unless they had them to begin with.
+	    if (this.slashes || slashedProtocol[protocol]) {
+	        if (this.slashes || host) {
+	            if (pathname && pathname.charCodeAt(0) !== 47/*/*/)
+	                pathname = '/' + pathname;
+	            host = '//' + host;
+	        } else if (protocol.length >= 4 &&
+	            protocol.charCodeAt(0) === 102/*f*/ &&
+	            protocol.charCodeAt(1) === 105/*i*/ &&
+	            protocol.charCodeAt(2) === 108/*l*/ &&
+	            protocol.charCodeAt(3) === 101/*e*/) {
+	            host = '//';
+	        }
+	    }
+
+	    search = search.replace('#', '%23');
+
+	    if (hash && hash.charCodeAt(0) !== 35/*#*/) hash = '#' + hash;
+	    if (search && search.charCodeAt(0) !== 63/*?*/) search = '?' + search;
+
+	    return protocol + host + pathname + search + hash;
+	};
+
+	function urlResolve(source, relative) {
+	    return urlParse(source, false, true).resolve(relative);
+	}
+
+	Url.prototype.resolve = function(relative) {
+	    return this.resolveObject(urlParse(relative, false, true)).format();
+	};
+
+	function urlResolveObject(source, relative) {
+	    if (!source) return relative;
+	    return urlParse(source, false, true).resolveObject(relative);
+	}
+
+	Url.prototype.resolveObject = function(relative) {
+	    if (typeof relative === 'string') {
+	        var rel = new Url();
+	        rel.parse(relative, false, true);
+	        relative = rel;
+	    }
+
+	    var result = new Url();
+	    var tkeys = Object.keys(this);
+	    for (var tk = 0; tk < tkeys.length; tk++) {
+	        var tkey = tkeys[tk];
+	        result[tkey] = this[tkey];
+	    }
+
+	    // hash is always overridden, no matter what.
+	    // even href="" will remove it.
+	    result.hash = relative.hash;
+
+	    // if the relative url is empty, then there's nothing left to do here.
+	    if (relative.href === '') {
+	        result.href = result.format();
+	        return result;
+	    }
+
+	    // hrefs like //foo/bar always cut to the protocol.
+	    if (relative.slashes && !relative.protocol) {
+	        // take everything except the protocol from relative
+	        var rkeys = Object.keys(relative);
+	        for (var rk = 0; rk < rkeys.length; rk++) {
+	            var rkey = rkeys[rk];
+	            if (rkey !== 'protocol')
+	                result[rkey] = relative[rkey];
+	        }
+
+	        //urlParse appends trailing / to urls like http://www.example.com
+	        if (slashedProtocol[result.protocol] &&
+	            result.hostname && !result.pathname) {
+	            result.path = result.pathname = '/';
+	        }
+
+	        result.href = result.format();
+	        return result;
+	    }
+
+	    if (relative.protocol && relative.protocol !== result.protocol) {
+	        // if it's a known url protocol, then changing
+	        // the protocol does weird things
+	        // first, if it's not file:, then we MUST have a host,
+	        // and if there was a path
+	        // to begin with, then we MUST have a path.
+	        // if it is file:, then the host is dropped,
+	        // because that's known to be hostless.
+	        // anything else is assumed to be absolute.
+	        if (!slashedProtocol[relative.protocol]) {
+	            var keys = Object.keys(relative);
+	            for (var v = 0; v < keys.length; v++) {
+	                var k = keys[v];
+	                result[k] = relative[k];
+	            }
+	            result.href = result.format();
+	            return result;
+	        }
+
+	        result.protocol = relative.protocol;
+	        if (!relative.host &&
+	            !/^file:?$/.test(relative.protocol) &&
+	            !hostlessProtocol[relative.protocol]) {
+	            const relPath = (relative.pathname || '').split('/');
+	            while (relPath.length && !(relative.host = relPath.shift()));
+	            if (!relative.host) relative.host = '';
+	            if (!relative.hostname) relative.hostname = '';
+	            if (relPath[0] !== '') relPath.unshift('');
+	            if (relPath.length < 2) relPath.unshift('');
+	            result.pathname = relPath.join('/');
+	        } else {
+	            result.pathname = relative.pathname;
+	        }
+	        result.search = relative.search;
+	        result.query = relative.query;
+	        result.host = relative.host || '';
+	        result.auth = relative.auth;
+	        result.hostname = relative.hostname || relative.host;
+	        result.port = relative.port;
+	        // to support http.request
+	        if (result.pathname || result.search) {
+	            var p = result.pathname || '';
+	            var s = result.search || '';
+	            result.path = p + s;
+	        }
+	        result.slashes = result.slashes || relative.slashes;
+	        result.href = result.format();
+	        return result;
+	    }
+
+	    var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/');
+	    var isRelAbs = (
+	        relative.host ||
+	        relative.pathname && relative.pathname.charAt(0) === '/'
+	    );
+	    var mustEndAbs = (isRelAbs || isSourceAbs ||
+	    (result.host && relative.pathname));
+	    var removeAllDots = mustEndAbs;
+	    var srcPath = result.pathname && result.pathname.split('/') || [];
+	    var relPath = relative.pathname && relative.pathname.split('/') || [];
+	    var psychotic = result.protocol && !slashedProtocol[result.protocol];
+
+	    // if the url is a non-slashed url, then relative
+	    // links like ../.. should be able
+	    // to crawl up to the hostname, as well.  This is strange.
+	    // result.protocol has already been set by now.
+	    // Later on, put the first path part into the host field.
+	    if (psychotic) {
+	        result.hostname = '';
+	        result.port = null;
+	        if (result.host) {
+	            if (srcPath[0] === '') srcPath[0] = result.host;
+	            else srcPath.unshift(result.host);
+	        }
+	        result.host = '';
+	        if (relative.protocol) {
+	            relative.hostname = null;
+	            relative.port = null;
+	            result.auth = null;
+	            if (relative.host) {
+	                if (relPath[0] === '') relPath[0] = relative.host;
+	                else relPath.unshift(relative.host);
+	            }
+	            relative.host = null;
+	        }
+	        mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
+	    }
+
+	    if (isRelAbs) {
+	        // it's absolute.
+	        if (relative.host || relative.host === '') {
+	            result.host = relative.host;
+	            result.auth = null;
+	        }
+	        if (relative.hostname || relative.hostname === '') {
+	            result.hostname = relative.hostname;
+	            result.auth = null;
+	        }
+	        result.search = relative.search;
+	        result.query = relative.query;
+	        srcPath = relPath;
+	        // fall through to the dot-handling below.
+	    } else if (relPath.length) {
+	        // it's relative
+	        // throw away the existing file, and take the new path instead.
+	        if (!srcPath) srcPath = [];
+	        srcPath.pop();
+	        srcPath = srcPath.concat(relPath);
+	        result.search = relative.search;
+	        result.query = relative.query;
+	    } else if (relative.search !== null && relative.search !== undefined) {
+	        // just pull out the search.
+	        // like href='?foo'.
+	        // Put this after the other two cases because it simplifies the booleans
+	        if (psychotic) {
+	            result.hostname = result.host = srcPath.shift();
+	            //occasionally the auth can get stuck only in host
+	            //this especially happens in cases like
+	            //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+	            const authInHost = result.host && result.host.indexOf('@') > 0 ?
+	                result.host.split('@') : false;
+	            if (authInHost) {
+	                result.auth = authInHost.shift();
+	                result.host = result.hostname = authInHost.shift();
+	            }
+	        }
+	        result.search = relative.search;
+	        result.query = relative.query;
+	        //to support http.request
+	        if (result.pathname !== null || result.search !== null) {
+	            result.path = (result.pathname ? result.pathname : '') +
+	                (result.search ? result.search : '');
+	        }
+	        result.href = result.format();
+	        return result;
+	    }
+
+	    if (!srcPath.length) {
+	        // no path at all.  easy.
+	        // we've already handled the other stuff above.
+	        result.pathname = null;
+	        //to support http.request
+	        if (result.search) {
+	            result.path = '/' + result.search;
+	        } else {
+	            result.path = null;
+	        }
+	        result.href = result.format();
+	        return result;
+	    }
+
+	    // if a url ENDs in . or .., then it must get a trailing slash.
+	    // however, if it ends in anything else non-slashy,
+	    // then it must NOT get a trailing slash.
+	    var last = srcPath.slice(-1)[0];
+	    var hasTrailingSlash = (
+	    (result.host || relative.host || srcPath.length > 1) &&
+	    (last === '.' || last === '..') || last === '');
+
+	    // strip single dots, resolve double dots to parent dir
+	    // if the path tries to go above the root, `up` ends up > 0
+	    var up = 0;
+	    for (var i = srcPath.length; i >= 0; i--) {
+	        last = srcPath[i];
+	        if (last === '.') {
+	            spliceOne(srcPath, i);
+	        } else if (last === '..') {
+	            spliceOne(srcPath, i);
+	            up++;
+	        } else if (up) {
+	            spliceOne(srcPath, i);
+	            up--;
+	        }
+	    }
+
+	    // if the path is allowed to go above the root, restore leading ..s
+	    if (!mustEndAbs && !removeAllDots) {
+	        for (; up--; up) {
+	            srcPath.unshift('..');
+	        }
+	    }
+
+	    if (mustEndAbs && srcPath[0] !== '' &&
+	        (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
+	        srcPath.unshift('');
+	    }
+
+	    if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
+	        srcPath.push('');
+	    }
+
+	    var isAbsolute = srcPath[0] === '' ||
+	        (srcPath[0] && srcPath[0].charAt(0) === '/');
+
+	    // put the host back
+	    if (psychotic) {
+	        result.hostname = result.host = isAbsolute ? '' :
+	            srcPath.length ? srcPath.shift() : '';
+	        //occasionally the auth can get stuck only in host
+	        //this especially happens in cases like
+	        //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+	        const authInHost = result.host && result.host.indexOf('@') > 0 ?
+	            result.host.split('@') : false;
+	        if (authInHost) {
+	            result.auth = authInHost.shift();
+	            result.host = result.hostname = authInHost.shift();
+	        }
+	    }
+
+	    mustEndAbs = mustEndAbs || (result.host && srcPath.length);
+
+	    if (mustEndAbs && !isAbsolute) {
+	        srcPath.unshift('');
+	    }
+
+	    if (!srcPath.length) {
+	        result.pathname = null;
+	        result.path = null;
+	    } else {
+	        result.pathname = srcPath.join('/');
+	    }
+
+	    //to support request.http
+	    if (result.pathname !== null || result.search !== null) {
+	        result.path = (result.pathname ? result.pathname : '') +
+	            (result.search ? result.search : '');
+	    }
+	    result.auth = relative.auth || result.auth;
+	    result.slashes = result.slashes || relative.slashes;
+	    result.href = result.format();
+	    return result;
+	};
+
+	Url.prototype.parseHost = function() {
+	    var host = this.host;
+	    var port = portPattern.exec(host);
+	    if (port) {
+	        port = port[0];
+	        if (port !== ':') {
+	            this.port = port.slice(1);
+	        }
+	        host = host.slice(0, host.length - port.length);
+	    }
+	    if (host) this.hostname = host;
+	};
+
+	// About 1.5x faster than the two-arg version of Array#splice().
+	function spliceOne(list, index) {
+	    for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
+	        list[i] = list[k];
+	    list.pop();
+	}
+
+	var hexTable = new Array(256);
+	for (var i = 0; i < 256; ++i)
+	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
+	function encodeAuth(str) {
+	    // faster encodeURIComponent alternative for encoding auth uri components
+	    var out = '';
+	    var lastPos = 0;
+	    for (var i = 0; i < str.length; ++i) {
+	        var c = str.charCodeAt(i);
+
+	        // These characters do not need escaping:
+	        // ! - . _ ~
+	        // ' ( ) * :
+	        // digits
+	        // alpha (uppercase)
+	        // alpha (lowercase)
+	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
+	            (c >= 0x27 && c <= 0x2A) ||
+	            (c >= 0x30 && c <= 0x3A) ||
+	            (c >= 0x41 && c <= 0x5A) ||
+	            (c >= 0x61 && c <= 0x7A)) {
+	            continue;
+	        }
+
+	        if (i - lastPos > 0)
+	            out += str.slice(lastPos, i);
+
+	        lastPos = i + 1;
+
+	        // Other ASCII characters
+	        if (c < 0x80) {
+	            out += hexTable[c];
+	            continue;
+	        }
+
+	        // Multi-byte characters ...
+	        if (c < 0x800) {
+	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        if (c < 0xD800 || c >= 0xE000) {
+	            out += hexTable[0xE0 | (c >> 12)] +
+	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	                hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        // Surrogate pair
+	        ++i;
+	        var c2;
+	        if (i < str.length)
+	            c2 = str.charCodeAt(i) & 0x3FF;
+	        else
+	            c2 = 0;
+	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
+	        out += hexTable[0xF0 | (c >> 18)] +
+	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
+	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	            hexTable[0x80 | (c & 0x3F)];
+	    }
+	    if (lastPos === 0)
+	        return str;
+	    if (lastPos < str.length)
+	        return out + str.slice(lastPos);
+	    return out;
+	}
+
+
+/***/ },
+/* 39 */
+/***/ function(module, exports) {
+
+	'use strict';
+
+	/** Highest positive signed 32-bit float value */
+	var maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	var base = 36;
+	var tMin = 1;
+	var tMax = 26;
+	var skew = 38;
+	var damp = 700;
+	var initialBias = 72;
+	var initialN = 128; // 0x80
+	var delimiter = '-'; // '\x2D'
+
+	/** Regular expressions */
+	var regexPunycode = /^xn--/;
+	var regexNonASCII = /[^\x20-\x7E]/; // unprintable ASCII chars + non-ASCII chars
+	var regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
+
+	/** Error messages */
+	var errors = {
+	    'overflow': 'Overflow: input needs wider integers to process',
+	    'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+	    'invalid-input': 'Invalid input'
+	};
+
+	/** Convenience shortcuts */
+	var baseMinusTMin = base - tMin;
+	var floor = Math.floor;
+	var stringFromCharCode = String.fromCharCode;
+
+
+	// `.fromCodePoint` shim
+	if (!String.fromCodePoint) {
+	    (function() {
+	        var defineProperty = (function() {
+	            // IE 8 only supports `Object.defineProperty` on DOM elements
+	            try {
+	                var object = {};
+	                var $defineProperty = Object.defineProperty;
+	                var result = $defineProperty(object, object, object) && $defineProperty;
+	            } catch(error) {}
+	            return result;
+	        }());
+	        var stringFromCharCode = String.fromCharCode;
+	        var floor = Math.floor;
+	        var fromCodePoint = function() {
+	            var MAX_SIZE = 0x4000;
+	            var codeUnits = [];
+	            var highSurrogate;
+	            var lowSurrogate;
+	            var index = -1;
+	            var length = arguments.length;
+	            if (!length) {
+	                return '';
+	            }
+	            var result = '';
+	            while (++index < length) {
+	                var codePoint = Number(arguments[index]);
+	                if (
+	                    !isFinite(codePoint) ||       // `NaN`, `+Infinity`, or `-Infinity`
+	                    codePoint < 0 ||              // not a valid Unicode code point
+	                    codePoint > 0x10FFFF ||       // not a valid Unicode code point
+	                    floor(codePoint) != codePoint // not an integer
+	                ) {
+	                    throw RangeError('Invalid code point: ' + codePoint);
+	                }
+	                if (codePoint <= 0xFFFF) { // BMP code point
+	                    codeUnits.push(codePoint);
+	                } else { // Astral code point; split in surrogate halves
+	                    // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+	                    codePoint -= 0x10000;
+	                    highSurrogate = (codePoint >> 10) + 0xD800;
+	                    lowSurrogate = (codePoint % 0x400) + 0xDC00;
+	                    codeUnits.push(highSurrogate, lowSurrogate);
+	                }
+	                if (index + 1 == length || codeUnits.length > MAX_SIZE) {
+	                    result += stringFromCharCode.apply(null, codeUnits);
+	                    codeUnits.length = 0;
+	                }
+	            }
+	            return result;
+	        };
+	        if (defineProperty) {
+	            defineProperty(String, 'fromCodePoint', {
+	                'value': fromCodePoint,
+	                'configurable': true,
+	                'writable': true
+	            });
+	        } else {
+	            String.fromCodePoint = fromCodePoint;
+	        }
+	    }());
+	}
+
+
+
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+	    throw new RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+	    var result = [];
+	    var length = array.length;
+	    while (length--) {
+	        result[length] = fn(array[length]);
+	    }
+	    return result;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings or email
+	 * addresses.
+	 * @private
+	 * @param {String} domain The domain name or email address.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+	    var parts = string.split('@');
+	    var result = '';
+	    if (parts.length > 1) {
+	        // In email addresses, only the domain name should be punycoded. Leave
+	        // the local part (i.e. everything up to `@`) intact.
+	        result = parts[0] + '@';
+	        string = parts[1];
+	    }
+	    // Avoid `split(regex)` for IE8 compatibility. See #17.
+	    string = string.replace(regexSeparators, '\x2E');
+	    var labels = string.split('.');
+	    var encoded = map(labels, fn).join('.');
+	    return result + encoded;
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+	    var output = [];
+	    var counter = 0;
+	    var length = string.length;
+	    while (counter < length) {
+	        var value = string.charCodeAt(counter++);
+	        if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+	            // It's a high surrogate, and there is a next character.
+	            var extra = string.charCodeAt(counter++);
+	            if ((extra & 0xFC00) == 0xDC00) { // Low surrogate.
+	                output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+	            } else {
+	                // It's an unmatched surrogate; only append this code unit, in case the
+	                // next code unit is the high surrogate of a surrogate pair.
+	                output.push(value);
+	                counter--;
+	            }
+	        } else {
+	            output.push(value);
+	        }
+	    }
+	    return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	var ucs2encode = function(array) { String.fromCodePoint.apply(null, array); }
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	var basicToDigit = function(codePoint) {
+	    if (codePoint - 0x30 < 0x0A) {
+	        return codePoint - 0x16;
+	    }
+	    if (codePoint - 0x41 < 0x1A) {
+	        return codePoint - 0x41;
+	    }
+	    if (codePoint - 0x61 < 0x1A) {
+	        return codePoint - 0x61;
+	    }
+	    return base;
+	};
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	var digitToBasic = function(digit, flag) {
+	    //  0..25 map to ASCII a..z or A..Z
+	    // 26..35 map to ASCII 0..9
+	    return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	};
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * https://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	var adapt = function(delta, numPoints, firstTime) {
+	    var k = 0;
+	    delta = firstTime ? floor(delta / damp) : delta >> 1;
+	    delta += floor(delta / numPoints);
+	    for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+	        delta = floor(delta / baseMinusTMin);
+	    }
+	    return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	};
+
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	var decode = function(input) {
+	    // Don't use UCS-2.
+	    var output = [];
+	    var inputLength = input.length;
+	    var i = 0;
+	    var n = initialN;
+	    var bias = initialBias;
+
+	    // Handle the basic code points: var `basic` be the number of input code
+	    // points before the last delimiter, or `0` if there is none, then copy
+	    // the first basic code points to the output.
+
+	    var basic = input.lastIndexOf(delimiter);
+	    if (basic < 0) {
+	        basic = 0;
+	    }
+
+	    for (var j = 0; j < basic; ++j) {
+	        // if it's not a basic code point
+	        if (input.charCodeAt(j) >= 0x80) {
+	            error('not-basic');
+	        }
+	        output.push(input.charCodeAt(j));
+	    }
+
+	    // Main decoding loop: start just after the last delimiter if any basic code
+	    // points were copied; start at the beginning otherwise.
+
+	    for (var index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+	        // `index` is the index of the next character to be consumed.
+	        // Decode a generalized variable-length integer into `delta`,
+	        // which gets added to `i`. The overflow checking is easier
+	        // if we increase `i` as we go, then subtract off its starting
+	        // value at the end to obtain `delta`.
+	        var oldi = i;
+	        for (var w = 1, k = base; /* no condition */; k += base) {
+
+	            if (index >= inputLength) {
+	                error('invalid-input');
+	            }
+
+	            var digit = basicToDigit(input.charCodeAt(index++));
+
+	            if (digit >= base || digit > floor((maxInt - i) / w)) {
+	                error('overflow');
+	            }
+
+	            i += digit * w;
+	            var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+	            if (digit < t) {
+	                break;
+	            }
+
+	            var baseMinusT = base - t;
+	            if (w > floor(maxInt / baseMinusT)) {
+	                error('overflow');
+	            }
+
+	            w *= baseMinusT;
+
+	        }
+
+	        var out = output.length + 1;
+	        bias = adapt(i - oldi, out, oldi == 0);
+
+	        // `i` was supposed to wrap around from `out` to `0`,
+	        // incrementing `n` each time, so we'll fix that now:
+	        if (floor(i / out) > maxInt - n) {
+	            error('overflow');
+	        }
+
+	        n += floor(i / out);
+	        i %= out;
+
+	        // Insert `n` at position `i` of the output.
+	        output.splice(i++, 0, n);
+
+	    }
+
+	    return String.fromCodePoint.apply(null, output);
+	};
+
+	/**
+	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
+	 * Punycode string of ASCII-only symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	var encode = function(input) {
+	    var output = [];
+
+	    // Convert the input in UCS-2 to an array of Unicode code points.
+	    input = ucs2decode(input);
+
+	    // Cache the length.
+	    var inputLength = input.length;
+
+	    // Initialize the state.
+	    var n = initialN;
+	    var delta = 0;
+	    var bias = initialBias;
+
+	    // Handle the basic code points.
+	    for (var i = 0; i < input.length; i++) {
+	        var currentValue = input[i];
+	        if (currentValue < 0x80) {
+	            output.push(stringFromCharCode(currentValue));
+	        }
+	    }
+
+	    var basicLength = output.length;
+	    var handledCPCount = basicLength;
+
+	    // `handledCPCount` is the number of code points that have been handled;
+	    // `basicLength` is the number of basic code points.
+
+	    // Finish the basic string with a delimiter unless it's empty.
+	    if (basicLength) {
+	        output.push(delimiter);
+	    }
+
+	    // Main encoding loop:
+	    while (handledCPCount < inputLength) {
+
+	        // All non-basic code points < n have been handled already. Find the next
+	        // larger one:
+	        var m = maxInt;
+	        for (var i = 0; i < input.length; i++) {
+	            var currentValue = input[i];
+	            if (currentValue >= n && currentValue < m) {
+	                m = currentValue;
+	            }
+	        }
+
+	        // Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+	        // but guard against overflow.
+	        var handledCPCountPlusOne = handledCPCount + 1;
+	        if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+	            error('overflow');
+	        }
+
+	        delta += (m - n) * handledCPCountPlusOne;
+	        n = m;
+
+	        for (var i = 0; i < input.length; i++) {
+	            var currentValue = input[i];
+	            if (currentValue < n && ++delta > maxInt) {
+	                error('overflow');
+	            }
+	            if (currentValue == n) {
+	                // Represent delta as a generalized variable-length integer.
+	                var q = delta;
+	                for (var k = base; /* no condition */; k += base) {
+	                    var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+	                    if (q < t) {
+	                        break;
+	                    }
+	                    var qMinusT = q - t;
+	                    var baseMinusT = base - t;
+	                    output.push(
+	                        stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+	                    );
+	                    q = floor(qMinusT / baseMinusT);
+	                }
+
+	                output.push(stringFromCharCode(digitToBasic(q, 0)));
+	                bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+	                delta = 0;
+	                ++handledCPCount;
+	            }
+	        }
+
+	        ++delta;
+	        ++n;
+
+	    }
+	    return output.join('');
+	};
+
+	/**
+	 * Converts a Punycode string representing a domain name or an email address
+	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+	 * it doesn't matter if you call it on a string that has already been
+	 * converted to Unicode.
+	 * @memberOf punycode
+	 * @param {String} input The Punycoded domain name or email address to
+	 * convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	var toUnicode = function(input) {
+	    return mapDomain(input, function(string) {
+	        return regexPunycode.test(string)
+	            ? decode(string.slice(4).toLowerCase())
+	            : string;
+	    });
+	};
+
+	/**
+	 * Converts a Unicode string representing a domain name or an email address to
+	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
+	 * i.e. it doesn't matter if you call it with a domain that's already in
+	 * ASCII.
+	 * @memberOf punycode
+	 * @param {String} input The domain name or email address to convert, as a
+	 * Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name or
+	 * email address.
+	 */
+	var toASCII = function(input) {
+	    return mapDomain(input, function(string) {
+	        return regexNonASCII.test(string)
+	            ? 'xn--' + encode(string)
+	            : string;
+	    });
+	};
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	var punycode = {
+	    /**
+	     * A string representing the current Punycode.js version number.
+	     * @memberOf punycode
+	     * @type String
+	     */
+	    'version': '2.0.0',
+	    /**
+	     * An object of methods to convert from JavaScript's internal character
+	     * representation (UCS-2) to Unicode code points, and back.
+	     * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	     * @memberOf punycode
+	     * @type Object
+	     */
+	    'ucs2': {
+	        'decode': ucs2decode,
+	        'encode': ucs2encode
+	    },
+	    'decode': decode,
+	    'encode': encode,
+	    'toASCII': toASCII,
+	    'toUnicode': toUnicode
+	};
+
+	module.exports = punycode;
+
+
+/***/ },
+/* 40 */
+/***/ function(module, exports, __webpack_require__) {
+
+	// Query String Utilities
+
+	'use strict';
+
+	const QueryString = exports;
+	const Buffer = __webpack_require__(2).Buffer;
+
+	// This constructor is used to store parsed query string values. Instantiating
+	// this is faster than explicitly calling `Object.create(null)` to get a
+	// "clean" empty object (tested with v8 v4.9).
+	function ParsedQueryString() {}
+	ParsedQueryString.prototype = Object.create(null);
+
+
+	// a safe fast alternative to decodeURIComponent
+	QueryString.unescapeBuffer = function(s, decodeSpaces) {
+	    var out = Buffer.allocUnsafe(s.length);
+	    var state = 0;
+	    var n, m, hexchar;
+
+	    for (var inIndex = 0, outIndex = 0; inIndex <= s.length; inIndex++) {
+	        var c = inIndex < s.length ? s.charCodeAt(inIndex) : NaN;
+	        switch (state) {
+	            case 0: // Any character
+	                switch (c) {
+	                    case 37: // '%'
+	                        n = 0;
+	                        m = 0;
+	                        state = 1;
+	                        break;
+	                    case 43: // '+'
+	                        if (decodeSpaces)
+	                            c = 32; // ' '
+	                    // falls through
+	                    default:
+	                        out[outIndex++] = c;
+	                        break;
+	                }
+	                break;
+
+	            case 1: // First hex digit
+	                hexchar = c;
+	                if (c >= 48/*0*/ && c <= 57/*9*/) {
+	                    n = c - 48/*0*/;
+	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
+	                    n = c - 65/*A*/ + 10;
+	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
+	                    n = c - 97/*a*/ + 10;
+	                } else {
+	                    out[outIndex++] = 37/*%*/;
+	                    out[outIndex++] = c;
+	                    state = 0;
+	                    break;
+	                }
+	                state = 2;
+	                break;
+
+	            case 2: // Second hex digit
+	                state = 0;
+	                if (c >= 48/*0*/ && c <= 57/*9*/) {
+	                    m = c - 48/*0*/;
+	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
+	                    m = c - 65/*A*/ + 10;
+	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
+	                    m = c - 97/*a*/ + 10;
+	                } else {
+	                    out[outIndex++] = 37/*%*/;
+	                    out[outIndex++] = hexchar;
+	                    out[outIndex++] = c;
+	                    break;
+	                }
+	                out[outIndex++] = 16 * n + m;
+	                break;
+	        }
+	    }
+
+	    // TODO support returning arbitrary buffers.
+
+	    return out.slice(0, outIndex - 1);
+	};
+
+
+	function qsUnescape(s, decodeSpaces) {
+	    try {
+	        return decodeURIComponent(s);
+	    } catch (e) {
+	        return QueryString.unescapeBuffer(s, decodeSpaces).toString();
+	    }
+	}
+	QueryString.unescape = qsUnescape;
+
+
+	var hexTable = new Array(256);
+	for (var i = 0; i < 256; ++i)
+	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
+	QueryString.escape = function(str) {
+	    // replaces encodeURIComponent
+	    // http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3.4
+	    if (typeof str !== 'string') {
+	        if (typeof str === 'object')
+	            str = String(str);
+	        else
+	            str += '';
+	    }
+	    var out = '';
+	    var lastPos = 0;
+
+	    for (var i = 0; i < str.length; ++i) {
+	        var c = str.charCodeAt(i);
+
+	        // These characters do not need escaping (in order):
+	        // ! - . _ ~
+	        // ' ( ) *
+	        // digits
+	        // alpha (uppercase)
+	        // alpha (lowercase)
+	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
+	            (c >= 0x27 && c <= 0x2A) ||
+	            (c >= 0x30 && c <= 0x39) ||
+	            (c >= 0x41 && c <= 0x5A) ||
+	            (c >= 0x61 && c <= 0x7A)) {
+	            continue;
+	        }
+
+	        if (i - lastPos > 0)
+	            out += str.slice(lastPos, i);
+
+	        // Other ASCII characters
+	        if (c < 0x80) {
+	            lastPos = i + 1;
+	            out += hexTable[c];
+	            continue;
+	        }
+
+	        // Multi-byte characters ...
+	        if (c < 0x800) {
+	            lastPos = i + 1;
+	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        if (c < 0xD800 || c >= 0xE000) {
+	            lastPos = i + 1;
+	            out += hexTable[0xE0 | (c >> 12)] +
+	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	                hexTable[0x80 | (c & 0x3F)];
+	            continue;
+	        }
+	        // Surrogate pair
+	        ++i;
+	        var c2;
+	        if (i < str.length)
+	            c2 = str.charCodeAt(i) & 0x3FF;
+	        else
+	            throw new URIError('URI malformed');
+	        lastPos = i + 1;
+	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
+	        out += hexTable[0xF0 | (c >> 18)] +
+	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
+	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
+	            hexTable[0x80 | (c & 0x3F)];
+	    }
+	    if (lastPos === 0)
+	        return str;
+	    if (lastPos < str.length)
+	        return out + str.slice(lastPos);
+	    return out;
+	};
+
+	var stringifyPrimitive = function(v) {
+	    if (typeof v === 'string')
+	        return v;
+	    if (typeof v === 'number' && isFinite(v))
+	        return '' + v;
+	    if (typeof v === 'boolean')
+	        return v ? 'true' : 'false';
+	    return '';
+	};
+
+
+	QueryString.stringify = QueryString.encode = function(obj, sep, eq, options) {
+	    sep = sep || '&';
+	    eq = eq || '=';
+
+	    var encode = QueryString.escape;
+	    if (options && typeof options.encodeURIComponent === 'function') {
+	        encode = options.encodeURIComponent;
+	    }
+
+	    if (obj !== null && typeof obj === 'object') {
+	        var keys = Object.keys(obj);
+	        var len = keys.length;
+	        var flast = len - 1;
+	        var fields = '';
+	        for (var i = 0; i < len; ++i) {
+	            var k = keys[i];
+	            var v = obj[k];
+	            var ks = encode(stringifyPrimitive(k)) + eq;
+
+	            if (Array.isArray(v)) {
+	                var vlen = v.length;
+	                var vlast = vlen - 1;
+	                for (var j = 0; j < vlen; ++j) {
+	                    fields += ks + encode(stringifyPrimitive(v[j]));
+	                    if (j < vlast)
+	                        fields += sep;
+	                }
+	                if (vlen && i < flast)
+	                    fields += sep;
+	            } else {
+	                fields += ks + encode(stringifyPrimitive(v));
+	                if (i < flast)
+	                    fields += sep;
+	            }
+	        }
+	        return fields;
+	    }
+	    return '';
+	};
+
+	// Parse a key/val string.
+	QueryString.parse = QueryString.decode = function(qs, sep, eq, options) {
+	    sep = sep || '&';
+	    eq = eq || '=';
+
+	    const obj = new ParsedQueryString();
+
+	    if (typeof qs !== 'string' || qs.length === 0) {
+	        return obj;
+	    }
+
+	    if (typeof sep !== 'string')
+	        sep += '';
+
+	    const eqLen = eq.length;
+	    const sepLen = sep.length;
+
+	    var maxKeys = 1000;
+	    if (options && typeof options.maxKeys === 'number') {
+	        maxKeys = options.maxKeys;
+	    }
+
+	    var pairs = Infinity;
+	    if (maxKeys > 0)
+	        pairs = maxKeys;
+
+	    var decode = QueryString.unescape;
+	    if (options && typeof options.decodeURIComponent === 'function') {
+	        decode = options.decodeURIComponent;
+	    }
+	    const customDecode = (decode !== qsUnescape);
+
+	    const keys = [];
+	    var lastPos = 0;
+	    var sepIdx = 0;
+	    var eqIdx = 0;
+	    var key = '';
+	    var value = '';
+	    var keyEncoded = customDecode;
+	    var valEncoded = customDecode;
+	    var encodeCheck = 0;
+	    for (var i = 0; i < qs.length; ++i) {
+	        const code = qs.charCodeAt(i);
+
+	        // Try matching key/value pair separator (e.g. '&')
+	        if (code === sep.charCodeAt(sepIdx)) {
+	            if (++sepIdx === sepLen) {
+	                // Key/value pair separator match!
+	                const end = i - sepIdx + 1;
+	                if (eqIdx < eqLen) {
+	                    // If we didn't find the key/value separator, treat the substring as
+	                    // part of the key instead of the value
+	                    if (lastPos < end)
+	                        key += qs.slice(lastPos, end);
+	                } else if (lastPos < end)
+	                    value += qs.slice(lastPos, end);
+	                if (keyEncoded)
+	                    key = decodeStr(key, decode);
+	                if (valEncoded)
+	                    value = decodeStr(value, decode);
+	                // Use a key array lookup instead of using hasOwnProperty(), which is
+	                // slower
+	                if (keys.indexOf(key) === -1) {
+	                    obj[key] = value;
+	                    keys[keys.length] = key;
+	                } else {
+	                    const curValue = obj[key];
+	                    // `instanceof Array` is used instead of Array.isArray() because it
+	                    // is ~15-20% faster with v8 4.7 and is safe to use because we are
+	                    // using it with values being created within this function
+	                    if (curValue instanceof Array)
+	                        curValue[curValue.length] = value;
+	                    else
+	                        obj[key] = [curValue, value];
+	                }
+	                if (--pairs === 0)
+	                    break;
+	                keyEncoded = valEncoded = customDecode;
+	                encodeCheck = 0;
+	                key = value = '';
+	                lastPos = i + 1;
+	                sepIdx = eqIdx = 0;
+	            }
+	            continue;
+	        } else {
+	            sepIdx = 0;
+	            if (!valEncoded) {
+	                // Try to match an (valid) encoded byte (once) to minimize unnecessary
+	                // calls to string decoding functions
+	                if (code === 37/*%*/) {
+	                    encodeCheck = 1;
+	                } else if (encodeCheck > 0 &&
+	                    ((code >= 48/*0*/ && code <= 57/*9*/) ||
+	                    (code >= 65/*A*/ && code <= 70/*F*/) ||
+	                    (code >= 97/*a*/ && code <= 102/*f*/))) {
+	                    if (++encodeCheck === 3)
+	                        valEncoded = true;
+	                } else {
+	                    encodeCheck = 0;
+	                }
+	            }
+	        }
+
+	        // Try matching key/value separator (e.g. '=') if we haven't already
+	        if (eqIdx < eqLen) {
+	            if (code === eq.charCodeAt(eqIdx)) {
+	                if (++eqIdx === eqLen) {
+	                    // Key/value separator match!
+	                    const end = i - eqIdx + 1;
+	                    if (lastPos < end)
+	                        key += qs.slice(lastPos, end);
+	                    encodeCheck = 0;
+	                    lastPos = i + 1;
+	                }
+	                continue;
+	            } else {
+	                eqIdx = 0;
+	                if (!keyEncoded) {
+	                    // Try to match an (valid) encoded byte once to minimize unnecessary
+	                    // calls to string decoding functions
+	                    if (code === 37/*%*/) {
+	                        encodeCheck = 1;
+	                    } else if (encodeCheck > 0 &&
+	                        ((code >= 48/*0*/ && code <= 57/*9*/) ||
+	                        (code >= 65/*A*/ && code <= 70/*F*/) ||
+	                        (code >= 97/*a*/ && code <= 102/*f*/))) {
+	                        if (++encodeCheck === 3)
+	                            keyEncoded = true;
+	                    } else {
+	                        encodeCheck = 0;
+	                    }
+	                }
+	            }
+	        }
+
+	        if (code === 43/*+*/) {
+	            if (eqIdx < eqLen) {
+	                if (i - lastPos > 0)
+	                    key += qs.slice(lastPos, i);
+	                key += '%20';
+	                keyEncoded = true;
+	            } else {
+	                if (i - lastPos > 0)
+	                    value += qs.slice(lastPos, i);
+	                value += '%20';
+	                valEncoded = true;
+	            }
+	            lastPos = i + 1;
+	        }
+	    }
+
+	    // Check if we have leftover key or value data
+	    if (pairs > 0 && (lastPos < qs.length || eqIdx > 0)) {
+	        if (lastPos < qs.length) {
+	            if (eqIdx < eqLen)
+	                key += qs.slice(lastPos);
+	            else if (sepIdx < sepLen)
+	                value += qs.slice(lastPos);
+	        }
+	        if (keyEncoded)
+	            key = decodeStr(key, decode);
+	        if (valEncoded)
+	            value = decodeStr(value, decode);
+	        // Use a key array lookup instead of using hasOwnProperty(), which is
+	        // slower
+	        if (keys.indexOf(key) === -1) {
+	            obj[key] = value;
+	            keys[keys.length] = key;
+	        } else {
+	            const curValue = obj[key];
+	            // `instanceof Array` is used instead of Array.isArray() because it
+	            // is ~15-20% faster with v8 4.7 and is safe to use because we are
+	            // using it with values being created within this function
+	            if (curValue instanceof Array)
+	                curValue[curValue.length] = value;
+	            else
+	                obj[key] = [curValue, value];
+	        }
+	    }
+
+	    return obj;
+	};
+
+
+	// v8 does not optimize functions with try-catch blocks, so we isolate them here
+	// to minimize the damage
+	function decodeStr(s, decoder) {
+	    try {
+	        return decoder(s);
+	    } catch (e) {
+	        return QueryString.unescape(s, true);
+	    }
+	}
+
+
+/***/ },
+/* 41 */
+/***/ function(module, exports) {
+
+	// Taken from https://github.com/substack/vm-browserify
+
+	var indexOf = (function() {
+	    var indexOf = [].indexOf;
+
+	    return function (arr, obj) {
+	        if (indexOf) return arr.indexOf(obj);
+	        for (var i = 0; i < arr.length; ++i) {
+	            if (arr[i] === obj) return i;
+	        }
+	        return -1;
+	    };
+	})();
+
+	var Object_keys = function (obj) {
+	    if (Object.keys) return Object.keys(obj)
+	    else {
+	        var res = [];
+	        for (var key in obj) res.push(key)
+	        return res;
+	    }
+	};
+
+	var forEach = function (xs, fn) {
+	    if (xs.forEach) return xs.forEach(fn)
+	    else for (var i = 0; i < xs.length; i++) {
+	        fn(xs[i], i, xs);
+	    }
+	};
+
+	var defineProp = (function() {
+	    try {
+	        Object.defineProperty({}, '_', {});
+	        return function(obj, name, value) {
+	            Object.defineProperty(obj, name, {
+	                writable: true,
+	                enumerable: false,
+	                configurable: true,
+	                value: value
+	            })
+	        };
+	    } catch(e) {
+	        return function(obj, name, value) {
+	            obj[name] = value;
+	        };
+	    }
+	}());
+
+	var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
+	    'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
+	    'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
+	    'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
+	    'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
+
+	var Script = exports.Script = function NodeScript (code) {
+	    if (!(this instanceof Script)) return new Script(code);
+	    this.code = code;
+	};
+
+	Script.prototype.runInContext = function (context) {
+	    //if (!(context instanceof Context)) {
+	    //    throw new TypeError("needs a 'context' argument.");
+	    //}
+	    if (typeof context != 'object') {
+	        throw new TypeError("needs a 'context' argument.");
+	    }
+
+	    var iframe = document.createElement('iframe');
+	    if (!iframe.style) iframe.style = {};
+	    iframe.style.display = 'none';
+
+	    document.body.appendChild(iframe);
+
+	    var win = iframe.contentWindow;
+	    var wEval = win.eval, wExecScript = win.execScript;
+
+	    if (!wEval && wExecScript) {
+	        // win.eval() magically appears when this is called in IE:
+	        wExecScript.call(win, 'null');
+	        wEval = win.eval;
+	    }
+
+	    forEach(Object_keys(context), function (key) {
+	        win[key] = context[key];
+	    });
+	    forEach(globals, function (key) {
+	        if (context[key]) {
+	            win[key] = context[key];
+	        }
+	    });
+
+	    var winKeys = Object_keys(win);
+
+	    var res = wEval.call(win, this.code);
+
+	    forEach(Object_keys(win), function (key) {
+	        // Avoid copying circular objects like `top` and `window` by only
+	        // updating existing context properties or new properties in the `win`
+	        // that was only introduced after the eval.
+	        if (key in context || indexOf(winKeys, key) === -1) {
+	            context[key] = win[key];
+	        }
+	    });
+
+	    forEach(globals, function (key) {
+	        if (!(key in context)) {
+	            defineProp(context, key, win[key]);
+	        }
+	    });
+
+	    document.body.removeChild(iframe);
+
+	    return res;
+	};
+
+	Script.prototype.runInThisContext = function () {
+	    return eval(this.code); // maybe...
+	};
+
+	Script.prototype.runInNewContext = function (context) {
+	    var ctx = Script.createContext(context);
+	    var res = this.runInContext(ctx);
+
+	    forEach(Object_keys(ctx), function (key) {
+	        context[key] = ctx[key];
+	    });
+
+	    return res;
+	};
+
+	forEach(Object_keys(Script.prototype), function (name) {
+	    exports[name] = Script[name] = function (code) {
+	        var s = Script(code);
+	        return s[name].apply(s, [].slice.call(arguments, 1));
+	    };
+	});
+
+	exports.createScript = function (code) {
+	    return exports.Script(code);
+	};
+
+	//exports.createContext = Script.createContext = function (context) {
+	exports.createContext = function (context) {
+	    return context;
+	    //var copy = new Context();
+	    //if(typeof context === 'object') {
+	    //    forEach(Object_keys(context), function (key) {
+	    //        copy[key] = context[key];
+	    //    });
+	    //}
+	    //return copy;
+	};
+
+	exports.runInThisContext = function(code) {
+	    var script = new Script(code);
+	    script.runInThisContext();
+	};
+
+
+/***/ },
+/* 42 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var events_1 = __webpack_require__(13);
+	var buffer_1 = __webpack_require__(2);
+	var util = __webpack_require__(18);
+	var errnoException = util._errnoException;
+	function lookup4(address, callback) {
+	    callback();
+	}
+	function sliceBuffer(buffer, offset, length) {
+	    if (typeof buffer === 'string')
+	        buffer = buffer_1.Buffer.from(buffer);
+	    else if (!(buffer instanceof buffer_1.Buffer))
+	        throw new TypeError('First argument must be a buffer or string');
+	    offset = offset >>> 0;
+	    length = length >>> 0;
+	    return buffer.slice(offset, offset + length);
+	}
+	function fixBufferList(list) {
+	    var newlist = new Array(list.length);
+	    for (var i = 0, l = list.length; i < l; i++) {
+	        var buf = list[i];
+	        if (typeof buf === 'string')
+	            newlist[i] = buffer_1.Buffer.from(buf);
+	        else if (!(buf instanceof buffer_1.Buffer))
+	            return null;
+	        else
+	            newlist[i] = buf;
+	    }
+	    return newlist;
+	}
+	var Socket = (function (_super) {
+	    __extends(Socket, _super);
+	    function Socket() {
+	        _super.call(this);
+	        this.sock = process.loop.poll.createUdpSocket();
+	        this.lookup = lookup4;
+	        this.sock.ondata = function () {
+	        };
+	        this.sock.onstart = function () {
+	        };
+	        this.sock.onstop = function () {
+	        };
+	        this.sock.onerror = function () {
+	        };
+	    }
+	    Socket.prototype.send = function (msg, a, b, c, d, e) {
+	        var _this = this;
+	        var port;
+	        var address;
+	        var callback;
+	        var typeofb = typeof b;
+	        if (typeofb[0] === 'n') {
+	            var offset = a;
+	            var length = b;
+	            msg = sliceBuffer(msg, offset, length);
+	            port = c;
+	            address = d;
+	            callback = e;
+	        }
+	        else if (typeofb[1] === 't') {
+	            port = a;
+	            address = b;
+	            callback = c;
+	        }
+	        else
+	            throw TypeError('3rd arguments must be length or address');
+	        var list;
+	        if (!Array.isArray(msg)) {
+	            if (typeof msg === 'string') {
+	                list = [buffer_1.Buffer.from(msg)];
+	            }
+	            else if (!(msg instanceof buffer_1.Buffer)) {
+	                throw new TypeError('First argument must be a buffer or a string');
+	            }
+	            else {
+	                list = [msg];
+	            }
+	        }
+	        else if (!(list = fixBufferList(msg))) {
+	            throw new TypeError('Buffer list arguments must be buffers or strings');
+	        }
+	        port = port >>> 0;
+	        if (port === 0 || port > 65535)
+	            throw new RangeError('Port should be > 0 and < 65536');
+	        if (typeof callback !== 'function')
+	            callback = undefined;
+	        if (list.length === 0)
+	            list.push(new buffer_1.Buffer(0));
+	        this.lookup(address, function (err, ip) {
+	            var err = _this.sock.send(list[0], address, port);
+	            if (callback)
+	                callback(err);
+	        });
+	    };
+	    Socket.prototype.address = function () {
+	    };
+	    Socket.prototype.bind = function (a, b, c) {
+	    };
+	    Socket.prototype.close = function (callback) {
+	        this.sock.stop();
+	    };
+	    Socket.prototype.addMembership = function (multicastAddress, multicastInterface) {
+	    };
+	    Socket.prototype.dropMembership = function (multicastAddress, multicastInterface) {
+	    };
+	    Socket.prototype.setBroadcast = function (flag) {
+	        var res = this.sock.setBroadcast(flag);
+	        if (res < 0)
+	            throw errnoException(res, 'setBroadcast');
+	    };
+	    Socket.prototype.setMulticastLoopback = function (flag) {
+	        var res = this.sock.setMulticastLoop(flag);
+	        if (res < 0)
+	            throw errnoException(res, 'setMulticastLoopback');
+	        return flag;
+	    };
+	    Socket.prototype.setTTL = function (ttl) {
+	        if (typeof ttl !== 'number')
+	            throw TypeError('Argument must be a number');
+	        var res = this.sock.setTtl(ttl);
+	        if (res < 0)
+	            throw errnoException(res, 'setTTL');
+	        return ttl;
+	    };
+	    Socket.prototype.setMulticastTTL = function (ttl) {
+	        if (typeof ttl !== 'number')
+	            throw new TypeError('Argument must be a number');
+	        var err = this.sock.setMulticastTtl(ttl);
+	        if (err < 0)
+	            throw errnoException(err, 'setMulticastTTL');
+	        return ttl;
+	    };
+	    Socket.prototype.ref = function () {
+	        this.sock.ref();
+	    };
+	    Socket.prototype.unref = function () {
+	        this.sock.unref();
+	    };
+	    return Socket;
+	}(events_1.EventEmitter));
+	exports.Socket = Socket;
+	function createSocket(type) {
+	    var socket = new Socket;
+	    return socket;
+	}
+	exports.createSocket = createSocket;
+
+
+/***/ },
+/* 43 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var libjs = __webpack_require__(6);
+	var buffer_1 = __webpack_require__(2);
+	var static_buffer_1 = __webpack_require__(7);
+	var event_1 = __webpack_require__(44);
+	var CHUNK = 8192;
+	var Socket = (function () {
+	    function Socket() {
+	        this.poll = null;
+	        this.fd = 0;
+	        this.connected = false;
+	        this.reffed = false;
+	        this.onstart = event_1.noop;
+	        this.onstop = event_1.noop;
+	        this.ondata = event_1.noop;
+	        this.onerror = event_1.noop;
+	    }
+	    Socket.prototype.start = function () {
+	        this.fd = libjs.socket(2, this.type, 0);
+	        if (this.fd < 0)
+	            return Error("Could not create scoket: errno = " + this.fd);
+	        var fcntl = libjs.fcntl(this.fd, 4, 2048);
+	        if (fcntl < 0)
+	            return Error("Could not make socket non-blocking: errno = " + fcntl);
+	    };
+	    Socket.prototype.stop = function () {
+	        if (this.fd) {
+	            libjs.close(this.fd);
+	            this.fd = 0;
+	        }
+	        this.onstop();
+	    };
+	    return Socket;
+	}());
+	exports.Socket = Socket;
+	var SocketUdp = (function (_super) {
+	    __extends(SocketUdp, _super);
+	    function SocketUdp() {
+	        _super.apply(this, arguments);
+	        this.type = 2;
+	        this.isIPv4 = true;
+	    }
+	    SocketUdp.prototype.start = function () {
+	        var err = _super.prototype.start.call(this);
+	        if (err)
+	            return err;
+	        var fd = this.fd;
+	        var event = {
+	            events: 1 | 4,
+	            data: [fd, 0]
+	        };
+	        var ctl = libjs.epoll_ctl(this.poll.epfd, 1, fd, event);
+	        if (ctl < 0)
+	            return Error("Could not add epoll events: errno = " + ctl);
+	    };
+	    SocketUdp.prototype.send = function (buf, ip, port) {
+	        var addr = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(ip)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        var flags = 64 | 16384;
+	        var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
+	        if (res < 0) {
+	            if (-res == 11) {
+	                return;
+	            }
+	            else {
+	                return Error("sendto error, errno = " + res);
+	            }
+	        }
+	    };
+	    SocketUdp.prototype.bind = function (port, ip) {
+	        if (ip === void 0) { ip = '0.0.0.0'; }
+	        var addr = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(ip)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
+	        if (res < 0)
+	            return Error("bind error, errno = " + res);
+	        this.reffed = true;
+	        this.poll.refs++;
+	    };
+	    SocketUdp.prototype.update = function (events) {
+	        console.log('events', events);
+	        if (events & 4) {
+	            console.log(this.fd, 'EPOLLOUT');
+	            this.connected = true;
+	            var event = {
+	                events: 1,
+	                data: [this.fd, 0]
+	            };
+	            var res = libjs.epoll_ctl(this.poll.epfd, 3, this.fd, event);
+	            this.onstart();
+	        }
+	        if ((events & 1) || (events & 2)) {
+	            console.log(this.fd, 'EPOLLIN');
+	            var err = null;
+	            do {
+	                var buf = new buffer_1.Buffer(CHUNK);
+	                var bytes = libjs.read(this.fd, buf);
+	                if (bytes < -1) {
+	                    err = Error("Error reading data: " + bytes);
+	                    break;
+	                }
+	                else {
+	                    this.ondata(buf.slice(0, bytes));
+	                }
+	            } while (bytes === CHUNK);
+	        }
+	        if (events & 8) {
+	            console.log(this.fd, 'EPOLLERR');
+	            this.onerror(Error("Some error on " + this.fd));
+	        }
+	        if (events & 8192) {
+	            console.log(this.fd, 'EPOLLRDHUP');
+	        }
+	        if (events & 16) {
+	            console.log(this.fd, 'EPOLLHUP');
+	        }
+	    };
+	    SocketUdp.prototype.setTtl = function (ttl) {
+	        if (ttl < 1 || ttl > 255)
+	            return -22;
+	        var buf = libjs.optval_t.pack(ttl);
+	        return this.isIPv4
+	            ? libjs.setsockopt(this.fd, 0, 2, buf)
+	            : libjs.setsockopt(this.fd, 41, 16, buf);
+	    };
+	    SocketUdp.prototype.setMulticastTtl = function (ttl) {
+	        var buf = libjs.optval_t.pack(ttl);
+	        return this.isIPv4
+	            ? libjs.setsockopt(this.fd, 0, 33, buf)
+	            : libjs.setsockopt(this.fd, 41, 18, buf);
+	    };
+	    SocketUdp.prototype.setMulticastLoop = function (on) {
+	        var buf = libjs.optval_t.pack(on ? 1 : 0);
+	        return this.isIPv4
+	            ? libjs.setsockopt(this.fd, 0, 34, buf)
+	            : libjs.setsockopt(this.fd, 41, 19, buf);
+	    };
+	    SocketUdp.prototype.setBroadcast = function (on) {
+	        var buf = libjs.optval_t.pack(on ? 1 : 0);
+	        return this.isIPv4
+	            ? libjs.setsockopt(this.fd, 0, libjs.SOL.SOCKET, buf)
+	            : libjs.setsockopt(this.fd, 41, libjs.SO.BROADCAST, buf);
+	    };
+	    return SocketUdp;
+	}(Socket));
+	exports.SocketUdp = SocketUdp;
+	var SocketTcp = (function (_super) {
+	    __extends(SocketTcp, _super);
+	    function SocketTcp() {
+	        _super.apply(this, arguments);
+	        this.type = 1;
+	        this.connected = false;
+	    }
+	    SocketTcp.prototype.connect = function (opts) {
+	        var addr_in = {
+	            sin_family: 2,
+	            sin_port: libjs.hton16(opts.port),
+	            sin_addr: {
+	                s_addr: new libjs.Ipv4(opts.host)
+	            },
+	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
+	        };
+	        var res = libjs.connect(this.fd, addr_in);
+	        if (res == -115) {
+	            this.poll();
+	            return;
+	        }
+	        if (res < 0)
+	            throw Error("Could no connect: " + res);
+	        throw Error('Something went not according to plan.');
+	    };
+	    SocketTcp.prototype.onRead = function () {
+	    };
+	    SocketTcp.prototype.write = function (data) {
+	        var sb = static_buffer_1.StaticBuffer.from(data + '\0');
+	        var res = libjs.write(this.fd, sb);
+	        return res;
+	    };
+	    return SocketTcp;
+	}(Socket));
+	exports.SocketTcp = SocketTcp;
+	var Poll = (function () {
+	    function Poll() {
+	        this.socks = {};
+	        this.refs = 0;
+	        this.epfd = 0;
+	        this.onerror = event_1.noop;
+	        this.maxEvents = 10;
+	        this.bufSize = libjs.epoll_event.size;
+	        this.epfd = libjs.epoll_create1(0);
+	        if (this.epfd < 0)
+	            throw Error("Could not create epoll fd: errno = " + this.epfd);
+	    }
+	    Poll.prototype.wait = function (timeout) {
+	        var EVENT_SIZE = this.bufSize;
+	        var evbuf = new static_buffer_1.StaticBuffer(this.maxEvents * EVENT_SIZE);
+	        var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
+	        if (waitres > 0) {
+	            for (var i = 0; i < waitres; i++) {
+	                var event = libjs.epoll_event.unpack(evbuf, i * EVENT_SIZE);
+	                var fd = event.data[0];
+	                var socket = this.socks[fd];
+	                if (socket) {
+	                    socket.update(event.events);
+	                }
+	                else {
+	                    this.onerror(Error("Socket not in pool: " + fd));
+	                }
+	            }
+	        }
+	        else if (waitres < 0) {
+	            this.onerror(Error("Error while waiting for connection: " + waitres));
+	        }
+	        setTimeout(this.wait.bind(this), 1000);
+	    };
+	    Poll.prototype.hasRefs = function () {
+	        return !!this.refs;
+	    };
+	    Poll.prototype.createUdpSocket = function () {
+	        var sock = new SocketUdp;
+	        sock.poll = this;
+	        var err = sock.start();
+	        this.socks[sock.fd] = sock;
+	        if (err)
+	            return err;
+	        else
+	            return sock;
+	    };
+	    return Poll;
+	}());
+	exports.Poll = Poll;
+
+
+/***/ },
+/* 44 */
+/***/ function(module, exports) {
+
+	"use strict";
+	function noop() { }
+	exports.noop = noop;
+
+
+/***/ },
+/* 45 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var require;'use strict';
+
+	exports = module.exports = {
+	    makeRequireFunction: makeRequireFunction,
+	    stripBOM: stripBOM,
+	    addBuiltinLibsToObject: addBuiltinLibsToObject
+	};
+
+	exports.requireDepth = 0;
+
+	// Invoke with makeRequireFunction.call(module) where |module| is the
+	// Module object to use as the context for the require() function.
+	function makeRequireFunction() {
+	    var Module = this.constructor;
+	    var self = this;
+
+	    function require(path) {
+	        try {
+	            exports.requireDepth += 1;
+	            return self.require(path);
+	        } finally {
+	            exports.requireDepth -= 1;
+	        }
+	    }
+
+	    function resolve(request) {
+	        return Module._resolveFilename(request, self);
+	    }
+
+	    require.resolve = resolve;
+
+	    require.main = process.mainModule;
+
+	    // Enable support to add extra extension types.
+	    require.extensions = Module._extensions;
+
+	    require.cache = Module._cache;
+
+	    return require;
+	}
+
+	/**
+	 * Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
+	 * because the buffer-to-string conversion in `fs.readFileSync()`
+	 * translates it to FEFF, the UTF-16 BOM.
+	 */
+	function stripBOM(content) {
+	    if (content.charCodeAt(0) === 0xFEFF) {
+	        content = content.slice(1);
+	    }
+	    return content;
+	}
+
+	exports.builtinLibs = ['assert', 'buffer', 'child_process', 'cluster',
+	    'crypto', 'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https', 'net',
+	    'os', 'path', 'punycode', 'querystring', 'readline', 'repl', 'stream',
+	    'string_decoder', 'tls', 'tty', 'url', 'util', 'v8', 'vm', 'zlib'];
+
+	function addBuiltinLibsToObject(object) {
+	    // Make built-in modules available directly (loaded lazily).
+	    exports.builtinLibs.forEach(function (name) {
+	        // Goals of this mechanism are:
+	        // - Lazy loading of built-in modules
+	        // - Having all built-in modules available as non-enumerable properties
+	        // - Allowing the user to re-assign these variables as if there were no
+	        //   pre-existing globals with the same name.
+
+	        var setReal = function(val) {
+	        // Deleting the property before re-assigning it disables the
+	        // getter/setter mechanism.
+	        delete object[name];
+	    object[name] = val;
+	};
+
+	    Object.defineProperty(object, name, {
+	            get: function() {
+	                var r = require;
+	            var lib = __webpack_require__(46)(name);
+
+	    // Disable the current getter/setter and set up a new
+	    // non-enumerable property.
+	    delete object[name];
+	    Object.defineProperty(object, name, {
+	            get: function() { return lib; },
+	        set: setReal,
+	        configurable: true,
+	        enumerable: false
+	});
+
+	    return lib;
+	},
+	    set: setReal,
+	        configurable: true,
+	        enumerable: false
+	});
+	});
+	}
+
+
+/***/ },
+/* 46 */
+/***/ function(module, exports, __webpack_require__) {
+
 	var map = {
-		"./_stream_duplex": 27,
-		"./_stream_passthrough": 29,
-		"./_stream_readable": 22,
-		"./_stream_transform": 28,
-		"./_stream_writable": 25,
-		"./assert": 31,
-		"./boot": 1,
-		"./buffer": 2,
-		"./console": 30,
-		"./dgram": 39,
-		"./eloop": 15,
-		"./events": 13,
-		"./fs": 16,
-		"./index": 40,
-		"./internal/module": 41,
-		"./internal/streams/BufferList": 23,
-		"./internal/streams/lazy_transform": 43,
-		"./internal/util": 26,
-		"./module": 36,
-		"./native_module": 37,
-		"./path": 20,
-		"./process": 12,
-		"./punycode": 44,
-		"./querystring": 45,
-		"./static-arraybuffer": 5,
-		"./static-buffer": 7,
-		"./stream": 21,
-		"./timers": 32,
-		"./url": 46,
-		"./util": 18,
-		"./vm": 47
+		"./module": 45,
+		"./streams/BufferList": 23,
+		"./streams/lazy_transform": 47,
+		"./util": 26
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -12652,26 +15287,681 @@ global = this;
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 38;
+	webpackContext.id = 46;
 
 
 /***/ },
-/* 39 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var SocketDgram = __webpack_require__(48).SocketDgram;
-	var Buffer = __webpack_require__(2).Buffer;
-	console.log('dgram');
-	var dgram = new SocketDgram;
-	console.log(dgram);
-	dgram.start();
-	dgram.send(new Buffer('cool stuff'), '127.0.0.1', 1234);
-	dgram.send(new Buffer('yolo'), '127.0.0.1', 1234);
-	dgram.send(new Buffer('Hi, there'), '127.0.0.1', 1234);
+	// LazyTransform is a special type of Transform stream that is lazily loaded.
+	// This is used for performance with bi-API-ship: when two APIs are available
+	// for the stream, one conventional and one non-conventional.
+	'use strict';
+
+	const stream = __webpack_require__(21);
+	const util = __webpack_require__(18);
+
+	module.exports = LazyTransform;
+
+	function LazyTransform(options) {
+	    this._options = options;
+	}
+	util.inherits(LazyTransform, stream.Transform);
+
+	[
+	    '_readableState',
+	    '_writableState',
+	    '_transformState'
+	].forEach(function(prop, i, props) {
+	    Object.defineProperty(LazyTransform.prototype, prop, {
+	        get: function() {
+	            stream.Transform.call(this, this._options);
+	            this._writableState.decodeStrings = false;
+	            this._writableState.defaultEncoding = 'latin1';
+	            return this[prop];
+	        },
+	        set: function(val) {
+	            Object.defineProperty(this, prop, {
+	                value: val,
+	                enumerable: true,
+	                configurable: true,
+	                writable: true
+	            });
+	        },
+	        configurable: true,
+	        enumerable: true
+	    });
+	});
 
 
 /***/ },
-/* 40 */
+/* 48 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var map = {
+		"./_stream_duplex": 27,
+		"./_stream_passthrough": 29,
+		"./_stream_readable": 22,
+		"./_stream_transform": 28,
+		"./_stream_writable": 25,
+		"./assert": 31,
+		"./boot": 1,
+		"./buffer": 2,
+		"./console": 30,
+		"./dgram": 42,
+		"./dgram-reference": 49,
+		"./eloop": 15,
+		"./events": 13,
+		"./fs": 16,
+		"./index": 50,
+		"./internal/module": 45,
+		"./internal/streams/BufferList": 23,
+		"./internal/streams/lazy_transform": 47,
+		"./internal/util": 26,
+		"./module": 36,
+		"./native_module": 37,
+		"./path": 20,
+		"./process": 12,
+		"./punycode": 39,
+		"./querystring": 40,
+		"./static-arraybuffer": 5,
+		"./static-buffer": 7,
+		"./stream": 21,
+		"./timers": 32,
+		"./url": 38,
+		"./util": 18,
+		"./vm": 41
+	};
+	function webpackContext(req) {
+		return __webpack_require__(webpackContextResolve(req));
+	};
+	function webpackContextResolve(req) {
+		return map[req] || (function() { throw new Error("Cannot find module '" + req + "'.") }());
+	};
+	webpackContext.keys = function webpackContextKeys() {
+		return Object.keys(map);
+	};
+	webpackContext.resolve = webpackContextResolve;
+	module.exports = webpackContext;
+	webpackContext.id = 48;
+
+
+/***/ },
+/* 49 */
+/***/ function(module, exports) {
+
+	/*
+	'use strict';
+
+	const assert = require('assert');
+	const Buffer = require('buffer').Buffer;
+	const util = require('util');
+	const EventEmitter = require('events');
+	const UV_UDP_REUSEADDR = process.binding('constants').os.UV_UDP_REUSEADDR;
+
+	const UDP = process.binding('udp_wrap').UDP;
+	const SendWrap = process.binding('udp_wrap').SendWrap;
+
+	const BIND_STATE_UNBOUND = 0;
+	const BIND_STATE_BINDING = 1;
+	const BIND_STATE_BOUND = 2;
+
+	// lazily loaded
+	var cluster = null;
+	var dns = null;
+
+	const errnoException = util._errnoException;
+	const exceptionWithHostPort = util._exceptionWithHostPort;
+
+	function lookup(address, family, callback) {
+	    if (!dns)
+	        dns = require('dns');
+
+	    return dns.lookup(address, family, callback);
+	}
+
+
+	function lookup4(address, callback) {
+	    return lookup(address || '127.0.0.1', 4, callback);
+	}
+
+
+	function lookup6(address, callback) {
+	    return lookup(address || '::1', 6, callback);
+	}
+
+
+	function newHandle(type) {
+	    if (type == 'udp4') {
+	        const handle = new UDP();
+	        handle.lookup = lookup4;
+	        return handle;
+	    }
+
+	    if (type == 'udp6') {
+	        const handle = new UDP();
+	        handle.lookup = lookup6;
+	        handle.bind = handle.bind6;
+	        handle.send = handle.send6;
+	        return handle;
+	    }
+
+	    if (type == 'unix_dgram')
+	        throw new Error('"unix_dgram" type sockets are not supported any more');
+
+	    throw new Error('Bad socket type specified. Valid types are: udp4, udp6');
+	}
+
+
+	exports._createSocketHandle = function(address, port, addressType, fd, flags) {
+	    // Opening an existing fd is not supported for UDP handles.
+	    assert(typeof fd !== 'number' || fd < 0);
+
+	    var handle = newHandle(addressType);
+
+	    if (port || address) {
+	        var err = handle.bind(address, port || 0, flags);
+	        if (err) {
+	            handle.close();
+	            return err;
+	        }
+	    }
+
+	    return handle;
+	};
+
+
+	function Socket(type, listener) {
+	    EventEmitter.call(this);
+
+	    if (typeof type === 'object') {
+	        var options = type;
+	        type = options.type;
+	    }
+
+	    var handle = newHandle(type);
+	    handle.owner = this;
+
+	    this._handle = handle;
+	    this._receiving = false;
+	    this._bindState = BIND_STATE_UNBOUND;
+	    this.type = type;
+	    this.fd = null; // compatibility hack
+
+	    // If true - UV_UDP_REUSEADDR flag will be set
+	    this._reuseAddr = options && options.reuseAddr;
+
+	    if (typeof listener === 'function')
+	        this.on('message', listener);
+	}
+	util.inherits(Socket, EventEmitter);
+	exports.Socket = Socket;
+
+
+	exports.createSocket = function(type, listener) {
+	    return new Socket(type, listener);
+	};
+
+
+	function startListening(socket) {
+	    socket._handle.onmessage = onMessage;
+	    // Todo: handle errors
+	    socket._handle.recvStart();
+	    socket._receiving = true;
+	    socket._bindState = BIND_STATE_BOUND;
+	    socket.fd = -42; // compatibility hack
+
+	    socket.emit('listening');
+	}
+
+	function replaceHandle(self, newHandle) {
+
+	    // Set up the handle that we got from master.
+	    newHandle.lookup = self._handle.lookup;
+	    newHandle.bind = self._handle.bind;
+	    newHandle.send = self._handle.send;
+	    newHandle.owner = self;
+
+	    // Replace the existing handle by the handle we got from master.
+	    self._handle.close();
+	    self._handle = newHandle;
+	}
+
+	Socket.prototype.bind = function(port_ /!*, address, callback*!/) {
+	    var self = this;
+	    let port = port_;
+
+	    self._healthCheck();
+
+	    if (this._bindState != BIND_STATE_UNBOUND)
+	        throw new Error('Socket is already bound');
+
+	    this._bindState = BIND_STATE_BINDING;
+
+	    if (typeof arguments[arguments.length - 1] === 'function')
+	        self.once('listening', arguments[arguments.length - 1]);
+
+	    if (port instanceof UDP) {
+	        replaceHandle(self, port);
+	        startListening(self);
+	        return self;
+	    }
+
+	    var address;
+	    var exclusive;
+
+	    if (port !== null && typeof port === 'object') {
+	        address = port.address || '';
+	        exclusive = !!port.exclusive;
+	        port = port.port;
+	    } else {
+	        address = typeof arguments[1] === 'function' ? '' : arguments[1];
+	        exclusive = false;
+	    }
+
+	    // defaulting address for bind to all interfaces
+	    if (!address && self._handle.lookup === lookup4) {
+	        address = '0.0.0.0';
+	    } else if (!address && self._handle.lookup === lookup6) {
+	        address = '::';
+	    }
+
+	    // resolve address first
+	    self._handle.lookup(address, function(err, ip) {
+	        if (err) {
+	            self._bindState = BIND_STATE_UNBOUND;
+	            self.emit('error', err);
+	            return;
+	        }
+
+	        if (!cluster)
+	            cluster = require('cluster');
+
+	        var flags = 0;
+	        if (self._reuseAddr)
+	            flags |= UV_UDP_REUSEADDR;
+
+	        if (cluster.isWorker && !exclusive) {
+	            function onHandle(err, handle) {
+	                if (err) {
+	                    var ex = exceptionWithHostPort(err, 'bind', ip, port);
+	                    self.emit('error', ex);
+	                    self._bindState = BIND_STATE_UNBOUND;
+	                    return;
+	                }
+
+	                if (!self._handle)
+	                // handle has been closed in the mean time.
+	                    return handle.close();
+
+	                replaceHandle(self, handle);
+	                startListening(self);
+	            }
+	            cluster._getServer(self, {
+	                address: ip,
+	                port: port,
+	                addressType: self.type,
+	                fd: -1,
+	                flags: flags
+	            }, onHandle);
+
+	        } else {
+	            if (!self._handle)
+	                return; // handle has been closed in the mean time
+
+	            const err = self._handle.bind(ip, port || 0, flags);
+	            if (err) {
+	                var ex = exceptionWithHostPort(err, 'bind', ip, port);
+	                self.emit('error', ex);
+	                self._bindState = BIND_STATE_UNBOUND;
+	                // Todo: close?
+	                return;
+	            }
+
+	            startListening(self);
+	        }
+	    });
+
+	    return self;
+	};
+
+
+	// thin wrapper around `send`, here for compatibility with dgram_legacy.js
+	Socket.prototype.sendto = function(buffer,
+	                                   offset,
+	                                   length,
+	                                   port,
+	                                   address,
+	                                   callback) {
+	    if (typeof offset !== 'number' || typeof length !== 'number')
+	        throw new Error('Send takes "offset" and "length" as args 2 and 3');
+
+	    if (typeof address !== 'string')
+	        throw new Error(this.type + ' sockets must send to port, address');
+
+	    this.send(buffer, offset, length, port, address, callback);
+	};
+
+
+	function sliceBuffer(buffer, offset, length) {
+	    if (typeof buffer === 'string')
+	        buffer = Buffer.from(buffer);
+	    else if (!(buffer instanceof Buffer))
+	        throw new TypeError('First argument must be a buffer or string');
+
+	    offset = offset >>> 0;
+	    length = length >>> 0;
+
+	    return buffer.slice(offset, offset + length);
+	}
+
+
+	function fixBufferList(list) {
+	    const newlist = new Array(list.length);
+
+	    for (var i = 0, l = list.length; i < l; i++) {
+	        var buf = list[i];
+	        if (typeof buf === 'string')
+	            newlist[i] = Buffer.from(buf);
+	        else if (!(buf instanceof Buffer))
+	            return null;
+	        else
+	            newlist[i] = buf;
+	    }
+
+	    return newlist;
+	}
+
+
+	function enqueue(self, toEnqueue) {
+	    // If the send queue hasn't been initialized yet, do it, and install an
+	    // event handler that flushes the send queue after binding is done.
+	    if (!self._queue) {
+	        self._queue = [];
+	        self.once('listening', clearQueue);
+	    }
+	    self._queue.push(toEnqueue);
+	    return;
+	}
+
+
+	function clearQueue() {
+	    const queue = this._queue;
+	    this._queue = undefined;
+
+	    // Flush the send queue.
+	    for (var i = 0; i < queue.length; i++)
+	        queue[i]();
+	}
+
+
+	// valid combinations
+	// send(buffer, offset, length, port, address, callback)
+	// send(buffer, offset, length, port, address)
+	// send(buffer, offset, length, port)
+	// send(bufferOrList, port, address, callback)
+	// send(bufferOrList, port, address)
+	// send(bufferOrList, port)
+	Socket.prototype.send = function(buffer,
+	                                 offset,
+	                                 length,
+	                                 port,
+	                                 address,
+	                                 callback) {
+	    const self = this;
+	    let list;
+
+	    if (address || (port && typeof port !== 'function')) {
+	        buffer = sliceBuffer(buffer, offset, length);
+	    } else {
+	        callback = port;
+	        port = offset;
+	        address = length;
+	    }
+
+	    if (!Array.isArray(buffer)) {
+	        if (typeof buffer === 'string') {
+	            list = [ Buffer.from(buffer) ];
+	        } else if (!(buffer instanceof Buffer)) {
+	            throw new TypeError('First argument must be a buffer or a string');
+	        } else {
+	            list = [ buffer ];
+	        }
+	    } else if (!(list = fixBufferList(buffer))) {
+	        throw new TypeError('Buffer list arguments must be buffers or strings');
+	    }
+
+	    port = port >>> 0;
+	    if (port === 0 || port > 65535)
+	        throw new RangeError('Port should be > 0 and < 65536');
+
+	    // Normalize callback so it's either a function or undefined but not anything
+	    // else.
+	    if (typeof callback !== 'function')
+	        callback = undefined;
+
+	    self._healthCheck();
+
+	    if (self._bindState == BIND_STATE_UNBOUND)
+	        self.bind({port: 0, exclusive: true}, null);
+
+	    if (list.length === 0)
+	        list.push(Buffer.allocUnsafe(0));
+
+	    // If the socket hasn't been bound yet, push the outbound packet onto the
+	    // send queue and send after binding is complete.
+	    if (self._bindState != BIND_STATE_BOUND) {
+	        enqueue(self, self.send.bind(self, list, port, address, callback));
+	        return;
+	    }
+
+	    self._handle.lookup(address, function afterDns(ex, ip) {
+	        doSend(ex, self, ip, list, address, port, callback);
+	    });
+	};
+
+
+	function doSend(ex, self, ip, list, address, port, callback) {
+	    if (ex) {
+	        if (typeof callback === 'function') {
+	            callback(ex);
+	            return;
+	        }
+
+	        self.emit('error', ex);
+	        return;
+	    } else if (!self._handle) {
+	        return;
+	    }
+
+	    var req = new SendWrap();
+	    req.list = list;  // Keep reference alive.
+	    req.address = address;
+	    req.port = port;
+	    if (callback) {
+	        req.callback = callback;
+	        req.oncomplete = afterSend;
+	    }
+	    var err = self._handle.send(req,
+	        list,
+	        list.length,
+	        port,
+	        ip,
+	        !!callback);
+	    if (err && callback) {
+	        // don't emit as error, dgram_legacy.js compatibility
+	        const ex = exceptionWithHostPort(err, 'send', address, port);
+	        process.nextTick(callback, ex);
+	    }
+	}
+
+	function afterSend(err, sent) {
+	    if (err) {
+	        err = exceptionWithHostPort(err, 'send', this.address, this.port);
+	    } else {
+	        err = null;
+	    }
+
+	    this.callback(err, sent);
+	}
+
+	Socket.prototype.close = function(callback) {
+	    if (typeof callback === 'function')
+	        this.on('close', callback);
+
+	    if (this._queue) {
+	        this._queue.push(this.close.bind(this));
+	        return this;
+	    }
+
+	    this._healthCheck();
+	    this._stopReceiving();
+	    this._handle.close();
+	    this._handle = null;
+	    process.nextTick(socketCloseNT, this);
+
+	    return this;
+	};
+
+
+	function socketCloseNT(self) {
+	    self.emit('close');
+	}
+
+
+	Socket.prototype.address = function() {
+	    this._healthCheck();
+
+	    var out = {};
+	    var err = this._handle.getsockname(out);
+	    if (err) {
+	        throw errnoException(err, 'getsockname');
+	    }
+
+	    return out;
+	};
+
+	Socket.prototype.setBroadcast = function(arg) {
+	    var err = this._handle.setBroadcast(arg ? 1 : 0);
+	    if (err) {
+	        throw errnoException(err, 'setBroadcast');
+	    }
+	};
+
+
+	Socket.prototype.setTTL = function(arg) {
+	    if (typeof arg !== 'number') {
+	        throw new TypeError('Argument must be a number');
+	    }
+
+	    var err = this._handle.setTTL(arg);
+	    if (err) {
+	        throw errnoException(err, 'setTTL');
+	    }
+
+	    return arg;
+	};
+
+
+	Socket.prototype.setMulticastTTL = function(arg) {
+	    if (typeof arg !== 'number') {
+	        throw new TypeError('Argument must be a number');
+	    }
+
+	    var err = this._handle.setMulticastTTL(arg);
+	    if (err) {
+	        throw errnoException(err, 'setMulticastTTL');
+	    }
+
+	    return arg;
+	};
+
+
+	Socket.prototype.setMulticastLoopback = function(arg) {
+	    var err = this._handle.setMulticastLoopback(arg ? 1 : 0);
+	    if (err) {
+	        throw errnoException(err, 'setMulticastLoopback');
+	    }
+
+	    return arg; // 0.4 compatibility
+	};
+
+
+	Socket.prototype.addMembership = function(multicastAddress,
+	                                          interfaceAddress) {
+	    this._healthCheck();
+
+	    if (!multicastAddress) {
+	        throw new Error('multicast address must be specified');
+	    }
+
+	    var err = this._handle.addMembership(multicastAddress, interfaceAddress);
+	    if (err) {
+	        throw errnoException(err, 'addMembership');
+	    }
+	};
+
+
+	Socket.prototype.dropMembership = function(multicastAddress,
+	                                           interfaceAddress) {
+	    this._healthCheck();
+
+	    if (!multicastAddress) {
+	        throw new Error('multicast address must be specified');
+	    }
+
+	    var err = this._handle.dropMembership(multicastAddress, interfaceAddress);
+	    if (err) {
+	        throw errnoException(err, 'dropMembership');
+	    }
+	};
+
+
+	Socket.prototype._healthCheck = function() {
+	    if (!this._handle)
+	        throw new Error('Not running'); // error message from dgram_legacy.js
+	};
+
+
+	Socket.prototype._stopReceiving = function() {
+	    if (!this._receiving)
+	        return;
+
+	    this._handle.recvStop();
+	    this._receiving = false;
+	    this.fd = null; // compatibility hack
+	};
+
+
+	function onMessage(nread, handle, buf, rinfo) {
+	    var self = handle.owner;
+	    if (nread < 0) {
+	        return self.emit('error', errnoException(nread, 'recvmsg'));
+	    }
+	    rinfo.size = buf.length; // compatibility
+	    self.emit('message', buf, rinfo);
+	}
+
+
+	Socket.prototype.ref = function() {
+	    if (this._handle)
+	        this._handle.ref();
+
+	    return this;
+	};
+
+
+	Socket.prototype.unref = function() {
+	    if (this._handle)
+	        this._handle.unref();
+
+	    return this;
+	};*/
+
+
+/***/ },
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -13905,2487 +17195,6 @@ global = this;
 	        });
 	    }
 	}
-
-
-/***/ },
-/* 41 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var require;'use strict';
-
-	exports = module.exports = {
-	    makeRequireFunction: makeRequireFunction,
-	    stripBOM: stripBOM,
-	    addBuiltinLibsToObject: addBuiltinLibsToObject
-	};
-
-	exports.requireDepth = 0;
-
-	// Invoke with makeRequireFunction.call(module) where |module| is the
-	// Module object to use as the context for the require() function.
-	function makeRequireFunction() {
-	    var Module = this.constructor;
-	    var self = this;
-
-	    function require(path) {
-	        try {
-	            exports.requireDepth += 1;
-	            return self.require(path);
-	        } finally {
-	            exports.requireDepth -= 1;
-	        }
-	    }
-
-	    function resolve(request) {
-	        return Module._resolveFilename(request, self);
-	    }
-
-	    require.resolve = resolve;
-
-	    require.main = process.mainModule;
-
-	    // Enable support to add extra extension types.
-	    require.extensions = Module._extensions;
-
-	    require.cache = Module._cache;
-
-	    return require;
-	}
-
-	/**
-	 * Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
-	 * because the buffer-to-string conversion in `fs.readFileSync()`
-	 * translates it to FEFF, the UTF-16 BOM.
-	 */
-	function stripBOM(content) {
-	    if (content.charCodeAt(0) === 0xFEFF) {
-	        content = content.slice(1);
-	    }
-	    return content;
-	}
-
-	exports.builtinLibs = ['assert', 'buffer', 'child_process', 'cluster',
-	    'crypto', 'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https', 'net',
-	    'os', 'path', 'punycode', 'querystring', 'readline', 'repl', 'stream',
-	    'string_decoder', 'tls', 'tty', 'url', 'util', 'v8', 'vm', 'zlib'];
-
-	function addBuiltinLibsToObject(object) {
-	    // Make built-in modules available directly (loaded lazily).
-	    exports.builtinLibs.forEach(function (name) {
-	        // Goals of this mechanism are:
-	        // - Lazy loading of built-in modules
-	        // - Having all built-in modules available as non-enumerable properties
-	        // - Allowing the user to re-assign these variables as if there were no
-	        //   pre-existing globals with the same name.
-
-	        var setReal = function(val) {
-	        // Deleting the property before re-assigning it disables the
-	        // getter/setter mechanism.
-	        delete object[name];
-	    object[name] = val;
-	};
-
-	    Object.defineProperty(object, name, {
-	            get: function() {
-	                var r = require;
-	            var lib = __webpack_require__(42)(name);
-
-	    // Disable the current getter/setter and set up a new
-	    // non-enumerable property.
-	    delete object[name];
-	    Object.defineProperty(object, name, {
-	            get: function() { return lib; },
-	        set: setReal,
-	        configurable: true,
-	        enumerable: false
-	});
-
-	    return lib;
-	},
-	    set: setReal,
-	        configurable: true,
-	        enumerable: false
-	});
-	});
-	}
-
-
-/***/ },
-/* 42 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var map = {
-		"./module": 41,
-		"./streams/BufferList": 23,
-		"./streams/lazy_transform": 43,
-		"./util": 26
-	};
-	function webpackContext(req) {
-		return __webpack_require__(webpackContextResolve(req));
-	};
-	function webpackContextResolve(req) {
-		return map[req] || (function() { throw new Error("Cannot find module '" + req + "'.") }());
-	};
-	webpackContext.keys = function webpackContextKeys() {
-		return Object.keys(map);
-	};
-	webpackContext.resolve = webpackContextResolve;
-	module.exports = webpackContext;
-	webpackContext.id = 42;
-
-
-/***/ },
-/* 43 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// LazyTransform is a special type of Transform stream that is lazily loaded.
-	// This is used for performance with bi-API-ship: when two APIs are available
-	// for the stream, one conventional and one non-conventional.
-	'use strict';
-
-	const stream = __webpack_require__(21);
-	const util = __webpack_require__(18);
-
-	module.exports = LazyTransform;
-
-	function LazyTransform(options) {
-	    this._options = options;
-	}
-	util.inherits(LazyTransform, stream.Transform);
-
-	[
-	    '_readableState',
-	    '_writableState',
-	    '_transformState'
-	].forEach(function(prop, i, props) {
-	    Object.defineProperty(LazyTransform.prototype, prop, {
-	        get: function() {
-	            stream.Transform.call(this, this._options);
-	            this._writableState.decodeStrings = false;
-	            this._writableState.defaultEncoding = 'latin1';
-	            return this[prop];
-	        },
-	        set: function(val) {
-	            Object.defineProperty(this, prop, {
-	                value: val,
-	                enumerable: true,
-	                configurable: true,
-	                writable: true
-	            });
-	        },
-	        configurable: true,
-	        enumerable: true
-	    });
-	});
-
-
-/***/ },
-/* 44 */
-/***/ function(module, exports) {
-
-	'use strict';
-
-	/** Highest positive signed 32-bit float value */
-	var maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
-
-	/** Bootstring parameters */
-	var base = 36;
-	var tMin = 1;
-	var tMax = 26;
-	var skew = 38;
-	var damp = 700;
-	var initialBias = 72;
-	var initialN = 128; // 0x80
-	var delimiter = '-'; // '\x2D'
-
-	/** Regular expressions */
-	var regexPunycode = /^xn--/;
-	var regexNonASCII = /[^\x20-\x7E]/; // unprintable ASCII chars + non-ASCII chars
-	var regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
-
-	/** Error messages */
-	var errors = {
-	    'overflow': 'Overflow: input needs wider integers to process',
-	    'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
-	    'invalid-input': 'Invalid input'
-	};
-
-	/** Convenience shortcuts */
-	var baseMinusTMin = base - tMin;
-	var floor = Math.floor;
-	var stringFromCharCode = String.fromCharCode;
-
-
-	// `.fromCodePoint` shim
-	if (!String.fromCodePoint) {
-	    (function() {
-	        var defineProperty = (function() {
-	            // IE 8 only supports `Object.defineProperty` on DOM elements
-	            try {
-	                var object = {};
-	                var $defineProperty = Object.defineProperty;
-	                var result = $defineProperty(object, object, object) && $defineProperty;
-	            } catch(error) {}
-	            return result;
-	        }());
-	        var stringFromCharCode = String.fromCharCode;
-	        var floor = Math.floor;
-	        var fromCodePoint = function() {
-	            var MAX_SIZE = 0x4000;
-	            var codeUnits = [];
-	            var highSurrogate;
-	            var lowSurrogate;
-	            var index = -1;
-	            var length = arguments.length;
-	            if (!length) {
-	                return '';
-	            }
-	            var result = '';
-	            while (++index < length) {
-	                var codePoint = Number(arguments[index]);
-	                if (
-	                    !isFinite(codePoint) ||       // `NaN`, `+Infinity`, or `-Infinity`
-	                    codePoint < 0 ||              // not a valid Unicode code point
-	                    codePoint > 0x10FFFF ||       // not a valid Unicode code point
-	                    floor(codePoint) != codePoint // not an integer
-	                ) {
-	                    throw RangeError('Invalid code point: ' + codePoint);
-	                }
-	                if (codePoint <= 0xFFFF) { // BMP code point
-	                    codeUnits.push(codePoint);
-	                } else { // Astral code point; split in surrogate halves
-	                    // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
-	                    codePoint -= 0x10000;
-	                    highSurrogate = (codePoint >> 10) + 0xD800;
-	                    lowSurrogate = (codePoint % 0x400) + 0xDC00;
-	                    codeUnits.push(highSurrogate, lowSurrogate);
-	                }
-	                if (index + 1 == length || codeUnits.length > MAX_SIZE) {
-	                    result += stringFromCharCode.apply(null, codeUnits);
-	                    codeUnits.length = 0;
-	                }
-	            }
-	            return result;
-	        };
-	        if (defineProperty) {
-	            defineProperty(String, 'fromCodePoint', {
-	                'value': fromCodePoint,
-	                'configurable': true,
-	                'writable': true
-	            });
-	        } else {
-	            String.fromCodePoint = fromCodePoint;
-	        }
-	    }());
-	}
-
-
-
-
-	/*--------------------------------------------------------------------------*/
-
-	/**
-	 * A generic error utility function.
-	 * @private
-	 * @param {String} type The error type.
-	 * @returns {Error} Throws a `RangeError` with the applicable error message.
-	 */
-	function error(type) {
-	    throw new RangeError(errors[type]);
-	}
-
-	/**
-	 * A generic `Array#map` utility function.
-	 * @private
-	 * @param {Array} array The array to iterate over.
-	 * @param {Function} callback The function that gets called for every array
-	 * item.
-	 * @returns {Array} A new array of values returned by the callback function.
-	 */
-	function map(array, fn) {
-	    var result = [];
-	    var length = array.length;
-	    while (length--) {
-	        result[length] = fn(array[length]);
-	    }
-	    return result;
-	}
-
-	/**
-	 * A simple `Array#map`-like wrapper to work with domain name strings or email
-	 * addresses.
-	 * @private
-	 * @param {String} domain The domain name or email address.
-	 * @param {Function} callback The function that gets called for every
-	 * character.
-	 * @returns {Array} A new string of characters returned by the callback
-	 * function.
-	 */
-	function mapDomain(string, fn) {
-	    var parts = string.split('@');
-	    var result = '';
-	    if (parts.length > 1) {
-	        // In email addresses, only the domain name should be punycoded. Leave
-	        // the local part (i.e. everything up to `@`) intact.
-	        result = parts[0] + '@';
-	        string = parts[1];
-	    }
-	    // Avoid `split(regex)` for IE8 compatibility. See #17.
-	    string = string.replace(regexSeparators, '\x2E');
-	    var labels = string.split('.');
-	    var encoded = map(labels, fn).join('.');
-	    return result + encoded;
-	}
-
-	/**
-	 * Creates an array containing the numeric code points of each Unicode
-	 * character in the string. While JavaScript uses UCS-2 internally,
-	 * this function will convert a pair of surrogate halves (each of which
-	 * UCS-2 exposes as separate characters) into a single code point,
-	 * matching UTF-16.
-	 * @see `punycode.ucs2.encode`
-	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
-	 * @memberOf punycode.ucs2
-	 * @name decode
-	 * @param {String} string The Unicode input string (UCS-2).
-	 * @returns {Array} The new array of code points.
-	 */
-	function ucs2decode(string) {
-	    var output = [];
-	    var counter = 0;
-	    var length = string.length;
-	    while (counter < length) {
-	        var value = string.charCodeAt(counter++);
-	        if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-	            // It's a high surrogate, and there is a next character.
-	            var extra = string.charCodeAt(counter++);
-	            if ((extra & 0xFC00) == 0xDC00) { // Low surrogate.
-	                output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-	            } else {
-	                // It's an unmatched surrogate; only append this code unit, in case the
-	                // next code unit is the high surrogate of a surrogate pair.
-	                output.push(value);
-	                counter--;
-	            }
-	        } else {
-	            output.push(value);
-	        }
-	    }
-	    return output;
-	}
-
-	/**
-	 * Creates a string based on an array of numeric code points.
-	 * @see `punycode.ucs2.decode`
-	 * @memberOf punycode.ucs2
-	 * @name encode
-	 * @param {Array} codePoints The array of numeric code points.
-	 * @returns {String} The new Unicode string (UCS-2).
-	 */
-	var ucs2encode = function(array) { String.fromCodePoint.apply(null, array); }
-
-	/**
-	 * Converts a basic code point into a digit/integer.
-	 * @see `digitToBasic()`
-	 * @private
-	 * @param {Number} codePoint The basic numeric code point value.
-	 * @returns {Number} The numeric value of a basic code point (for use in
-	 * representing integers) in the range `0` to `base - 1`, or `base` if
-	 * the code point does not represent a value.
-	 */
-	var basicToDigit = function(codePoint) {
-	    if (codePoint - 0x30 < 0x0A) {
-	        return codePoint - 0x16;
-	    }
-	    if (codePoint - 0x41 < 0x1A) {
-	        return codePoint - 0x41;
-	    }
-	    if (codePoint - 0x61 < 0x1A) {
-	        return codePoint - 0x61;
-	    }
-	    return base;
-	};
-
-	/**
-	 * Converts a digit/integer into a basic code point.
-	 * @see `basicToDigit()`
-	 * @private
-	 * @param {Number} digit The numeric value of a basic code point.
-	 * @returns {Number} The basic code point whose value (when used for
-	 * representing integers) is `digit`, which needs to be in the range
-	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
-	 * used; else, the lowercase form is used. The behavior is undefined
-	 * if `flag` is non-zero and `digit` has no uppercase form.
-	 */
-	var digitToBasic = function(digit, flag) {
-	    //  0..25 map to ASCII a..z or A..Z
-	    // 26..35 map to ASCII 0..9
-	    return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
-	};
-
-	/**
-	 * Bias adaptation function as per section 3.4 of RFC 3492.
-	 * https://tools.ietf.org/html/rfc3492#section-3.4
-	 * @private
-	 */
-	var adapt = function(delta, numPoints, firstTime) {
-	    var k = 0;
-	    delta = firstTime ? floor(delta / damp) : delta >> 1;
-	    delta += floor(delta / numPoints);
-	    for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
-	        delta = floor(delta / baseMinusTMin);
-	    }
-	    return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
-	};
-
-
-	/**
-	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
-	 * symbols.
-	 * @memberOf punycode
-	 * @param {String} input The Punycode string of ASCII-only symbols.
-	 * @returns {String} The resulting string of Unicode symbols.
-	 */
-	var decode = function(input) {
-	    // Don't use UCS-2.
-	    var output = [];
-	    var inputLength = input.length;
-	    var i = 0;
-	    var n = initialN;
-	    var bias = initialBias;
-
-	    // Handle the basic code points: var `basic` be the number of input code
-	    // points before the last delimiter, or `0` if there is none, then copy
-	    // the first basic code points to the output.
-
-	    var basic = input.lastIndexOf(delimiter);
-	    if (basic < 0) {
-	        basic = 0;
-	    }
-
-	    for (var j = 0; j < basic; ++j) {
-	        // if it's not a basic code point
-	        if (input.charCodeAt(j) >= 0x80) {
-	            error('not-basic');
-	        }
-	        output.push(input.charCodeAt(j));
-	    }
-
-	    // Main decoding loop: start just after the last delimiter if any basic code
-	    // points were copied; start at the beginning otherwise.
-
-	    for (var index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
-
-	        // `index` is the index of the next character to be consumed.
-	        // Decode a generalized variable-length integer into `delta`,
-	        // which gets added to `i`. The overflow checking is easier
-	        // if we increase `i` as we go, then subtract off its starting
-	        // value at the end to obtain `delta`.
-	        var oldi = i;
-	        for (var w = 1, k = base; /* no condition */; k += base) {
-
-	            if (index >= inputLength) {
-	                error('invalid-input');
-	            }
-
-	            var digit = basicToDigit(input.charCodeAt(index++));
-
-	            if (digit >= base || digit > floor((maxInt - i) / w)) {
-	                error('overflow');
-	            }
-
-	            i += digit * w;
-	            var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-
-	            if (digit < t) {
-	                break;
-	            }
-
-	            var baseMinusT = base - t;
-	            if (w > floor(maxInt / baseMinusT)) {
-	                error('overflow');
-	            }
-
-	            w *= baseMinusT;
-
-	        }
-
-	        var out = output.length + 1;
-	        bias = adapt(i - oldi, out, oldi == 0);
-
-	        // `i` was supposed to wrap around from `out` to `0`,
-	        // incrementing `n` each time, so we'll fix that now:
-	        if (floor(i / out) > maxInt - n) {
-	            error('overflow');
-	        }
-
-	        n += floor(i / out);
-	        i %= out;
-
-	        // Insert `n` at position `i` of the output.
-	        output.splice(i++, 0, n);
-
-	    }
-
-	    return String.fromCodePoint.apply(null, output);
-	};
-
-	/**
-	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
-	 * Punycode string of ASCII-only symbols.
-	 * @memberOf punycode
-	 * @param {String} input The string of Unicode symbols.
-	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
-	 */
-	var encode = function(input) {
-	    var output = [];
-
-	    // Convert the input in UCS-2 to an array of Unicode code points.
-	    input = ucs2decode(input);
-
-	    // Cache the length.
-	    var inputLength = input.length;
-
-	    // Initialize the state.
-	    var n = initialN;
-	    var delta = 0;
-	    var bias = initialBias;
-
-	    // Handle the basic code points.
-	    for (var i = 0; i < input.length; i++) {
-	        var currentValue = input[i];
-	        if (currentValue < 0x80) {
-	            output.push(stringFromCharCode(currentValue));
-	        }
-	    }
-
-	    var basicLength = output.length;
-	    var handledCPCount = basicLength;
-
-	    // `handledCPCount` is the number of code points that have been handled;
-	    // `basicLength` is the number of basic code points.
-
-	    // Finish the basic string with a delimiter unless it's empty.
-	    if (basicLength) {
-	        output.push(delimiter);
-	    }
-
-	    // Main encoding loop:
-	    while (handledCPCount < inputLength) {
-
-	        // All non-basic code points < n have been handled already. Find the next
-	        // larger one:
-	        var m = maxInt;
-	        for (var i = 0; i < input.length; i++) {
-	            var currentValue = input[i];
-	            if (currentValue >= n && currentValue < m) {
-	                m = currentValue;
-	            }
-	        }
-
-	        // Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
-	        // but guard against overflow.
-	        var handledCPCountPlusOne = handledCPCount + 1;
-	        if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
-	            error('overflow');
-	        }
-
-	        delta += (m - n) * handledCPCountPlusOne;
-	        n = m;
-
-	        for (var i = 0; i < input.length; i++) {
-	            var currentValue = input[i];
-	            if (currentValue < n && ++delta > maxInt) {
-	                error('overflow');
-	            }
-	            if (currentValue == n) {
-	                // Represent delta as a generalized variable-length integer.
-	                var q = delta;
-	                for (var k = base; /* no condition */; k += base) {
-	                    var t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-	                    if (q < t) {
-	                        break;
-	                    }
-	                    var qMinusT = q - t;
-	                    var baseMinusT = base - t;
-	                    output.push(
-	                        stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
-	                    );
-	                    q = floor(qMinusT / baseMinusT);
-	                }
-
-	                output.push(stringFromCharCode(digitToBasic(q, 0)));
-	                bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
-	                delta = 0;
-	                ++handledCPCount;
-	            }
-	        }
-
-	        ++delta;
-	        ++n;
-
-	    }
-	    return output.join('');
-	};
-
-	/**
-	 * Converts a Punycode string representing a domain name or an email address
-	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
-	 * it doesn't matter if you call it on a string that has already been
-	 * converted to Unicode.
-	 * @memberOf punycode
-	 * @param {String} input The Punycoded domain name or email address to
-	 * convert to Unicode.
-	 * @returns {String} The Unicode representation of the given Punycode
-	 * string.
-	 */
-	var toUnicode = function(input) {
-	    return mapDomain(input, function(string) {
-	        return regexPunycode.test(string)
-	            ? decode(string.slice(4).toLowerCase())
-	            : string;
-	    });
-	};
-
-	/**
-	 * Converts a Unicode string representing a domain name or an email address to
-	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
-	 * i.e. it doesn't matter if you call it with a domain that's already in
-	 * ASCII.
-	 * @memberOf punycode
-	 * @param {String} input The domain name or email address to convert, as a
-	 * Unicode string.
-	 * @returns {String} The Punycode representation of the given domain name or
-	 * email address.
-	 */
-	var toASCII = function(input) {
-	    return mapDomain(input, function(string) {
-	        return regexNonASCII.test(string)
-	            ? 'xn--' + encode(string)
-	            : string;
-	    });
-	};
-
-	/*--------------------------------------------------------------------------*/
-
-	/** Define the public API */
-	var punycode = {
-	    /**
-	     * A string representing the current Punycode.js version number.
-	     * @memberOf punycode
-	     * @type String
-	     */
-	    'version': '2.0.0',
-	    /**
-	     * An object of methods to convert from JavaScript's internal character
-	     * representation (UCS-2) to Unicode code points, and back.
-	     * @see <https://mathiasbynens.be/notes/javascript-encoding>
-	     * @memberOf punycode
-	     * @type Object
-	     */
-	    'ucs2': {
-	        'decode': ucs2decode,
-	        'encode': ucs2encode
-	    },
-	    'decode': decode,
-	    'encode': encode,
-	    'toASCII': toASCII,
-	    'toUnicode': toUnicode
-	};
-
-	module.exports = punycode;
-
-
-/***/ },
-/* 45 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// Query String Utilities
-
-	'use strict';
-
-	const QueryString = exports;
-	const Buffer = __webpack_require__(2).Buffer;
-
-	// This constructor is used to store parsed query string values. Instantiating
-	// this is faster than explicitly calling `Object.create(null)` to get a
-	// "clean" empty object (tested with v8 v4.9).
-	function ParsedQueryString() {}
-	ParsedQueryString.prototype = Object.create(null);
-
-
-	// a safe fast alternative to decodeURIComponent
-	QueryString.unescapeBuffer = function(s, decodeSpaces) {
-	    var out = Buffer.allocUnsafe(s.length);
-	    var state = 0;
-	    var n, m, hexchar;
-
-	    for (var inIndex = 0, outIndex = 0; inIndex <= s.length; inIndex++) {
-	        var c = inIndex < s.length ? s.charCodeAt(inIndex) : NaN;
-	        switch (state) {
-	            case 0: // Any character
-	                switch (c) {
-	                    case 37: // '%'
-	                        n = 0;
-	                        m = 0;
-	                        state = 1;
-	                        break;
-	                    case 43: // '+'
-	                        if (decodeSpaces)
-	                            c = 32; // ' '
-	                    // falls through
-	                    default:
-	                        out[outIndex++] = c;
-	                        break;
-	                }
-	                break;
-
-	            case 1: // First hex digit
-	                hexchar = c;
-	                if (c >= 48/*0*/ && c <= 57/*9*/) {
-	                    n = c - 48/*0*/;
-	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
-	                    n = c - 65/*A*/ + 10;
-	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
-	                    n = c - 97/*a*/ + 10;
-	                } else {
-	                    out[outIndex++] = 37/*%*/;
-	                    out[outIndex++] = c;
-	                    state = 0;
-	                    break;
-	                }
-	                state = 2;
-	                break;
-
-	            case 2: // Second hex digit
-	                state = 0;
-	                if (c >= 48/*0*/ && c <= 57/*9*/) {
-	                    m = c - 48/*0*/;
-	                } else if (c >= 65/*A*/ && c <= 70/*F*/) {
-	                    m = c - 65/*A*/ + 10;
-	                } else if (c >= 97/*a*/ && c <= 102/*f*/) {
-	                    m = c - 97/*a*/ + 10;
-	                } else {
-	                    out[outIndex++] = 37/*%*/;
-	                    out[outIndex++] = hexchar;
-	                    out[outIndex++] = c;
-	                    break;
-	                }
-	                out[outIndex++] = 16 * n + m;
-	                break;
-	        }
-	    }
-
-	    // TODO support returning arbitrary buffers.
-
-	    return out.slice(0, outIndex - 1);
-	};
-
-
-	function qsUnescape(s, decodeSpaces) {
-	    try {
-	        return decodeURIComponent(s);
-	    } catch (e) {
-	        return QueryString.unescapeBuffer(s, decodeSpaces).toString();
-	    }
-	}
-	QueryString.unescape = qsUnescape;
-
-
-	var hexTable = new Array(256);
-	for (var i = 0; i < 256; ++i)
-	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
-	QueryString.escape = function(str) {
-	    // replaces encodeURIComponent
-	    // http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3.4
-	    if (typeof str !== 'string') {
-	        if (typeof str === 'object')
-	            str = String(str);
-	        else
-	            str += '';
-	    }
-	    var out = '';
-	    var lastPos = 0;
-
-	    for (var i = 0; i < str.length; ++i) {
-	        var c = str.charCodeAt(i);
-
-	        // These characters do not need escaping (in order):
-	        // ! - . _ ~
-	        // ' ( ) *
-	        // digits
-	        // alpha (uppercase)
-	        // alpha (lowercase)
-	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
-	            (c >= 0x27 && c <= 0x2A) ||
-	            (c >= 0x30 && c <= 0x39) ||
-	            (c >= 0x41 && c <= 0x5A) ||
-	            (c >= 0x61 && c <= 0x7A)) {
-	            continue;
-	        }
-
-	        if (i - lastPos > 0)
-	            out += str.slice(lastPos, i);
-
-	        // Other ASCII characters
-	        if (c < 0x80) {
-	            lastPos = i + 1;
-	            out += hexTable[c];
-	            continue;
-	        }
-
-	        // Multi-byte characters ...
-	        if (c < 0x800) {
-	            lastPos = i + 1;
-	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        if (c < 0xD800 || c >= 0xE000) {
-	            lastPos = i + 1;
-	            out += hexTable[0xE0 | (c >> 12)] +
-	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	                hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        // Surrogate pair
-	        ++i;
-	        var c2;
-	        if (i < str.length)
-	            c2 = str.charCodeAt(i) & 0x3FF;
-	        else
-	            throw new URIError('URI malformed');
-	        lastPos = i + 1;
-	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
-	        out += hexTable[0xF0 | (c >> 18)] +
-	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
-	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	            hexTable[0x80 | (c & 0x3F)];
-	    }
-	    if (lastPos === 0)
-	        return str;
-	    if (lastPos < str.length)
-	        return out + str.slice(lastPos);
-	    return out;
-	};
-
-	var stringifyPrimitive = function(v) {
-	    if (typeof v === 'string')
-	        return v;
-	    if (typeof v === 'number' && isFinite(v))
-	        return '' + v;
-	    if (typeof v === 'boolean')
-	        return v ? 'true' : 'false';
-	    return '';
-	};
-
-
-	QueryString.stringify = QueryString.encode = function(obj, sep, eq, options) {
-	    sep = sep || '&';
-	    eq = eq || '=';
-
-	    var encode = QueryString.escape;
-	    if (options && typeof options.encodeURIComponent === 'function') {
-	        encode = options.encodeURIComponent;
-	    }
-
-	    if (obj !== null && typeof obj === 'object') {
-	        var keys = Object.keys(obj);
-	        var len = keys.length;
-	        var flast = len - 1;
-	        var fields = '';
-	        for (var i = 0; i < len; ++i) {
-	            var k = keys[i];
-	            var v = obj[k];
-	            var ks = encode(stringifyPrimitive(k)) + eq;
-
-	            if (Array.isArray(v)) {
-	                var vlen = v.length;
-	                var vlast = vlen - 1;
-	                for (var j = 0; j < vlen; ++j) {
-	                    fields += ks + encode(stringifyPrimitive(v[j]));
-	                    if (j < vlast)
-	                        fields += sep;
-	                }
-	                if (vlen && i < flast)
-	                    fields += sep;
-	            } else {
-	                fields += ks + encode(stringifyPrimitive(v));
-	                if (i < flast)
-	                    fields += sep;
-	            }
-	        }
-	        return fields;
-	    }
-	    return '';
-	};
-
-	// Parse a key/val string.
-	QueryString.parse = QueryString.decode = function(qs, sep, eq, options) {
-	    sep = sep || '&';
-	    eq = eq || '=';
-
-	    const obj = new ParsedQueryString();
-
-	    if (typeof qs !== 'string' || qs.length === 0) {
-	        return obj;
-	    }
-
-	    if (typeof sep !== 'string')
-	        sep += '';
-
-	    const eqLen = eq.length;
-	    const sepLen = sep.length;
-
-	    var maxKeys = 1000;
-	    if (options && typeof options.maxKeys === 'number') {
-	        maxKeys = options.maxKeys;
-	    }
-
-	    var pairs = Infinity;
-	    if (maxKeys > 0)
-	        pairs = maxKeys;
-
-	    var decode = QueryString.unescape;
-	    if (options && typeof options.decodeURIComponent === 'function') {
-	        decode = options.decodeURIComponent;
-	    }
-	    const customDecode = (decode !== qsUnescape);
-
-	    const keys = [];
-	    var lastPos = 0;
-	    var sepIdx = 0;
-	    var eqIdx = 0;
-	    var key = '';
-	    var value = '';
-	    var keyEncoded = customDecode;
-	    var valEncoded = customDecode;
-	    var encodeCheck = 0;
-	    for (var i = 0; i < qs.length; ++i) {
-	        const code = qs.charCodeAt(i);
-
-	        // Try matching key/value pair separator (e.g. '&')
-	        if (code === sep.charCodeAt(sepIdx)) {
-	            if (++sepIdx === sepLen) {
-	                // Key/value pair separator match!
-	                const end = i - sepIdx + 1;
-	                if (eqIdx < eqLen) {
-	                    // If we didn't find the key/value separator, treat the substring as
-	                    // part of the key instead of the value
-	                    if (lastPos < end)
-	                        key += qs.slice(lastPos, end);
-	                } else if (lastPos < end)
-	                    value += qs.slice(lastPos, end);
-	                if (keyEncoded)
-	                    key = decodeStr(key, decode);
-	                if (valEncoded)
-	                    value = decodeStr(value, decode);
-	                // Use a key array lookup instead of using hasOwnProperty(), which is
-	                // slower
-	                if (keys.indexOf(key) === -1) {
-	                    obj[key] = value;
-	                    keys[keys.length] = key;
-	                } else {
-	                    const curValue = obj[key];
-	                    // `instanceof Array` is used instead of Array.isArray() because it
-	                    // is ~15-20% faster with v8 4.7 and is safe to use because we are
-	                    // using it with values being created within this function
-	                    if (curValue instanceof Array)
-	                        curValue[curValue.length] = value;
-	                    else
-	                        obj[key] = [curValue, value];
-	                }
-	                if (--pairs === 0)
-	                    break;
-	                keyEncoded = valEncoded = customDecode;
-	                encodeCheck = 0;
-	                key = value = '';
-	                lastPos = i + 1;
-	                sepIdx = eqIdx = 0;
-	            }
-	            continue;
-	        } else {
-	            sepIdx = 0;
-	            if (!valEncoded) {
-	                // Try to match an (valid) encoded byte (once) to minimize unnecessary
-	                // calls to string decoding functions
-	                if (code === 37/*%*/) {
-	                    encodeCheck = 1;
-	                } else if (encodeCheck > 0 &&
-	                    ((code >= 48/*0*/ && code <= 57/*9*/) ||
-	                    (code >= 65/*A*/ && code <= 70/*F*/) ||
-	                    (code >= 97/*a*/ && code <= 102/*f*/))) {
-	                    if (++encodeCheck === 3)
-	                        valEncoded = true;
-	                } else {
-	                    encodeCheck = 0;
-	                }
-	            }
-	        }
-
-	        // Try matching key/value separator (e.g. '=') if we haven't already
-	        if (eqIdx < eqLen) {
-	            if (code === eq.charCodeAt(eqIdx)) {
-	                if (++eqIdx === eqLen) {
-	                    // Key/value separator match!
-	                    const end = i - eqIdx + 1;
-	                    if (lastPos < end)
-	                        key += qs.slice(lastPos, end);
-	                    encodeCheck = 0;
-	                    lastPos = i + 1;
-	                }
-	                continue;
-	            } else {
-	                eqIdx = 0;
-	                if (!keyEncoded) {
-	                    // Try to match an (valid) encoded byte once to minimize unnecessary
-	                    // calls to string decoding functions
-	                    if (code === 37/*%*/) {
-	                        encodeCheck = 1;
-	                    } else if (encodeCheck > 0 &&
-	                        ((code >= 48/*0*/ && code <= 57/*9*/) ||
-	                        (code >= 65/*A*/ && code <= 70/*F*/) ||
-	                        (code >= 97/*a*/ && code <= 102/*f*/))) {
-	                        if (++encodeCheck === 3)
-	                            keyEncoded = true;
-	                    } else {
-	                        encodeCheck = 0;
-	                    }
-	                }
-	            }
-	        }
-
-	        if (code === 43/*+*/) {
-	            if (eqIdx < eqLen) {
-	                if (i - lastPos > 0)
-	                    key += qs.slice(lastPos, i);
-	                key += '%20';
-	                keyEncoded = true;
-	            } else {
-	                if (i - lastPos > 0)
-	                    value += qs.slice(lastPos, i);
-	                value += '%20';
-	                valEncoded = true;
-	            }
-	            lastPos = i + 1;
-	        }
-	    }
-
-	    // Check if we have leftover key or value data
-	    if (pairs > 0 && (lastPos < qs.length || eqIdx > 0)) {
-	        if (lastPos < qs.length) {
-	            if (eqIdx < eqLen)
-	                key += qs.slice(lastPos);
-	            else if (sepIdx < sepLen)
-	                value += qs.slice(lastPos);
-	        }
-	        if (keyEncoded)
-	            key = decodeStr(key, decode);
-	        if (valEncoded)
-	            value = decodeStr(value, decode);
-	        // Use a key array lookup instead of using hasOwnProperty(), which is
-	        // slower
-	        if (keys.indexOf(key) === -1) {
-	            obj[key] = value;
-	            keys[keys.length] = key;
-	        } else {
-	            const curValue = obj[key];
-	            // `instanceof Array` is used instead of Array.isArray() because it
-	            // is ~15-20% faster with v8 4.7 and is safe to use because we are
-	            // using it with values being created within this function
-	            if (curValue instanceof Array)
-	                curValue[curValue.length] = value;
-	            else
-	                obj[key] = [curValue, value];
-	        }
-	    }
-
-	    return obj;
-	};
-
-
-	// v8 does not optimize functions with try-catch blocks, so we isolate them here
-	// to minimize the damage
-	function decodeStr(s, decoder) {
-	    try {
-	        return decoder(s);
-	    } catch (e) {
-	        return QueryString.unescape(s, true);
-	    }
-	}
-
-
-/***/ },
-/* 46 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// 'use strict';
-
-
-	var toASCII = __webpack_require__(44).toASCII;
-
-	exports.parse = urlParse;
-	exports.resolve = urlResolve;
-	exports.resolveObject = urlResolveObject;
-	exports.format = urlFormat;
-
-	exports.Url = Url;
-
-	function Url() {
-	    this.protocol = null;
-	    this.slashes = null;
-	    this.auth = null;
-	    this.host = null;
-	    this.port = null;
-	    this.hostname = null;
-	    this.hash = null;
-	    this.search = null;
-	    this.query = null;
-	    this.pathname = null;
-	    this.path = null;
-	    this.href = null;
-	}
-
-	// Reference: RFC 3986, RFC 1808, RFC 2396
-
-	// define these here so at least they only have to be
-	// compiled once on the first module load.
-	var protocolPattern = /^([a-z0-9.+-]+:)/i;
-	var portPattern = /:[0-9]*$/;
-
-	// Special case for a simple path URL
-	var simplePathPattern = /^(\/\/?(?!\/)[^\?\s]*)(\?[^\s]*)?$/;
-
-	var hostnameMaxLen = 255;
-	// protocols that can allow "unsafe" and "unwise" chars.
-	var unsafeProtocol = {
-	    'javascript': true,
-	    'javascript:': true
-	};
-	// protocols that never have a hostname.
-	var hostlessProtocol = {
-	    'javascript': true,
-	    'javascript:': true
-	};
-	// protocols that always contain a // bit.
-	var slashedProtocol = {
-	    'http': true,
-	    'http:': true,
-	    'https': true,
-	    'https:': true,
-	    'ftp': true,
-	    'ftp:': true,
-	    'gopher': true,
-	    'gopher:': true,
-	    'file': true,
-	    'file:': true
-	};
-
-	var querystring = __webpack_require__(45);
-
-	// This constructor is used to store parsed query string values. Instantiating
-	// this is faster than explicitly calling `Object.create(null)` to get a
-	// "clean" empty object (tested with v8 v4.9).
-	function ParsedQueryString() {}
-	ParsedQueryString.prototype = Object.create(null);
-
-	function urlParse(url, parseQueryString, slashesDenoteHost) {
-	    if (url instanceof Url) return url;
-
-	    var u = new Url();
-	    u.parse(url, parseQueryString, slashesDenoteHost);
-	    return u;
-	}
-
-	Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
-	    if (typeof url !== 'string') {
-	        throw new TypeError('Parameter "url" must be a string, not ' + typeof url);
-	    }
-
-	    // Copy chrome, IE, opera backslash-handling behavior.
-	    // Back slashes before the query string get converted to forward slashes
-	    // See: https://code.google.com/p/chromium/issues/detail?id=25916
-	    var hasHash = false;
-	    var start = -1;
-	    var end = -1;
-	    var rest = '';
-	    var lastPos = 0;
-	    var i = 0;
-	    for (var inWs = false, split = false; i < url.length; ++i) {
-	        const code = url.charCodeAt(i);
-
-	        // Find first and last non-whitespace characters for trimming
-	        const isWs = code === 32/* */ ||
-	            code === 9/*\t*/ ||
-	            code === 13/*\r*/ ||
-	            code === 10/*\n*/ ||
-	            code === 12/*\f*/ ||
-	            code === 160/*\u00A0*/ ||
-	            code === 65279/*\uFEFF*/;
-	        if (start === -1) {
-	            if (isWs)
-	                continue;
-	            lastPos = start = i;
-	        } else {
-	            if (inWs) {
-	                if (!isWs) {
-	                    end = -1;
-	                    inWs = false;
-	                }
-	            } else if (isWs) {
-	                end = i;
-	                inWs = true;
-	            }
-	        }
-
-	        // Only convert backslashes while we haven't seen a split character
-	        if (!split) {
-	            switch (code) {
-	                case 35: // '#'
-	                    hasHash = true;
-	                // Fall through
-	                case 63: // '?'
-	                    split = true;
-	                    break;
-	                case 92: // '\\'
-	                    if (i - lastPos > 0)
-	                        rest += url.slice(lastPos, i);
-	                    rest += '/';
-	                    lastPos = i + 1;
-	                    break;
-	            }
-	        } else if (!hasHash && code === 35/*#*/) {
-	            hasHash = true;
-	        }
-	    }
-
-	    // Check if string was non-empty (including strings with only whitespace)
-	    if (start !== -1) {
-	        if (lastPos === start) {
-	            // We didn't convert any backslashes
-
-	            if (end === -1) {
-	                if (start === 0)
-	                    rest = url;
-	                else
-	                    rest = url.slice(start);
-	            } else {
-	                rest = url.slice(start, end);
-	            }
-	        } else if (end === -1 && lastPos < url.length) {
-	            // We converted some backslashes and have only part of the entire string
-	            rest += url.slice(lastPos);
-	        } else if (end !== -1 && lastPos < end) {
-	            // We converted some backslashes and have only part of the entire string
-	            rest += url.slice(lastPos, end);
-	        }
-	    }
-
-	    if (!slashesDenoteHost && !hasHash) {
-	        // Try fast path regexp
-	        const simplePath = simplePathPattern.exec(rest);
-	        if (simplePath) {
-	            this.path = rest;
-	            this.href = rest;
-	            this.pathname = simplePath[1];
-	            if (simplePath[2]) {
-	                this.search = simplePath[2];
-	                if (parseQueryString) {
-	                    this.query = querystring.parse(this.search.slice(1));
-	                } else {
-	                    this.query = this.search.slice(1);
-	                }
-	            } else if (parseQueryString) {
-	                this.search = '';
-	                this.query = new ParsedQueryString();
-	            }
-	            return this;
-	        }
-	    }
-
-	    var proto = protocolPattern.exec(rest);
-	    if (proto) {
-	        proto = proto[0];
-	        var lowerProto = proto.toLowerCase();
-	        this.protocol = lowerProto;
-	        rest = rest.slice(proto.length);
-	    }
-
-	    // figure out if it's got a host
-	    // user@server is *always* interpreted as a hostname, and url
-	    // resolution will treat //foo/bar as host=foo,path=bar because that's
-	    // how the browser resolves relative URLs.
-	    if (slashesDenoteHost || proto || /^\/\/[^@\/]+@[^@\/]+/.test(rest)) {
-	        var slashes = rest.charCodeAt(0) === 47/*/*/ &&
-	            rest.charCodeAt(1) === 47/*/*/;
-	        if (slashes && !(proto && hostlessProtocol[proto])) {
-	            rest = rest.slice(2);
-	            this.slashes = true;
-	        }
-	    }
-
-	    if (!hostlessProtocol[proto] &&
-	        (slashes || (proto && !slashedProtocol[proto]))) {
-
-	        // there's a hostname.
-	        // the first instance of /, ?, ;, or # ends the host.
-	        //
-	        // If there is an @ in the hostname, then non-host chars *are* allowed
-	        // to the left of the last @ sign, unless some host-ending character
-	        // comes *before* the @-sign.
-	        // URLs are obnoxious.
-	        //
-	        // ex:
-	        // http://a@b@c/ => user:a@b host:c
-	        // http://a@b?@c => user:a host:b path:/?@c
-
-	        // v0.12 TODO(isaacs): This is not quite how Chrome does things.
-	        // Review our test case against browsers more comprehensively.
-
-	        var hostEnd = -1;
-	        var atSign = -1;
-	        var nonHost = -1;
-	        for (i = 0; i < rest.length; ++i) {
-	            switch (rest.charCodeAt(i)) {
-	                case 9:   // '\t'
-	                case 10:  // '\n'
-	                case 13:  // '\r'
-	                case 32:  // ' '
-	                case 34:  // '"'
-	                case 37:  // '%'
-	                case 39:  // '\''
-	                case 59:  // ';'
-	                case 60:  // '<'
-	                case 62:  // '>'
-	                case 92:  // '\\'
-	                case 94:  // '^'
-	                case 96:  // '`'
-	                case 123: // '{'
-	                case 124: // '|'
-	                case 125: // '}'
-	                          // Characters that are never ever allowed in a hostname from RFC 2396
-	                    if (nonHost === -1)
-	                        nonHost = i;
-	                    break;
-	                case 35: // '#'
-	                case 47: // '/'
-	                case 63: // '?'
-	                    // Find the first instance of any host-ending characters
-	                    if (nonHost === -1)
-	                        nonHost = i;
-	                    hostEnd = i;
-	                    break;
-	                case 64: // '@'
-	                    // At this point, either we have an explicit point where the
-	                    // auth portion cannot go past, or the last @ char is the decider.
-	                    atSign = i;
-	                    nonHost = -1;
-	                    break;
-	            }
-	            if (hostEnd !== -1)
-	                break;
-	        }
-	        start = 0;
-	        if (atSign !== -1) {
-	            this.auth = decodeURIComponent(rest.slice(0, atSign));
-	            start = atSign + 1;
-	        }
-	        if (nonHost === -1) {
-	            this.host = rest.slice(start);
-	            rest = '';
-	        } else {
-	            this.host = rest.slice(start, nonHost);
-	            rest = rest.slice(nonHost);
-	        }
-
-	        // pull out port.
-	        this.parseHost();
-
-	        // we've indicated that there is a hostname,
-	        // so even if it's empty, it has to be present.
-	        if (typeof this.hostname !== 'string')
-	            this.hostname = '';
-
-	        var hostname = this.hostname;
-
-	        // if hostname begins with [ and ends with ]
-	        // assume that it's an IPv6 address.
-	        var ipv6Hostname = hostname.charCodeAt(0) === 91/*[*/ &&
-	            hostname.charCodeAt(hostname.length - 1) === 93/*]*/;
-
-	        // validate a little.
-	        if (!ipv6Hostname) {
-	            const result = validateHostname(this, rest, hostname);
-	            if (result !== undefined)
-	                rest = result;
-	        }
-
-	        if (this.hostname.length > hostnameMaxLen) {
-	            this.hostname = '';
-	        } else {
-	            // hostnames are always lower case.
-	            this.hostname = this.hostname.toLowerCase();
-	        }
-
-	        if (!ipv6Hostname) {
-	            // IDNA Support: Returns a punycoded representation of "domain".
-	            // It only converts parts of the domain name that
-	            // have non-ASCII characters, i.e. it doesn't matter if
-	            // you call it with a domain that already is ASCII-only.
-	            this.hostname = toASCII(this.hostname);
-	        }
-
-	        var p = this.port ? ':' + this.port : '';
-	        var h = this.hostname || '';
-	        this.host = h + p;
-
-	        // strip [ and ] from the hostname
-	        // the host field still retains them, though
-	        if (ipv6Hostname) {
-	            this.hostname = this.hostname.slice(1, -1);
-	            if (rest[0] !== '/') {
-	                rest = '/' + rest;
-	            }
-	        }
-	    }
-
-	    // now rest is set to the post-host stuff.
-	    // chop off any delim chars.
-	    if (!unsafeProtocol[lowerProto]) {
-	        // First, make 100% sure that any "autoEscape" chars get
-	        // escaped, even if encodeURIComponent doesn't think they
-	        // need to be.
-	        const result = autoEscapeStr(rest);
-	        if (result !== undefined)
-	            rest = result;
-	    }
-
-	    var questionIdx = -1;
-	    var hashIdx = -1;
-	    for (i = 0; i < rest.length; ++i) {
-	        const code = rest.charCodeAt(i);
-	        if (code === 35/*#*/) {
-	            this.hash = rest.slice(i);
-	            hashIdx = i;
-	            break;
-	        } else if (code === 63/*?*/ && questionIdx === -1) {
-	            questionIdx = i;
-	        }
-	    }
-
-	    if (questionIdx !== -1) {
-	        if (hashIdx === -1) {
-	            this.search = rest.slice(questionIdx);
-	            this.query = rest.slice(questionIdx + 1);
-	        } else {
-	            this.search = rest.slice(questionIdx, hashIdx);
-	            this.query = rest.slice(questionIdx + 1, hashIdx);
-	        }
-	        if (parseQueryString) {
-	            this.query = querystring.parse(this.query);
-	        }
-	    } else if (parseQueryString) {
-	        // no query string, but parseQueryString still requested
-	        this.search = '';
-	        this.query = new ParsedQueryString();
-	    }
-
-	    var firstIdx = (questionIdx !== -1 &&
-	    (hashIdx === -1 || questionIdx < hashIdx)
-	        ? questionIdx
-	        : hashIdx);
-	    if (firstIdx === -1) {
-	        if (rest.length > 0)
-	            this.pathname = rest;
-	    } else if (firstIdx > 0) {
-	        this.pathname = rest.slice(0, firstIdx);
-	    }
-	    if (slashedProtocol[lowerProto] &&
-	        this.hostname && !this.pathname) {
-	        this.pathname = '/';
-	    }
-
-	    // to support http.request
-	    if (this.pathname || this.search) {
-	        const p = this.pathname || '';
-	        const s = this.search || '';
-	        this.path = p + s;
-	    }
-
-	    // finally, reconstruct the href based on what has been validated.
-	    this.href = this.format();
-	    return this;
-	};
-
-	function validateHostname(self, rest, hostname) {
-	    for (var i = 0, lastPos; i <= hostname.length; ++i) {
-	        var code;
-	        if (i < hostname.length)
-	            code = hostname.charCodeAt(i);
-	        if (code === 46/*.*/ || i === hostname.length) {
-	            if (i - lastPos > 0) {
-	                if (i - lastPos > 63) {
-	                    self.hostname = hostname.slice(0, lastPos + 63);
-	                    return '/' + hostname.slice(lastPos + 63) + rest;
-	                }
-	            }
-	            lastPos = i + 1;
-	            continue;
-	        } else if ((code >= 48/*0*/ && code <= 57/*9*/) ||
-	            (code >= 97/*a*/ && code <= 122/*z*/) ||
-	            code === 45/*-*/ ||
-	            (code >= 65/*A*/ && code <= 90/*Z*/) ||
-	            code === 43/*+*/ ||
-	            code === 95/*_*/ ||
-	            code > 127) {
-	            continue;
-	        }
-	        // Invalid host character
-	        self.hostname = hostname.slice(0, i);
-	        if (i < hostname.length)
-	            return '/' + hostname.slice(i) + rest;
-	        break;
-	    }
-	}
-
-	function autoEscapeStr(rest) {
-	    var newRest = '';
-	    var lastPos = 0;
-	    for (var i = 0; i < rest.length; ++i) {
-	        // Automatically escape all delimiters and unwise characters from RFC 2396
-	        // Also escape single quotes in case of an XSS attack
-	        switch (rest.charCodeAt(i)) {
-	            case 9:   // '\t'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%09';
-	                lastPos = i + 1;
-	                break;
-	            case 10:  // '\n'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%0A';
-	                lastPos = i + 1;
-	                break;
-	            case 13:  // '\r'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%0D';
-	                lastPos = i + 1;
-	                break;
-	            case 32:  // ' '
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%20';
-	                lastPos = i + 1;
-	                break;
-	            case 34:  // '"'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%22';
-	                lastPos = i + 1;
-	                break;
-	            case 39:  // '\''
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%27';
-	                lastPos = i + 1;
-	                break;
-	            case 60:  // '<'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%3C';
-	                lastPos = i + 1;
-	                break;
-	            case 62:  // '>'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%3E';
-	                lastPos = i + 1;
-	                break;
-	            case 92:  // '\\'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%5C';
-	                lastPos = i + 1;
-	                break;
-	            case 94:  // '^'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%5E';
-	                lastPos = i + 1;
-	                break;
-	            case 96:  // '`'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%60';
-	                lastPos = i + 1;
-	                break;
-	            case 123: // '{'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%7B';
-	                lastPos = i + 1;
-	                break;
-	            case 124: // '|'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%7C';
-	                lastPos = i + 1;
-	                break;
-	            case 125: // '}'
-	                if (i - lastPos > 0)
-	                    newRest += rest.slice(lastPos, i);
-	                newRest += '%7D';
-	                lastPos = i + 1;
-	                break;
-	        }
-	    }
-	    if (lastPos === 0)
-	        return;
-	    if (lastPos < rest.length)
-	        return newRest + rest.slice(lastPos);
-	    else
-	        return newRest;
-	}
-
-	// format a parsed object into a url string
-	function urlFormat(obj) {
-	    // ensure it's an object, and not a string url.
-	    // If it's an obj, this is a no-op.
-	    // this way, you can call url_format() on strings
-	    // to clean up potentially wonky urls.
-	    if (typeof obj === 'string') obj = urlParse(obj);
-
-	    else if (typeof obj !== 'object' || obj === null)
-	        throw new TypeError('Parameter "urlObj" must be an object, not ' +
-	        obj === null ? 'null' : typeof obj);
-
-	    else if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
-
-	    return obj.format();
-	}
-
-	Url.prototype.format = function() {
-	    var auth = this.auth || '';
-	    if (auth) {
-	        auth = encodeAuth(auth);
-	        auth += '@';
-	    }
-
-	    var protocol = this.protocol || '';
-	    var pathname = this.pathname || '';
-	    var hash = this.hash || '';
-	    var host = '';
-	    var query = '';
-
-	    if (this.host) {
-	        host = auth + this.host;
-	    } else if (this.hostname) {
-	        host = auth + (this.hostname.indexOf(':') === -1 ?
-	                this.hostname :
-	            '[' + this.hostname + ']');
-	        if (this.port) {
-	            host += ':' + this.port;
-	        }
-	    }
-
-	    if (this.query !== null && typeof this.query === 'object')
-	        query = querystring.stringify(this.query);
-
-	    var search = this.search || (query && ('?' + query)) || '';
-
-	    if (protocol && protocol.charCodeAt(protocol.length - 1) !== 58/*:*/)
-	        protocol += ':';
-
-	    var newPathname = '';
-	    var lastPos = 0;
-	    for (var i = 0; i < pathname.length; ++i) {
-	        switch (pathname.charCodeAt(i)) {
-	            case 35: // '#'
-	                if (i - lastPos > 0)
-	                    newPathname += pathname.slice(lastPos, i);
-	                newPathname += '%23';
-	                lastPos = i + 1;
-	                break;
-	            case 63: // '?'
-	                if (i - lastPos > 0)
-	                    newPathname += pathname.slice(lastPos, i);
-	                newPathname += '%3F';
-	                lastPos = i + 1;
-	                break;
-	        }
-	    }
-	    if (lastPos > 0) {
-	        if (lastPos !== pathname.length)
-	            pathname = newPathname + pathname.slice(lastPos);
-	        else
-	            pathname = newPathname;
-	    }
-
-	    // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
-	    // unless they had them to begin with.
-	    if (this.slashes || slashedProtocol[protocol]) {
-	        if (this.slashes || host) {
-	            if (pathname && pathname.charCodeAt(0) !== 47/*/*/)
-	                pathname = '/' + pathname;
-	            host = '//' + host;
-	        } else if (protocol.length >= 4 &&
-	            protocol.charCodeAt(0) === 102/*f*/ &&
-	            protocol.charCodeAt(1) === 105/*i*/ &&
-	            protocol.charCodeAt(2) === 108/*l*/ &&
-	            protocol.charCodeAt(3) === 101/*e*/) {
-	            host = '//';
-	        }
-	    }
-
-	    search = search.replace('#', '%23');
-
-	    if (hash && hash.charCodeAt(0) !== 35/*#*/) hash = '#' + hash;
-	    if (search && search.charCodeAt(0) !== 63/*?*/) search = '?' + search;
-
-	    return protocol + host + pathname + search + hash;
-	};
-
-	function urlResolve(source, relative) {
-	    return urlParse(source, false, true).resolve(relative);
-	}
-
-	Url.prototype.resolve = function(relative) {
-	    return this.resolveObject(urlParse(relative, false, true)).format();
-	};
-
-	function urlResolveObject(source, relative) {
-	    if (!source) return relative;
-	    return urlParse(source, false, true).resolveObject(relative);
-	}
-
-	Url.prototype.resolveObject = function(relative) {
-	    if (typeof relative === 'string') {
-	        var rel = new Url();
-	        rel.parse(relative, false, true);
-	        relative = rel;
-	    }
-
-	    var result = new Url();
-	    var tkeys = Object.keys(this);
-	    for (var tk = 0; tk < tkeys.length; tk++) {
-	        var tkey = tkeys[tk];
-	        result[tkey] = this[tkey];
-	    }
-
-	    // hash is always overridden, no matter what.
-	    // even href="" will remove it.
-	    result.hash = relative.hash;
-
-	    // if the relative url is empty, then there's nothing left to do here.
-	    if (relative.href === '') {
-	        result.href = result.format();
-	        return result;
-	    }
-
-	    // hrefs like //foo/bar always cut to the protocol.
-	    if (relative.slashes && !relative.protocol) {
-	        // take everything except the protocol from relative
-	        var rkeys = Object.keys(relative);
-	        for (var rk = 0; rk < rkeys.length; rk++) {
-	            var rkey = rkeys[rk];
-	            if (rkey !== 'protocol')
-	                result[rkey] = relative[rkey];
-	        }
-
-	        //urlParse appends trailing / to urls like http://www.example.com
-	        if (slashedProtocol[result.protocol] &&
-	            result.hostname && !result.pathname) {
-	            result.path = result.pathname = '/';
-	        }
-
-	        result.href = result.format();
-	        return result;
-	    }
-
-	    if (relative.protocol && relative.protocol !== result.protocol) {
-	        // if it's a known url protocol, then changing
-	        // the protocol does weird things
-	        // first, if it's not file:, then we MUST have a host,
-	        // and if there was a path
-	        // to begin with, then we MUST have a path.
-	        // if it is file:, then the host is dropped,
-	        // because that's known to be hostless.
-	        // anything else is assumed to be absolute.
-	        if (!slashedProtocol[relative.protocol]) {
-	            var keys = Object.keys(relative);
-	            for (var v = 0; v < keys.length; v++) {
-	                var k = keys[v];
-	                result[k] = relative[k];
-	            }
-	            result.href = result.format();
-	            return result;
-	        }
-
-	        result.protocol = relative.protocol;
-	        if (!relative.host &&
-	            !/^file:?$/.test(relative.protocol) &&
-	            !hostlessProtocol[relative.protocol]) {
-	            const relPath = (relative.pathname || '').split('/');
-	            while (relPath.length && !(relative.host = relPath.shift()));
-	            if (!relative.host) relative.host = '';
-	            if (!relative.hostname) relative.hostname = '';
-	            if (relPath[0] !== '') relPath.unshift('');
-	            if (relPath.length < 2) relPath.unshift('');
-	            result.pathname = relPath.join('/');
-	        } else {
-	            result.pathname = relative.pathname;
-	        }
-	        result.search = relative.search;
-	        result.query = relative.query;
-	        result.host = relative.host || '';
-	        result.auth = relative.auth;
-	        result.hostname = relative.hostname || relative.host;
-	        result.port = relative.port;
-	        // to support http.request
-	        if (result.pathname || result.search) {
-	            var p = result.pathname || '';
-	            var s = result.search || '';
-	            result.path = p + s;
-	        }
-	        result.slashes = result.slashes || relative.slashes;
-	        result.href = result.format();
-	        return result;
-	    }
-
-	    var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/');
-	    var isRelAbs = (
-	        relative.host ||
-	        relative.pathname && relative.pathname.charAt(0) === '/'
-	    );
-	    var mustEndAbs = (isRelAbs || isSourceAbs ||
-	    (result.host && relative.pathname));
-	    var removeAllDots = mustEndAbs;
-	    var srcPath = result.pathname && result.pathname.split('/') || [];
-	    var relPath = relative.pathname && relative.pathname.split('/') || [];
-	    var psychotic = result.protocol && !slashedProtocol[result.protocol];
-
-	    // if the url is a non-slashed url, then relative
-	    // links like ../.. should be able
-	    // to crawl up to the hostname, as well.  This is strange.
-	    // result.protocol has already been set by now.
-	    // Later on, put the first path part into the host field.
-	    if (psychotic) {
-	        result.hostname = '';
-	        result.port = null;
-	        if (result.host) {
-	            if (srcPath[0] === '') srcPath[0] = result.host;
-	            else srcPath.unshift(result.host);
-	        }
-	        result.host = '';
-	        if (relative.protocol) {
-	            relative.hostname = null;
-	            relative.port = null;
-	            result.auth = null;
-	            if (relative.host) {
-	                if (relPath[0] === '') relPath[0] = relative.host;
-	                else relPath.unshift(relative.host);
-	            }
-	            relative.host = null;
-	        }
-	        mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
-	    }
-
-	    if (isRelAbs) {
-	        // it's absolute.
-	        if (relative.host || relative.host === '') {
-	            result.host = relative.host;
-	            result.auth = null;
-	        }
-	        if (relative.hostname || relative.hostname === '') {
-	            result.hostname = relative.hostname;
-	            result.auth = null;
-	        }
-	        result.search = relative.search;
-	        result.query = relative.query;
-	        srcPath = relPath;
-	        // fall through to the dot-handling below.
-	    } else if (relPath.length) {
-	        // it's relative
-	        // throw away the existing file, and take the new path instead.
-	        if (!srcPath) srcPath = [];
-	        srcPath.pop();
-	        srcPath = srcPath.concat(relPath);
-	        result.search = relative.search;
-	        result.query = relative.query;
-	    } else if (relative.search !== null && relative.search !== undefined) {
-	        // just pull out the search.
-	        // like href='?foo'.
-	        // Put this after the other two cases because it simplifies the booleans
-	        if (psychotic) {
-	            result.hostname = result.host = srcPath.shift();
-	            //occasionally the auth can get stuck only in host
-	            //this especially happens in cases like
-	            //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-	            const authInHost = result.host && result.host.indexOf('@') > 0 ?
-	                result.host.split('@') : false;
-	            if (authInHost) {
-	                result.auth = authInHost.shift();
-	                result.host = result.hostname = authInHost.shift();
-	            }
-	        }
-	        result.search = relative.search;
-	        result.query = relative.query;
-	        //to support http.request
-	        if (result.pathname !== null || result.search !== null) {
-	            result.path = (result.pathname ? result.pathname : '') +
-	                (result.search ? result.search : '');
-	        }
-	        result.href = result.format();
-	        return result;
-	    }
-
-	    if (!srcPath.length) {
-	        // no path at all.  easy.
-	        // we've already handled the other stuff above.
-	        result.pathname = null;
-	        //to support http.request
-	        if (result.search) {
-	            result.path = '/' + result.search;
-	        } else {
-	            result.path = null;
-	        }
-	        result.href = result.format();
-	        return result;
-	    }
-
-	    // if a url ENDs in . or .., then it must get a trailing slash.
-	    // however, if it ends in anything else non-slashy,
-	    // then it must NOT get a trailing slash.
-	    var last = srcPath.slice(-1)[0];
-	    var hasTrailingSlash = (
-	    (result.host || relative.host || srcPath.length > 1) &&
-	    (last === '.' || last === '..') || last === '');
-
-	    // strip single dots, resolve double dots to parent dir
-	    // if the path tries to go above the root, `up` ends up > 0
-	    var up = 0;
-	    for (var i = srcPath.length; i >= 0; i--) {
-	        last = srcPath[i];
-	        if (last === '.') {
-	            spliceOne(srcPath, i);
-	        } else if (last === '..') {
-	            spliceOne(srcPath, i);
-	            up++;
-	        } else if (up) {
-	            spliceOne(srcPath, i);
-	            up--;
-	        }
-	    }
-
-	    // if the path is allowed to go above the root, restore leading ..s
-	    if (!mustEndAbs && !removeAllDots) {
-	        for (; up--; up) {
-	            srcPath.unshift('..');
-	        }
-	    }
-
-	    if (mustEndAbs && srcPath[0] !== '' &&
-	        (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
-	        srcPath.unshift('');
-	    }
-
-	    if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
-	        srcPath.push('');
-	    }
-
-	    var isAbsolute = srcPath[0] === '' ||
-	        (srcPath[0] && srcPath[0].charAt(0) === '/');
-
-	    // put the host back
-	    if (psychotic) {
-	        result.hostname = result.host = isAbsolute ? '' :
-	            srcPath.length ? srcPath.shift() : '';
-	        //occasionally the auth can get stuck only in host
-	        //this especially happens in cases like
-	        //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-	        const authInHost = result.host && result.host.indexOf('@') > 0 ?
-	            result.host.split('@') : false;
-	        if (authInHost) {
-	            result.auth = authInHost.shift();
-	            result.host = result.hostname = authInHost.shift();
-	        }
-	    }
-
-	    mustEndAbs = mustEndAbs || (result.host && srcPath.length);
-
-	    if (mustEndAbs && !isAbsolute) {
-	        srcPath.unshift('');
-	    }
-
-	    if (!srcPath.length) {
-	        result.pathname = null;
-	        result.path = null;
-	    } else {
-	        result.pathname = srcPath.join('/');
-	    }
-
-	    //to support request.http
-	    if (result.pathname !== null || result.search !== null) {
-	        result.path = (result.pathname ? result.pathname : '') +
-	            (result.search ? result.search : '');
-	    }
-	    result.auth = relative.auth || result.auth;
-	    result.slashes = result.slashes || relative.slashes;
-	    result.href = result.format();
-	    return result;
-	};
-
-	Url.prototype.parseHost = function() {
-	    var host = this.host;
-	    var port = portPattern.exec(host);
-	    if (port) {
-	        port = port[0];
-	        if (port !== ':') {
-	            this.port = port.slice(1);
-	        }
-	        host = host.slice(0, host.length - port.length);
-	    }
-	    if (host) this.hostname = host;
-	};
-
-	// About 1.5x faster than the two-arg version of Array#splice().
-	function spliceOne(list, index) {
-	    for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
-	        list[i] = list[k];
-	    list.pop();
-	}
-
-	var hexTable = new Array(256);
-	for (var i = 0; i < 256; ++i)
-	    hexTable[i] = '%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase();
-	function encodeAuth(str) {
-	    // faster encodeURIComponent alternative for encoding auth uri components
-	    var out = '';
-	    var lastPos = 0;
-	    for (var i = 0; i < str.length; ++i) {
-	        var c = str.charCodeAt(i);
-
-	        // These characters do not need escaping:
-	        // ! - . _ ~
-	        // ' ( ) * :
-	        // digits
-	        // alpha (uppercase)
-	        // alpha (lowercase)
-	        if (c === 0x21 || c === 0x2D || c === 0x2E || c === 0x5F || c === 0x7E ||
-	            (c >= 0x27 && c <= 0x2A) ||
-	            (c >= 0x30 && c <= 0x3A) ||
-	            (c >= 0x41 && c <= 0x5A) ||
-	            (c >= 0x61 && c <= 0x7A)) {
-	            continue;
-	        }
-
-	        if (i - lastPos > 0)
-	            out += str.slice(lastPos, i);
-
-	        lastPos = i + 1;
-
-	        // Other ASCII characters
-	        if (c < 0x80) {
-	            out += hexTable[c];
-	            continue;
-	        }
-
-	        // Multi-byte characters ...
-	        if (c < 0x800) {
-	            out += hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        if (c < 0xD800 || c >= 0xE000) {
-	            out += hexTable[0xE0 | (c >> 12)] +
-	                hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	                hexTable[0x80 | (c & 0x3F)];
-	            continue;
-	        }
-	        // Surrogate pair
-	        ++i;
-	        var c2;
-	        if (i < str.length)
-	            c2 = str.charCodeAt(i) & 0x3FF;
-	        else
-	            c2 = 0;
-	        c = 0x10000 + (((c & 0x3FF) << 10) | c2);
-	        out += hexTable[0xF0 | (c >> 18)] +
-	            hexTable[0x80 | ((c >> 12) & 0x3F)] +
-	            hexTable[0x80 | ((c >> 6) & 0x3F)] +
-	            hexTable[0x80 | (c & 0x3F)];
-	    }
-	    if (lastPos === 0)
-	        return str;
-	    if (lastPos < str.length)
-	        return out + str.slice(lastPos);
-	    return out;
-	}
-
-
-/***/ },
-/* 47 */
-/***/ function(module, exports) {
-
-	// Taken from https://github.com/substack/vm-browserify
-
-	var indexOf = (function() {
-	    var indexOf = [].indexOf;
-
-	    return function (arr, obj) {
-	        if (indexOf) return arr.indexOf(obj);
-	        for (var i = 0; i < arr.length; ++i) {
-	            if (arr[i] === obj) return i;
-	        }
-	        return -1;
-	    };
-	})();
-
-	var Object_keys = function (obj) {
-	    if (Object.keys) return Object.keys(obj)
-	    else {
-	        var res = [];
-	        for (var key in obj) res.push(key)
-	        return res;
-	    }
-	};
-
-	var forEach = function (xs, fn) {
-	    if (xs.forEach) return xs.forEach(fn)
-	    else for (var i = 0; i < xs.length; i++) {
-	        fn(xs[i], i, xs);
-	    }
-	};
-
-	var defineProp = (function() {
-	    try {
-	        Object.defineProperty({}, '_', {});
-	        return function(obj, name, value) {
-	            Object.defineProperty(obj, name, {
-	                writable: true,
-	                enumerable: false,
-	                configurable: true,
-	                value: value
-	            })
-	        };
-	    } catch(e) {
-	        return function(obj, name, value) {
-	            obj[name] = value;
-	        };
-	    }
-	}());
-
-	var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
-	    'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
-	    'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
-	    'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
-	    'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
-
-	var Script = exports.Script = function NodeScript (code) {
-	    if (!(this instanceof Script)) return new Script(code);
-	    this.code = code;
-	};
-
-	Script.prototype.runInContext = function (context) {
-	    //if (!(context instanceof Context)) {
-	    //    throw new TypeError("needs a 'context' argument.");
-	    //}
-	    if (typeof context != 'object') {
-	        throw new TypeError("needs a 'context' argument.");
-	    }
-
-	    var iframe = document.createElement('iframe');
-	    if (!iframe.style) iframe.style = {};
-	    iframe.style.display = 'none';
-
-	    document.body.appendChild(iframe);
-
-	    var win = iframe.contentWindow;
-	    var wEval = win.eval, wExecScript = win.execScript;
-
-	    if (!wEval && wExecScript) {
-	        // win.eval() magically appears when this is called in IE:
-	        wExecScript.call(win, 'null');
-	        wEval = win.eval;
-	    }
-
-	    forEach(Object_keys(context), function (key) {
-	        win[key] = context[key];
-	    });
-	    forEach(globals, function (key) {
-	        if (context[key]) {
-	            win[key] = context[key];
-	        }
-	    });
-
-	    var winKeys = Object_keys(win);
-
-	    var res = wEval.call(win, this.code);
-
-	    forEach(Object_keys(win), function (key) {
-	        // Avoid copying circular objects like `top` and `window` by only
-	        // updating existing context properties or new properties in the `win`
-	        // that was only introduced after the eval.
-	        if (key in context || indexOf(winKeys, key) === -1) {
-	            context[key] = win[key];
-	        }
-	    });
-
-	    forEach(globals, function (key) {
-	        if (!(key in context)) {
-	            defineProp(context, key, win[key]);
-	        }
-	    });
-
-	    document.body.removeChild(iframe);
-
-	    return res;
-	};
-
-	Script.prototype.runInThisContext = function () {
-	    return eval(this.code); // maybe...
-	};
-
-	Script.prototype.runInNewContext = function (context) {
-	    var ctx = Script.createContext(context);
-	    var res = this.runInContext(ctx);
-
-	    forEach(Object_keys(ctx), function (key) {
-	        context[key] = ctx[key];
-	    });
-
-	    return res;
-	};
-
-	forEach(Object_keys(Script.prototype), function (name) {
-	    exports[name] = Script[name] = function (code) {
-	        var s = Script(code);
-	        return s[name].apply(s, [].slice.call(arguments, 1));
-	    };
-	});
-
-	exports.createScript = function (code) {
-	    return exports.Script(code);
-	};
-
-	//exports.createContext = Script.createContext = function (context) {
-	exports.createContext = function (context) {
-	    return context;
-	    //var copy = new Context();
-	    //if(typeof context === 'object') {
-	    //    forEach(Object_keys(context), function (key) {
-	    //        copy[key] = context[key];
-	    //    });
-	    //}
-	    //return copy;
-	};
-
-	exports.runInThisContext = function(code) {
-	    var script = new Script(code);
-	    script.runInThisContext();
-	};
-
-
-/***/ },
-/* 48 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var libjs = __webpack_require__(6);
-	var buffer_1 = __webpack_require__(2);
-	var static_buffer_1 = __webpack_require__(7);
-	console.log('here');
-	function noop() { }
-	var Socket = (function () {
-	    function Socket() {
-	        this.fd = 0;
-	        this.epfd = 0;
-	        this.onstart = noop;
-	        this.onstop = noop;
-	        this.ondata = noop;
-	        this.onerror = noop;
-	        this.created = false;
-	    }
-	    Socket.prototype.start = function () {
-	        this.fd = libjs.socket(2, this.type, 0);
-	        if (this.fd < 0)
-	            throw Error("Could not create scoket: errno = " + this.fd);
-	        var fcntl = libjs.fcntl(this.fd, 4, 2048);
-	        if (fcntl < 0)
-	            throw Error("Could not make socket non-blocking: errno = " + fcntl);
-	        this.epfd = libjs.epoll_create1(0);
-	        if (this.epfd < 0)
-	            throw Error("Could create epoll: errno = " + this.epfd);
-	        var event = {
-	            events: 1 | 4,
-	            data: [this.fd, 0]
-	        };
-	        var ctl = libjs.epoll_ctl(this.epfd, 1, this.fd, event);
-	        if (ctl < 0)
-	            throw Error("Could not add epoll events: errno = " + ctl);
-	    };
-	    Socket.prototype.stop = function () {
-	        if (this.epfd) {
-	            libjs.close(this.epfd);
-	            this.fd = 0;
-	        }
-	        if (this.fd) {
-	            libjs.close(this.fd);
-	            this.fd = 0;
-	        }
-	    };
-	    return Socket;
-	}());
-	exports.Socket = Socket;
-	var SocketDgram = (function (_super) {
-	    __extends(SocketDgram, _super);
-	    function SocketDgram() {
-	        _super.apply(this, arguments);
-	        this.type = 2;
-	    }
-	    SocketDgram.prototype.send = function (buf, ip, port) {
-	        var addr = {
-	            sin_family: 2,
-	            sin_port: libjs.hton16(port),
-	            sin_addr: {
-	                s_addr: new libjs.Ipv4(ip)
-	            },
-	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
-	        };
-	        var flags = 64 | 16384;
-	        var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
-	        if (res < 0) {
-	            if (-res == 11) {
-	                return 0;
-	            }
-	            else {
-	                return res;
-	            }
-	        }
-	    };
-	    SocketDgram.prototype.bind = function (port, ip) {
-	        if (port === void 0) { port = 0; }
-	        if (ip === void 0) { ip = '0.0.0.0'; }
-	        var addr = {
-	            sin_family: 2,
-	            sin_port: libjs.hton16(port),
-	            sin_addr: {
-	                s_addr: new libjs.Ipv4(ip)
-	            },
-	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
-	        };
-	        return libjs.bind(this.fd, addr, libjs.sockaddr_in);
-	    };
-	    SocketDgram.prototype.listen = function () {
-	    };
-	    return SocketDgram;
-	}(Socket));
-	exports.SocketDgram = SocketDgram;
-	var SocketTcp = (function (_super) {
-	    __extends(SocketTcp, _super);
-	    function SocketTcp() {
-	        _super.apply(this, arguments);
-	        this.type = 1;
-	        this.connected = false;
-	        this.onconnect = function () { };
-	        this.ondata = function () { };
-	        this.onerror = function () { };
-	        this.pollBound = this.poll.bind(this);
-	    }
-	    SocketTcp.prototype.poll = function () {
-	        var evbuf = new buffer_1.Buffer(libjs.epoll_event.size);
-	        var waitres = libjs.epoll_wait(this.epfd, evbuf, 1, 0);
-	        if (waitres > 0) {
-	            var event = libjs.epoll_event.unpack(evbuf);
-	            if (!this.connected) {
-	                if ((event.events & 4) > 0) {
-	                    this.connected = true;
-	                    this.onconnect();
-	                }
-	            }
-	            if ((event.events & 1) > 0) {
-	                var buf = new static_buffer_1.StaticBuffer(1000);
-	                var bytes = libjs.read(this.fd, buf);
-	                if (bytes < -1) {
-	                    this.onerror(Error("Error reading data: " + bytes));
-	                }
-	                if (bytes > 0) {
-	                    var data = buf.toString().substr(0, bytes);
-	                    this.ondata(data);
-	                }
-	            }
-	            if ((event.events & 8) > 0) {
-	            }
-	        }
-	        if (waitres < 0) {
-	            this.onerror(Error("Error while waiting for connection: " + waitres));
-	        }
-	        process.nextTick(this.pollBound);
-	    };
-	    SocketTcp.prototype.connect = function (opts) {
-	        var addr_in = {
-	            sin_family: 2,
-	            sin_port: libjs.hton16(opts.port),
-	            sin_addr: {
-	                s_addr: new libjs.Ipv4(opts.host)
-	            },
-	            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0]
-	        };
-	        var res = libjs.connect(this.fd, addr_in);
-	        if (res == -115) {
-	            this.poll();
-	            return;
-	        }
-	        if (res < 0)
-	            throw Error("Could no connect: " + res);
-	        throw Error('Something went not according to plan.');
-	    };
-	    SocketTcp.prototype.onRead = function () {
-	    };
-	    SocketTcp.prototype.write = function (data) {
-	        var sb = static_buffer_1.StaticBuffer.from(data + '\0');
-	        var res = libjs.write(this.fd, sb);
-	        return res;
-	    };
-	    return SocketTcp;
-	}(Socket));
-	exports.SocketTcp = SocketTcp;
-	var Pool = (function () {
-	    function Pool() {
-	        this.epfd = 0;
-	        this.socks = [];
-	        this.epfd = libjs.epoll_create1(0);
-	        if (this.epfd < 0)
-	            throw Error("Could not create epoll fd: errno = " + this.epfd);
-	    }
-	    Pool.prototype.nextTick = function () {
-	    };
-	    Pool.prototype.wait = function (timeout) {
-	    };
-	    Pool.prototype.createDgramSocket = function () {
-	        var sock = new SocketDgram;
-	        sock.start();
-	        this.addSocket(sock);
-	        return sock;
-	    };
-	    Pool.prototype.addSocket = function (sock) {
-	        var event = {
-	            events: 1 | 4,
-	            data: [sock.fd, 0]
-	        };
-	        var ctl = libjs.epoll_ctl(this.epfd, 1, sock.fd, event);
-	        if (ctl < 0)
-	            throw Error("Could not add epoll events: errno = " + ctl);
-	        this.socks[sock.fd] = sock;
-	    };
-	    return Pool;
-	}());
-	exports.Pool = Pool;
 
 
 /***/ }

@@ -1,4 +1,21 @@
 import {sched_yield, nanosleep} from '../libjs/index';
+import {IEventPoll, IEventPollConstructor} from '../libaio/event';
+
+
+var Poll: IEventPollConstructor;
+const platform = process.platform;
+switch(platform) {
+    case 'linux':
+        Poll = require('../libaio/epoll').Poll;
+        break;
+    default:
+        // require('../libaio/epoll-et');
+        // require('../libaio/kqueue');
+        // require('../libaio/poll');
+        // require('../libaio/select');
+        // require('../libaio/fake_socket_poll');
+        throw Error(`Platform not supported: ${platform}`);
+}
 
 
 // TODO: Bugs and TODOs:
@@ -68,11 +85,16 @@ export interface IQueue {
 
 // var _task_id = -1125899906842624;
 export class MicroTask implements IQueue {
-    // id: number = _task_id++;            // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
+    // id: number = _task_id++;         // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
     next: MicroTask = null;             // Previous task in list
     prev: MicroTask = null;             // Next task in list
-    callback = null;                    // Callback to be executed if any
-    args = null;                        // Optional arguments to pass to callback.
+    callback;                           // Callback to be executed if any
+    args;                               // Optional arguments to pass to callback.
+
+    constructor(callback?, args?) {
+        this.callback = callback || null;
+        this.args = args || null;
+    }
 
     exec() {
         var args = this.args, callback = this.callback;
@@ -339,6 +361,8 @@ export class EventLoop {
     refQueue = new EventQueue;              // Events that keep process running.
     unrefQueue = new EventQueue;            // Optional events.
 
+    poll: IEventPoll = new Poll;
+
     protected shouldStop() {
         if(!this.refQueue.start) return true;
         return false;
@@ -426,14 +450,15 @@ export class EventLoop {
 
 
             // Stop the program?
-            if(this.shouldStop()) break;
+            var havePollEvents = this.poll.hasRefs();
+            if(this.shouldStop() && !havePollEvents) break;
 
 
             // ----------------------------------------------------------------------------------
             // TODO:
             // By here we finished executing all the macro and micro tasks of the current cycle.
             // Now we need to decide if we have immediate tasks to execute in the next cycle,
-            // or (if don't) we can save CPU cycles by idling. We should use the `nanosleep`,
+            // or (if not) we can save CPU cycles by idling. We should use the `nanosleep`,
             // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
             //
             // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
@@ -462,23 +487,22 @@ export class EventLoop {
             // We should detect if it is possible and use `epoll` with timeout which effectively
             // idles the loop up until the timeout is reached or when new events are received.
             // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
+            //
+            // Also, use `eventfd` to notify `epoll` from thread poll when task is completed.
 
-
-            // Below we sleep, if the next task to be executed is 10ms+ away in the future,
-            // or we yield CPU time, if the next task is within 1-10ms.
-            // TODO: what we also could do is if there are no DELAY.IMMEDIATE but there are I/O
-            // TODO: requests we could wait on `epoll` syscall for some specified time.
             var ref_ms = this.refQueue.msNextTask();
             var unref_ms = this.unrefQueue.msNextTask();
 
-
-            var ms = Math.min(ref_ms, unref_ms);
-            if(ms > 10) {
-                if(ms > 10000) ms = 10000;
-                ms -= 5;
-                var seconds = Math.floor(ms / 1000);
-                var nanoseconds = (ms % 1000) * 1000000;
-                nanosleep(seconds, nanoseconds);
+            const CAP = 1000000;
+            var ms = Math.min(ref_ms, unref_ms, CAP);
+            if(ms > 0) {
+                if(havePollEvents) {
+                    this.poll.wait(ms); // epoll_wait
+                } else {
+                    var seconds = Math.floor(ms / 1000);
+                    var nanoseconds = (ms % 1000) * 1000000;
+                    nanosleep(seconds, nanoseconds);
+                }
             } else {
                 if(ms > 1) {
                     sched_yield();

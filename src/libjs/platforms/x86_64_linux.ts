@@ -2,7 +2,6 @@
 
 import {Type, Arr, Struct} from '../typebase';
 import {Ipv4} from '../socket';
-// import {t_pointer} from "../../../libmem/struct";
 
 
 export const PATH_MAX = 4096;
@@ -25,6 +24,7 @@ export var uint64  = Arr.define(uint32, 2);
 export var size_t = uint64;
 export var time_t = uint64;
 export var pid_t = uint32;
+export const optval_t = int32;
 export var ipv4    = Type.define(4,
     function (offset: number = 0) {
         var buf = this as Buffer;
@@ -172,7 +172,7 @@ export const enum SEEK {
 //         __kernel_long_t		__unused[3];
 //     };
 
-export var stat = Struct.define(31 * 4, [
+export var stat = Struct.define(32 * 4, [ // TODO: Check the correct size for this struct, this may be wrong.
     [0, uint32, 'dev'],
     // dev_hi:         [1 * 4,     buffer.int32],
     [2 * 4, uint32, 'ino'],
@@ -334,6 +334,194 @@ export const enum SOCK {
     // accept4
     NONBLOCK = 2048,
     CLOEXEC = 524288,
+}
+
+
+export const enum IP {
+    OPTIONS = 4, /* ip_opts; IP per-packet options.  */
+    HDRINCL = 3, /* int; Header is included with data.  */
+    TOS = 1, /* int; IP type of service and precedence.  */
+    TTL = 2, /* int; IP time to live.  */
+    RECVOPTS = 6, /* bool; Receive all IP options w/datagram.  */
+    /* For BSD compatibility.  */
+    RETOPTS = 7, /* ip_opts; Set/get IP per-packet options.  */
+    RECVRETOPTS = IP.RETOPTS, /* bool; Receive IP options for response.  */
+    MULTICAST_IF = 32, /* in_addr; set/get IP multicast i/f */
+    MULTICAST_TTL = 33, /* u_char; set/get IP multicast ttl */
+    MULTICAST_LOOP = 34, /* i_char; set/get IP multicast loopback */
+    ADD_MEMBERSHIP = 35, /* ip_mreq; add an IP group membership */
+    DROP_MEMBERSHIP = 36, /* ip_mreq; drop an IP group membership */
+    UNBLOCK_SOURCE = 37, /* ip_mreq_source: unblock data from source */
+    BLOCK_SOURCE = 38, /* ip_mreq_source: block data from source */
+    ADD_SOURCE_MEMBERSHIP = 39, /* ip_mreq_source: join source group */
+    DROP_SOURCE_MEMBERSHIP = 40, /* ip_mreq_source: leave source group */
+    MSFILTER = 41,
+    MULTICAST_ALL = 49,
+    UNICAST_IF = 50,
+    ROUTER_ALERT = 5, /* bool */
+    PKTINFO = 8, /* bool */
+    PKTOPTIONS = 9,
+    PMTUDISC = 10, /* obsolete name? */
+    MTU_DISCOVER = 10, /* int; see below */
+    RECVERR = 11, /* bool */
+    RECVTTL = 12, /* bool */
+    RECVTOS = 13, /* bool */
+    MTU = 14, /* int */
+    FREEBIND = 15,
+    IPSEC_POLICY = 16,
+    XFRM_POLICY = 17,
+    PASSSEC = 18,
+    TRANSPARENT = 19,
+    /* TProxy original addresses */
+    ORIGDSTADDR = 20,
+    RECVORIGDSTADDR = IP.ORIGDSTADDR,
+    MINTTL = 21,
+    /* IP_MTU_DISCOVER arguments.  */
+    PMTUDISC_DONT = 0, /* Never send DF frames.  */
+    PMTUDISC_WANT = 1, /* Use per route hints.  */
+    PMTUDISC_DO = 2, /* Always DF.  */
+    PMTUDISC_PROBE = 3, /* Ignore dst pmtu.  */
+
+    DEFAULT_MULTICAST_TTL = 1,
+    DEFAULT_MULTICAST_LOOP = 1,
+    MAX_MEMBERSHIPS = 20,
+}
+
+export const enum MCAST {
+    JOIN_GROUP = 42, /* group_req: join any-source group */
+    BLOCK_SOURCE = 43, /* group_source_req: block from given group */
+    UNBLOCK_SOURCE = 44, /* group_source_req: unblock from given group*/
+    LEAVE_GROUP = 45, /* group_req: leave any-source group */
+    JOIN_SOURCE_GROUP = 46, /* group_source_req: join source-spec gr */
+    LEAVE_SOURCE_GROUP = 47, /* group_source_req: leave source-spec gr*/
+    MSFILTER = 48,
+    EXCLUDE = 0,
+    INCLUDE = 1,
+}
+
+export const enum SOL {
+    /* To select the IP level.  */
+    IP = 0,
+    /* Socket level values for IPv6.  */
+    IPV6 = 41,
+    ICMPV6 = 58,
+}
+
+export const enum IPV6 {
+    ADDRFORM = 1,
+    IPV6_2292PKTINFO = 2,
+    IPV6_2292HOPOPTS = 3,
+    IPV6_2292DSTOPTS = 4,
+    IPV6_2292RTHDR = 5,
+    IPV6_2292PKTOPTIONS = 6,
+    CHECKSUM = 7,
+    IPV6_2292HOPLIMIT = 8,
+    NEXTHOP = 9,
+    AUTHHDR = 10,
+    UNICAST_HOPS = 16,
+    MULTICAST_IF = 17,
+    MULTICAST_HOPS = 18,
+    MULTICAST_LOOP = 19,
+    JOIN_GROUP = 20,
+    LEAVE_GROUP = 21,
+    ROUTER_ALERT = 22,
+    MTU_DISCOVER = 23,
+    MTU = 24,
+    RECVERR = 25,
+    V6ONLY = 26,
+    JOIN_ANYCAST = 27,
+    LEAVE_ANYCAST = 28,
+    IPSEC_POLICY = 34,
+    XFRM_POLICY = 35,
+    RECVPKTINFO = 49,
+    PKTINFO = 50,
+    RECVHOPLIMIT = 51,
+    HOPLIMIT = 52,
+    RECVHOPOPTS = 53,
+    HOPOPTS = 54,
+    RTHDRDSTOPTS = 55,
+    RECVRTHDR = 56,
+    RTHDR = 57,
+    RECVDSTOPTS = 58,
+    DSTOPTS = 59,
+    RECVTCLASS = 66,
+    TCLASS = 67,
+    /* IPV6_MTU_DISCOVER values.  */
+    PMTUDISC_DONT = 0, /* Never send DF frames.  */
+    PMTUDISC_WANT = 1, /* Use per route hints.  */
+    PMTUDISC_DO = 2, /* Always DF.  */
+    PMTUDISC_PROBE = 3, /* Ignore dst pmtu.  */
+    /* Routing header options for IPv6.  */
+    RTHDR_LOOSE = 0, /* Hop doesn't need to be neighbour. */
+    RTHDR_STRICT = 1, /* Hop must be a neighbour.  */
+    RTHDR_TYPE_0 = 0, /* IPv6 Routing header type 0.  */
+}
+
+export const enum IPPROTO {
+    IP = 0,	       /* Dummy protocol for TCP.  */
+    ICMP = 1,	   /* Internet Control Message Protocol.  */
+    IGMP = 2,	   /* Internet Group Management Protocol. */
+    IPIP = 4,	   /* IPIP tunnels (older KA9Q tunnels use 94).  */
+    TCP = 6,	   /* Transmission Control Protocol.  */
+    EGP = 8,	   /* Exterior Gateway Protocol.  */
+    PUP = 12,	   /* PUP protocol.  */
+    UDP = 17,	   /* User Datagram Protocol.  */
+    IDP = 22,	   /* XNS IDP protocol.  */
+    TP = 29,	   /* SO Transport Protocol Class 4.  */
+    DCCP = 33,	   /* Datagram Congestion Control Protocol.  */
+    IPV6 = 41,     /* IPv6 header.  */
+    RSVP = 46,	   /* Reservation Protocol.  */
+    GRE = 47,	   /* General Routing Encapsulation.  */
+    ESP = 50,      /* encapsulating security payload.  */
+    AH = 51,       /* authentication header.  */
+    MTP = 92,	   /* Multicast Transport Protocol.  */
+    BEETPH = 94,   /* IP option pseudo header for BEET.  */
+    ENCAP = 98,	   /* Encapsulation Header.  */
+    PIM = 103,	   /* Protocol Independent Multicast.  */
+    COMP = 108,	   /* Compression Header Protocol.  */
+    SCTP = 132,	   /* Stream Control Transmission Protocol.  */
+    UDPLITE = 136, /* UDP-Lite protocol.  */
+    RAW = 255,	   /* Raw IP packets.  */
+    // MAX
+    HOPOPTS = 0,   /* IPv6 Hop-by-Hop options.  */
+    ROUTING = 43,  /* IPv6 routing header.  */
+    FRAGMENT = 44, /* IPv6 fragmentation header.  */
+    ICMPV6 = 58,   /* ICMPv6.  */
+    NONE = 59,     /* IPv6 no next header.  */
+    DSTOPTS = 60,  /* IPv6 destination options.  */
+    MH = 135,      /* IPv6 mobility header.  */
+}
+
+export const enum IPPORT {
+    ECHO = 7,		    /* Echo service.  */
+    DISCARD = 9,	    /* Discard transmissions service.  */
+    SYSTAT = 11,	    /* System status service.  */
+    DAYTIME = 13,	    /* Time of day service.  */
+    NETSTAT = 15,	    /* Network status service.  */
+    FTP = 21,		    /* File Transfer Protocol.  */
+    TELNET = 23,		/* Telnet protocol.  */
+    SMTP = 25,		    /* Simple Mail Transfer Protocol.  */
+    TIMESERVER = 37,	/* Timeserver service.  */
+    NAMESERVER = 42,	/* Domain Name Service.  */
+    WHOIS = 43,		    /* Internet Whois service.  */
+    MTP = 57,
+    TFTP = 69,		    /* Trivial File Transfer Protocol.  */
+    RJE = 77,
+    FINGER = 79,		/* Finger service.  */
+    TTYLINK = 87,
+    SUPDUP = 95,		/* SUPDUP protocol.  */
+    EXECSERVER = 512,	/* execd service.  */
+    LOGINSERVER = 513,	/* rlogind service.  */
+    CMDSERVER = 514,
+    EFSSERVER = 520,
+    /* UDP ports.  */
+    BIFFUDP = 512,
+    WHOSERVER = 513,
+    ROUTESERVER = 520,
+    /* Ports less than this value are reserved for privileged processes.  */
+    RESERVED = 1024,
+    /* Ports greater this value are reserved for (non-privileged) servers.  */
+    USERRESERVED = 5000
 }
 
 
@@ -543,28 +731,60 @@ export const enum MSG {
 
 export const enum SHUT {
     RD = 0,		/* No more receptions.  */
-    WR,		/* No more transmissions.  */
+    WR,		    /* No more transmissions.  */
     RDWR,		/* No more receptions or transmissions.  */
 }
 
 
 export const enum EPOLL_EVENTS {
+    // The associated file is available for read(2) operations
     EPOLLIN = 1,
+
+    // The associated file is available for write(2) operations.
     EPOLLOUT = 4,
+
+    // Stream socket peer closed connection, or shut down writing
+    // half of connection.  (This flag is especially useful for
+    // writing simple code to detect peer shutdown when using Edge
+    // Triggered monitoring.)
     EPOLLRDHUP = 8192,
+
+    // There is urgent data available for read(2) operations.
     EPOLLPRI = 2,
+
+    // Error condition happened on the associated file descriptor.
+    // epoll_wait(2) will always wait for this event; it is not
+    // necessary to set it in events.
     EPOLLERR = 8,
+
+    // Hang up happened on the associated file descriptor.
+    // epoll_wait(2) will always wait for this event; it is not
+    // necessary to set it in events.  Note that when reading from a
+    // channel such as a pipe or a stream socket, this event merely
+    // indicates that the peer closed its end of the channel.
+    // Subsequent reads from the channel will return 0 (end of file)
+    // only after all outstanding data in the channel has been
+    // consumed.
     EPOLLHUP = 16,
+
+    // Sets the Edge Triggered behavior for the associated file descriptor
     EPOLLET = 2147483648,
+
+    // Once events fired, kernel fd will be disabled.
     EPOLLONESHOT = 1073741824,
+
+    // Don't "hibernate"
     EPOLLWAKEUP = 536870912,
+
+    // EPOLLEXCLUSIVE = ?
 }
 
 
 
 
 export const enum EPOLL {
-    CLOEXEC = 524288, // Set the close-on-exec (FD_CLOEXEC) flag on the new file descriptor.  See the description of the O_CLOEXEC flag in open(2) for reasons why this may be useful.
+    // Set the close-on-exec (FD_CLOEXEC) flag on the new file descriptor.  See the description of the O_CLOEXEC flag in open(2) for reasons why this may be useful.
+    CLOEXEC = 524288,
 }
 
 export const enum EPOLL_CTL {

@@ -1,3 +1,10 @@
-console.log(1);
-require('dgram');
-console.log(2);
+var dgram = require('dgram');
+
+
+var socket = dgram.createSocket('udp4');
+
+console.log(socket);
+socket.send('Hello there', 1234, '127.0.0.1', function(err) {
+    console.log('done', err);
+});
+

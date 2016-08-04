@@ -1,3 +1,5 @@
+![](FULL.gif)
+
 # FULL.js
 
 **What?** Node.js clone in pure JavaScript.
@@ -43,6 +45,8 @@ JIT compiling runtimes:
  - [ ] SpiderMonkey
  - [ ] JavaScriptCore
  - [ ] Nashorn
+    - [ ] HotSpot
+    - [ ] OpenJDK
 
 Interpreter runtimes:
 
@@ -56,6 +60,8 @@ Interpreter runtimes:
  - [ ] Narcissus
  - [ ] JS-Interpreter
  - [ ] Rhino
+    - [ ] HotSpot
+    - [ ] OpenJDK
  - [ ] YAJI
  - [ ] Jsish
  - [ ] Websocket.js

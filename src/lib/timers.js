@@ -7,8 +7,8 @@ var __extends = (this && this.__extends) || function (d, b) {
 var eloop_1 = require('./eloop');
 var TIMEOUT_MAX = 2147483647;
 var Timeout = (function () {
-    function Timeout() {
-        this.task = new eloop_1.Task;
+    function Timeout(callback, args) {
+        this.task = new eloop_1.Task(callback, args);
     }
     Timeout.prototype.ref = function () {
         this.task.ref();
@@ -35,10 +35,9 @@ function setTimeout(callback, after, arg1, arg2, arg3) {
     if (!(after >= 1 && after <= TIMEOUT_MAX)) {
         after = 1;
     }
-    var timer = new Timeout;
+    var timer = new Timeout(callback);
     var task = timer.task;
     task.delay = after;
-    task.callback = callback;
     var length = arguments.length;
     switch (length) {
         case 0:
@@ -101,10 +100,7 @@ function createImm(callback, arg1, arg2, arg3) {
                 args[i - 1] = arguments[i];
             break;
     }
-    var timer = new Immediate;
-    timer.callback = callback;
-    timer.args = args;
-    return timer;
+    return new Immediate(callback, args);
 }
 function setImmediate(callback, arg1, arg2, arg3) {
     var timer = createImm(callback, arg1, arg2, arg3);
@@ -130,3 +126,13 @@ function clearIOPoll(poll) {
         poll.cancel();
 }
 exports.clearIOPoll = clearIOPoll;
+function setMicroTask(callback) {
+    var args;
+    if (arguments.length > 1) {
+        args = new Array(arguments.length - 1);
+        for (var i = 1; i < arguments.length; i++)
+            args[i - 1] = arguments[i];
+    }
+    process.loop.insertMicrotask(new eloop_1.MicroTask(callback, args));
+}
+exports.setMicroTask = setMicroTask;

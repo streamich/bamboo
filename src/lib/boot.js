@@ -59,6 +59,7 @@ setImmediate = timers.setImmediate;
 clearImmediate = timers.clearImmediate;
 setIOPoll = timers.setIOPoll;
 clearIOPoll = timers.clearIOPoll;
+setMicroTask = process.nextTick = timers.setMicroTask;
 
 
 // First task in the event loop.
@@ -72,12 +73,6 @@ task.callback = function() {
 
     // Create `process.asyscall` and `process.asyscall64`
     require('../libasyscall/create');
-
-
-    // Includ in distribution bundle all `/lib/*` files.
-    // function a(a) {
-    //     require('./' + a + '.js');
-    // }
 
 
     try {

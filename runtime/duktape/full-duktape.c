@@ -360,7 +360,7 @@ int main(int argc, char *argv[]) {
 
     if (ctx) {
         duk_eval_string(ctx,
-            "process = {runtime: 'Duktape'};"
+            "process = {runtime: 'Duktape', platform: 'linux', arch: 'x64'};"
             "global = Duktape;"
             "global.process = process;"
             "Duktape.global = global;"

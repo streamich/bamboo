@@ -3,7 +3,7 @@ type BufferEncoding = "ascii" | "utf8" | "utf16le" | "ucs2" | "binary" | "hex";
 export class Buffer {
     length: number;
     static isBuffer(buf: any): boolean;
-    static concat(...buffers: Buffer[]): Buffer;
+    static concat(buffers: Buffer[], len?: number): Buffer;
     static print();
     static isEncoding(encoding: string): boolean;
 

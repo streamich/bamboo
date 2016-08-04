@@ -36,7 +36,7 @@ declare var StaticArrayBuffer: StaticArrayBufferConstructor;
 
 declare namespace NodeJS {
     export interface Process {
-        loop:any; // Main event loop
+        loop: any; // Main event loop
 
         // Whether `process` has `frame()` and `call()` methods.
         hasBinaryUtils: boolean;
