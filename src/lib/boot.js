@@ -10,6 +10,27 @@
 // global.global = global;
 
 
+// Useful for debugging when porting to new runtime, just create a global `print`
+// function that prints strings to STDOUT.
+if(__DEBUG__) {
+    if((typeof print !== 'undefined') && (typeof console === 'undefined')) {
+        console = {
+            log: function () {
+                var str = Array.prototype.join.call(arguments, ', ');
+                print(str);
+            }
+        };
+    }
+}
+
+
+if(__STRACE__) {
+    var strace = require('../strace/index').createLogger();
+    strace.blockStdout = __STRACE_BLOCK_STDOUT__;
+    strace.overwriteSync(process, 'syscall', 'syscall64');
+}
+
+
 // Export `Buffer` as global. Other things use `Buffer`, so we export Buffer first.
 Buffer = global.Buffer = require('./buffer').Buffer;
 
@@ -34,12 +55,14 @@ if(typeof StaticBuffer === 'undefined') {
 }
 
 
+
+
 // Set-up `process` global.
 require('./process');
 
 
 // Create global `console` object.
-console = require('./console');
+console = global.console = require('./console');
 
 
 // The main event loop, attached to `process` as `loop` property.
@@ -63,9 +86,8 @@ setMicroTask = process.nextTick = timers.setMicroTask;
 
 
 // First task in the event loop.
-console.log(1);
+
 var task = new Task;
-console.log(2);
 task.callback = function() {
 
     // !IMPORTANT: everything that uses `process.nextTick()` must
@@ -74,10 +96,12 @@ task.callback = function() {
 
 
     // Create `process.asyscall` and `process.asyscall64`
+    require('../libasyscall/create');
+    if(__STRACE__) {
+        strace.overwriteAsync(process, 'asyscall', 'asyscall64');
+    }
 
-    // require('../libasyscall/create');
 
-/*
     try {
         // Eval the file specified in first argument `full app.js`
         if(process.argv[1]) {
@@ -97,7 +121,7 @@ task.callback = function() {
     } catch(e) {
         console.log(e);
         console.log(e.stack);
-    }*/
+    }
 
 };
 loop.insert(task);

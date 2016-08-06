@@ -15,6 +15,10 @@ function Console(stdout, stderr) {
         throw new TypeError('Console expects writable stream instances');
     }
 
+    // if(__DEBUG__) {
+    //     this.isFULLjs = true;
+    // }
+
     // var prop = {
     //     writable: true,
     //     enumerable: false,

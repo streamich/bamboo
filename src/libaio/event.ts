@@ -4,22 +4,26 @@ import {StaticBuffer} from '../lib/static-buffer';
 
 export function noop() {}
 
+export interface Tfrom {
+    address: string,
+    port: number,
+    family: string,
+    size: number,
+}
 
 export type TonStart   = () => void;
 export type TonStop    = () => void;
-// export type TonData    = (data: Buffer[], totalLength: number) => void;
-export type TonData    = (data: Buffer) => void;
+export type TonData    = (data: Buffer, from?: Tfrom) => void;
 export type TonError   = (err: Error, errno?: number) => void;
 export type Tcallback  = (err?: Error, data?: any) => void;
 
 
 export interface ISocket {
     fd: number;
-    onstart:    TonStart;  // Maps to "listening" event.
-    onstop:     TonStop;   // Maps to "close" event.
-    ondata:     TonData;   // Maps to "message" event.
-    onerror:    TonError;  // Maps to "error" event.
-    
+    onstart: TonStart;      // Maps to "listening" event.
+    onstop: TonStop;        // Maps to "close" event.
+    ondata: TonData;        // Maps to "message" event.
+    onerror: TonError;      // Maps to "error" event.
     ref();
     unref();
 }
@@ -35,11 +39,6 @@ export interface ISocketUdp extends ISocket {
     setMulticastLoop(on: boolean);
     setBroadcast(on: boolean);
 }
-
-
-// export interface ISocketDgramConstructor {
-//     new (): ISocketDgram;
-// }
 
 
 export interface IEventPoll {

@@ -96,6 +96,7 @@ exports.format = function(f) {
             str += ' ' + inspect(x);
         }
     }
+
     return str;
 };
 
@@ -536,7 +537,6 @@ function formatValue(ctx, value, recurseTimes) {
     return reduceToSingleString(output, base, braces);
 }
 
-
 function formatNumber(ctx, value) {
     // Format -0 as '-0'. Strict equality won't distinguish 0 from -0,
     // so instead we use the fact that 1 / -0 < 0 whereas 1 / 0 > 0 .
@@ -628,7 +628,7 @@ function formatTypedArray(ctx, value, recurseTimes, visibleKeys, keys) {
     for (var i = 0; i < maxLength; ++i)
         output[i] = formatNumber(ctx, value[i]);
     if (remaining > 0) {
-        output.push("... ${remaining} more item${remaining > 1 ? 's' : ''}");
+        output.push("... " + remaining + " more item" + (remaining > 1 ? 's' : ''));
     }
     for (var i = 0; i < keys.length; i++) {
         var key = keys[i];

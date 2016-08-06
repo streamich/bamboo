@@ -668,4 +668,5 @@ Below is list of already implemented API and roadmap on how the rest of the API 
   - [ ] Use asynchronous Linux I/O for file systems on file systems that support that.
   - [ ] Integrate `process.asyscall` into `epoll`.
   - [ ] Compile full.js into V8's binary startup snapshot.  
+  - [ ] Switch to edge-triggered `epoll`  
   

@@ -1,11 +1,11 @@
 import * as libjs from '../libjs/index';
 import {Buffer} from '../lib/buffer';
 import {StaticBuffer} from '../lib/static-buffer';
-import {IEventPoll, ISocket, noop, TonData, TonError, TonStart, TonStop, Tcallback} from "./event";
+import {IEventPoll, ISocket, noop, Tfrom, TonData, TonError, TonStart, TonStop, Tcallback} from "./event";
 import {setMicroTask} from "../lib/timers";
 
 
-const CHUNK = 8192;
+const CHUNK = 11;
 
 
 export abstract class Socket implements ISocket {
@@ -18,7 +18,6 @@ export abstract class Socket implements ISocket {
     onstart:    TonStart    = noop as any as TonStart;  // Maps to "listening" event.
     onstop:     TonStop     = noop as any as TonStop;   // Maps to "close" event.
     ondata:     TonData     = noop as any as TonData;   // Maps to "message" event.
-
     // TODO: Synchronous first level errors: do we (1) `return`, (2) `throw`, or (3) `.onerror()` them?
     onerror:    TonError    = noop as any as TonError;  // Maps to "error" event.
 
@@ -52,6 +51,7 @@ export abstract class Socket implements ISocket {
 
 
 export class SocketUdp4 extends Socket {
+    
     type = libjs.SOCK.DGRAM;
     isIPv4 = true;
 
@@ -62,7 +62,8 @@ export class SocketUdp4 extends Socket {
         var fd = this.fd;
         var event: libjs.epoll_event = {
             // TODO: Do we need `EPOLLOUT` for dgram sockets, or they are ready for writing immediately?
-            events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
+            // events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
+            events: libjs.EPOLL_EVENTS.EPOLLIN,
             data: [fd, 0],
         };
 
@@ -94,7 +95,17 @@ export class SocketUdp4 extends Socket {
         }
     }
 
-    bind(port: number, ip: string = '0.0.0.0'): Error {
+    setOption(level, option: libjs.IP|libjs.IPV6|libjs.SO, value) {
+        var buf = libjs.optval_t.pack(value);
+        return libjs.setsockopt(this.fd, level, option, buf);
+    }
+
+    bind(port: number, ip: string = '0.0.0.0', reuse?): number {
+        if(reuse) {
+            var reuseRes = this.setOption(libjs.SOL.SOCKET, libjs.SO.REUSEADDR, 1);
+            if(reuseRes < 0) return reuseRes;
+        }
+
         var addr: libjs.sockaddr_in = {
             sin_family: libjs.AF.INET,
             sin_port: libjs.hton16(port),
@@ -105,87 +116,94 @@ export class SocketUdp4 extends Socket {
         };
 
         var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
-        if(res < 0)
-            return Error(`bind error, errno = ${res}`);
+        if(res < 0) return res;
 
         this.reffed = true;
         this.poll.refs++;
     }
 
     update(events: number) {
-        console.log('events', events);
+        // console.log('events', events);
 
         // TODO: Do we need this or UDP sockets are automatically writable after `bind()`.
-        if(events & libjs.EPOLL_EVENTS.EPOLLOUT) {
-            console.log(this.fd, 'EPOLLOUT');
-
-            this.connected = true;
-
-            var event: libjs.epoll_event = {
-                events: libjs.EPOLL_EVENTS.EPOLLIN,
-                data: [this.fd, 0],
-            };
-            var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event);
-            if(res < 0) this.onerror(Error(`Could not remove write listener: ${res}`));
-
-            this.onstart();
-        }
+        // if(events & libjs.EPOLL_EVENTS.EPOLLOUT) {
+        //     console.log(this.fd, 'EPOLLOUT');
+        //
+        //     this.connected = true;
+        //
+        //     var event: libjs.epoll_event = {
+        //         events: libjs.EPOLL_EVENTS.EPOLLIN,
+        //         data: [this.fd, 0],
+        //     };
+        //     var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event);
+        //     if(res < 0) this.onerror(Error(`Could not remove write listener: ${res}`));
+        //
+        //     this.onstart();
+        // }
 
         if((events & libjs.EPOLL_EVENTS.EPOLLIN) || (events & libjs.EPOLL_EVENTS.EPOLLPRI)) {
-            console.log(this.fd, 'EPOLLIN');
+            // console.log(this.fd, 'EPOLLIN');
 
-            var err = null;
             do {
-                // var buf = new StaticBuffer(CHUNK);
-                var buf = new StaticBuffer(CHUNK + libjs.sockaddr_in.size + 4);
+                var addrlen = libjs.sockaddr_in.size;
+                var buf = new StaticBuffer(CHUNK + addrlen + 4);
+                // var data = new StaticBuffer(CHUNK);
                 var data = buf.slice(0, CHUNK);
-                var addr = buf.slice(CHUNK, libjs.sockaddr_in.size);
-                var addrlen = buf.slice(CHUNK + libjs.sockaddr_in.size);
-                var bytes = libjs.recvfrom(this.fd, buf, CHUNK, 0, addr, addrlen);
+                // var addr = new StaticBuffer(libjs.sockaddr_in.size);
+                var addr = buf.slice(CHUNK, CHUNK + addrlen);
+                // var addrlenBuf = new StaticBuffer(4);
+                var addrlenBuf = buf.slice(CHUNK + addrlen);
+                libjs.int32.pack(libjs.sockaddr_in.size, addrlenBuf);
+
+                var bytes = libjs.recvfrom(this.fd, data, CHUNK, 0, addr, addrlenBuf);
+
                 if(bytes < -1) {
                     this.onerror(Error(`Error reading data: ${bytes}`));
                     break;
                 } else {
-                    var from = [libjs.sockaddr_in.unpack(addr), libjs.int32.unpack(addrlen)];
+                    var retAddrLen = libjs.int32.unpack(addrlenBuf);
+                    var addrStruct = libjs.sockaddr_in.unpack(addr);
+                    var from: Tfrom = {
+                        address: addrStruct.sin_addr.s_addr.toString(),
+                        family: retAddrLen === addrlen ? 'IPv4' : 'IPv6',
+                        port: addrStruct.sin_port,
+                        size: bytes,
+                    };
                     this.ondata(buf.slice(0, bytes), from);
                 }
             } while (bytes === CHUNK);
         }
 
         if(events & libjs.EPOLL_EVENTS.EPOLLERR) {
-            console.log(this.fd, 'EPOLLERR');
+            // console.log(this.fd, 'EPOLLERR');
             this.onerror(Error(`Some error on ${this.fd}`));
         }
 
         if(events & libjs.EPOLL_EVENTS.EPOLLRDHUP) {
-            console.log(this.fd, 'EPOLLRDHUP');
+            // console.log(this.fd, 'EPOLLRDHUP');
         }
 
         if(events & libjs.EPOLL_EVENTS.EPOLLHUP) {
-            console.log(this.fd, 'EPOLLHUP');
+            // console.log(this.fd, 'EPOLLHUP');
         }
     }
 
     setTtl(ttl: number) {
         if (ttl < 1 || ttl > 255) return -libjs.ERROR.EINVAL;
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.TTL, buf);
+        return this.setOption(libjs.IPPROTO.IP, libjs.IP.TTL, ttl);
     }
 
     setMulticastTtl(ttl: number) {
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_TTL, buf);
+        return this.setOption(libjs.IPPROTO.IP, libjs.IP.MULTICAST_TTL, ttl);
     }
 
     setMulticastLoop(on: boolean) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IP, libjs.IP.MULTICAST_LOOP, buf);
+        return this.setOption(libjs.IPPROTO.IP, libjs.IP.MULTICAST_LOOP, on ? 1 : 0);
     }
 
-    setBroadcast(on: boolean) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, libjs.SOL.SOCKET, libjs.SO.BROADCAST, buf);
-    }
+    // setBroadcast(on: boolean) {
+    //     return this.setOption(libjs.IPPROTO.SOCKET, libjs.IP.BROADCAST, on ? 1 : 0);
+    // }
 }
 
 export class SocketUdp6 extends SocketUdp4 {
@@ -193,18 +211,15 @@ export class SocketUdp6 extends SocketUdp4 {
 
     setTtl(ttl: number) {
         if (ttl < 1 || ttl > 255) return -libjs.ERROR.EINVAL;
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.UNICAST_HOPS, buf);
+        return this.setOption(libjs.IPPROTO.IPV6, libjs.IPV6.UNICAST_HOPS, ttl);
     }
 
     setMulticastTtl(ttl: number) {
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_HOPS, buf);
+        return this.setOption(libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_HOPS, ttl);
     }
 
     setMulticastLoop(on: boolean) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_LOOP, buf);
+        return this.setOption(libjs.IPPROTO.IPV6, libjs.IPV6.MULTICAST_LOOP, on ? 1 : 0);
     }
 }
 
@@ -268,7 +283,8 @@ export class Poll implements IEventPoll {
     onerror: TonError = noop as TonError;
 
     maxEvents = 10;
-    bufSize = libjs.epoll_event.size;
+    eventSize = libjs.epoll_event.size;
+    protected eventBuf = StaticBuffer.alloc(this.maxEvents * this.eventSize, 'rw');
 
     constructor() {
         this.epfd = libjs.epoll_create1(0);
@@ -276,8 +292,8 @@ export class Poll implements IEventPoll {
     }
 
     wait(timeout: number) {
-        const EVENT_SIZE = this.bufSize;
-        var evbuf = new StaticBuffer(this.maxEvents * EVENT_SIZE);
+        const EVENT_SIZE = this.eventSize;
+        var evbuf = this.eventBuf;
         var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
 
         if(waitres > 0) { // New events arrived.

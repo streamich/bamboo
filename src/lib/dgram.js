@@ -8,6 +8,7 @@ var events_1 = require('./events');
 var buffer_1 = require('./buffer');
 var util = require('./util');
 var errnoException = util._errnoException;
+var exceptionWithHostPort = util._exceptionWithHostPort;
 function lookup4(address, callback) {
     callback();
 }
@@ -41,6 +42,8 @@ var Socket = (function (_super) {
     function Socket(type, listener) {
         var _this = this;
         _super.call(this);
+        this.bindState = 0;
+        this.reuseAddr = false;
         var isIP6 = type === 'udp6';
         this.sock = process.loop.poll.createUdpSocket(isIP6);
         this.lookup = isIP6 ? lookup6 : lookup4;
@@ -108,6 +111,59 @@ var Socket = (function (_super) {
     Socket.prototype.address = function () {
     };
     Socket.prototype.bind = function (a, b, c) {
+        var _this = this;
+        var port;
+        var address;
+        var exclusive = false;
+        var callback;
+        if (typeof a === 'number') {
+            port = a;
+            if (typeof address === 'string') {
+                address = b;
+                callback = c;
+            }
+            else {
+                callback = b;
+            }
+        }
+        else if ((a !== null) && (typeof a === 'object')) {
+            port = a.port;
+            address = a.address || '';
+            exclusive = !!a.exclusive;
+            callback = b;
+        }
+        else
+            throw TypeError('Invalid bind() arguments.');
+        if (this.bindState !== 0)
+            throw Error('Socket is already bound');
+        this.bindState = 1;
+        if (!address) {
+            if (this.lookup === lookup4)
+                address = '0.0.0.0';
+            else
+                address = '::';
+        }
+        this.lookup(address, function (lookup_err, ip) {
+            if (lookup_err) {
+                _this.bindState = 0;
+                _this.emit('error', lookup_err);
+                return;
+            }
+            if (!_this.sock)
+                return;
+            var err = _this.sock.bind(port || 0, ip);
+            if (err) {
+                var ex = exceptionWithHostPort(err, 'bind', ip, port);
+                _this.emit('error', ex);
+                _this.bindState = 0;
+                return;
+            }
+            _this.bindState = 2;
+            _this.emit('listening');
+            if (typeof callback === 'function')
+                callback();
+        });
+        return this;
     };
     Socket.prototype.close = function (callback) {
         this.sock.stop();
@@ -153,7 +209,15 @@ var Socket = (function (_super) {
 }(events_1.EventEmitter));
 exports.Socket = Socket;
 function createSocket(type, callback) {
-    var socket = new Socket(type, callback);
+    var socket;
+    if (typeof type === 'string')
+        socket = new Socket(type, callback);
+    else if ((type !== null) && (typeof type === 'object')) {
+        socket = new Socket(type.type, callback);
+        socket.reuseAddr = !!type.reuseAddr;
+    }
+    else
+        throw TypeError('Invalid type argument.');
     return socket;
 }
 exports.createSocket = createSocket;

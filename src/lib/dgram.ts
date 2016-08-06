@@ -2,9 +2,11 @@ import {ISocketUdp} from '../libaio/event';
 import {EventEmitter} from './events';
 import {Buffer} from './buffer';
 import {StaticBuffer} from './static-buffer';
-import * as libjs from '../libjs/index';
 var util = require('./util');
+
+
 const errnoException = util._errnoException;
+const exceptionWithHostPort = util._exceptionWithHostPort;
 
 
 function lookup4(address, callback) {
@@ -47,9 +49,24 @@ function fixBufferList(list) {
 type Tmsg = Buffer|StaticBuffer|string|(Buffer[])|(StaticBuffer[]);
 
 
+const enum BIND_STATE {
+    UNBOUND,
+    BINDING,
+    BOUND,
+}
+
+export interface IbindOptions {
+    port: number,
+    address: string,
+    exclusive: boolean,
+}
+
 export class Socket extends EventEmitter {
     protected sock: ISocketUdp;
     protected lookup;
+    protected bindState = BIND_STATE.UNBOUND;
+
+    reuseAddr = false;
 
     constructor(type, listener) {
         super();
@@ -143,10 +160,75 @@ export class Socket extends EventEmitter {
 
     }
 
-    bind(options, callback?: Tcallback);
-    bind(port?: number, address?: string, callback?: Tcallback);
-    bind(a?: number, b?: string|Tcallback, c?: Tcallback) {
+    bind(options: IbindOptions,     callback?: Tcallback): this;
+    bind(port?: number,             callback?: Tcallback): this;
+    bind(port?: number,             address?: string,       callback?: Tcallback): this;
+    bind(a?: number|IbindOptions,   b?: string|Tcallback,   c?: Tcallback): this {
+        var port: number;
+        var address: string;
+        var exclusive = false;
+        var callback;
 
+        if(typeof a === 'number') {
+            port = a;
+            if(typeof address === 'string') {
+                address = b as string;
+                callback = c;
+            } else {
+                callback = b as Tcallback;
+            }
+        } else if((a !== null) && (typeof a === 'object')) {
+            port = a.port;
+            address = a.address || '';
+            exclusive = !!a.exclusive;
+            callback = b as Tcallback;
+        } else
+            throw TypeError('Invalid bind() arguments.');
+
+        // self._healthCheck();
+
+        if (this.bindState !== BIND_STATE.UNBOUND)
+            throw Error('Socket is already bound');
+        this.bindState = BIND_STATE.BINDING;
+
+        // Defaulting address for bind to all interfaces.
+        if(!address) {
+            if (this.lookup === lookup4)    address = '0.0.0.0';
+            else                            address = '::';
+        }
+
+        this.lookup(address, (lookup_err, ip) => {
+            if(lookup_err) {
+                this.bindState = BIND_STATE.UNBOUND;
+                this.emit('error', lookup_err);
+                return;
+            }
+
+            // var flags = 0;
+            // if (self._reuseAddr)
+            //     flags |= UV_UDP_REUSEADDR;
+
+            if (!this.sock)
+                return; // handle has been closed in the mean time
+
+            var err = this.sock.bind(port || 0, ip);
+            if(err) {
+                var ex = exceptionWithHostPort(err, 'bind', ip, port);
+                this.emit('error', ex);
+                this.bindState = BIND_STATE.UNBOUND;
+                return;
+            }
+
+            // TODO: We need this?
+            // this.fd = -42; // compatibility hack
+
+            this.bindState = BIND_STATE.BOUND;
+            this.emit('listening');
+
+            if(typeof callback === 'function') callback();
+        });
+
+        return this;
     }
 
     close(callback?) {
@@ -204,7 +286,21 @@ export class Socket extends EventEmitter {
 }
 
 
-export function createSocket(type, callback?) {
-    var socket = new Socket(type, callback);
+export interface TcreateSocketOpts {
+    type: string;
+    reuseAddr?: boolean;
+}
+
+export function createSocket(type: string|TcreateSocketOpts, callback?) {
+    var socket: Socket;
+
+    if(typeof type === 'string')
+        socket = new Socket(type as string, callback);
+    else if((type !== null) && (typeof type === 'object')) {
+        socket = new Socket(type.type, callback);
+        socket.reuseAddr = !!type.reuseAddr;
+    } else
+        throw TypeError('Invalid type argument.');
+
     return socket;
 }

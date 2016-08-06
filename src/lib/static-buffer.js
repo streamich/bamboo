@@ -169,13 +169,9 @@ StaticBuffer.prototype.getAddress = function(offset) {
 // The exception is `.slice()` method that creates a new `Buffer`, but
 // we need to return `StaticBuffer`. So we override it here.
 StaticBuffer.prototype.slice = function(start, end) {
-    if(!start) start = 0;
-    if(!end) end = this.length;
-    if(typeof start !== 'number')   throw TypeError('start must be number');
-    if(typeof end !== 'number')     throw TypeError('end must be number');
-    var length = end - start;
-    if(length <= 0) throw TypeError('end must be greater than start');
-    return new StaticBuffer(this.buffer, start, length);
+    var buf = Buffer.prototype.slice.call(this, start, end);
+    buf.__proto__ = StaticBuffer.prototype;
+    return buf;
 };
 
 

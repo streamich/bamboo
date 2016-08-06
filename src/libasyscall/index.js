@@ -24,7 +24,6 @@ var Asyscall = (function () {
         this.code.call();
     };
     Asyscall.prototype.recycleBlock = function (block) {
-        console.log(block.getAddress());
         block._id = Asyscall._id;
         Asyscall._id++;
         if (!this.usedFirst) {
@@ -38,11 +37,9 @@ var Asyscall = (function () {
     Asyscall.prototype.newBlock = function () {
         var block = this.usedFirst;
         if (block && (block.readInt32LE(4) === 2)) {
-            console.log('freeing memory');
             this.usedFirst = block._next;
         }
         block = static_buffer_1.StaticBuffer.alloc(72, 'rw');
-        console.log(block.getAddress());
         block.writeInt32LE(0, 0);
         block.writeInt32LE(0, 4);
         return block;

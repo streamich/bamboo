@@ -1,6 +1,5 @@
 'use strict';
 
-console.log('m')
 // Note: in general `module.js` needs 2 system calls to get `require` working:
 //  1. `fs.readFileSync()`
 //  2. `fs.statSync()`

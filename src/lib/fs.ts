@@ -1427,7 +1427,7 @@ SyncWriteStream.prototype.write = function(data, arg1, arg2) {
     if(typeof data === 'string') {
         data = Buffer.from(data, encoding);
     }
-
+    
     writeSync(this.fd, data, 0, data.length);
 
     if(cb) process.nextTick(cb);

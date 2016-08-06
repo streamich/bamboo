@@ -2,6 +2,9 @@
 // Constant set by Webpack, whether to print debug info.
 declare var __DEBUG__: boolean;
 
+// Constant set by Webpack, whether to trace syscalls.
+declare var __STRACE__: boolean;
+
 // Constant set by Webpack, whether JIT compile `process.asyscall` function.
 declare var __BUILD_ASYNC_SYSCALL__: boolean;
 

@@ -8,7 +8,7 @@ server.on('error', (err) => {
 });
 
 server.on('message', (msg, rinfo) => {
-    console.log(`server got: ${msg} from ${rinfo.address}:${rinfo.port} fam: ${rinfo.family}`);
+    console.log(msg, rinfo);
 });
 
 server.on('listening', () => {

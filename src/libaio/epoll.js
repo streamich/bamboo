@@ -7,7 +7,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = require('../libjs/index');
 var static_buffer_1 = require('../lib/static-buffer');
 var event_1 = require("./event");
-var CHUNK = 8192;
+var CHUNK = 11;
 var Socket = (function () {
     function Socket() {
         this.poll = null;
@@ -50,7 +50,7 @@ var SocketUdp4 = (function (_super) {
             return err;
         var fd = this.fd;
         var event = {
-            events: 1 | 4,
+            events: 1,
             data: [fd, 0]
         };
         var ctl = libjs.epoll_ctl(this.poll.epfd, 1, fd, event);
@@ -77,8 +77,17 @@ var SocketUdp4 = (function (_super) {
             }
         }
     };
-    SocketUdp4.prototype.bind = function (port, ip) {
+    SocketUdp4.prototype.setOption = function (level, option, value) {
+        var buf = libjs.optval_t.pack(value);
+        return libjs.setsockopt(this.fd, level, option, buf);
+    };
+    SocketUdp4.prototype.bind = function (port, ip, reuse) {
         if (ip === void 0) { ip = '0.0.0.0'; }
+        if (reuse) {
+            var reuseRes = this.setOption(65535, 4, 1);
+            if (reuseRes < 0)
+                return reuseRes;
+        }
         var addr = {
             sin_family: 2,
             sin_port: libjs.hton16(port),
@@ -89,71 +98,55 @@ var SocketUdp4 = (function (_super) {
         };
         var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
         if (res < 0)
-            return Error("bind error, errno = " + res);
+            return res;
         this.reffed = true;
         this.poll.refs++;
     };
     SocketUdp4.prototype.update = function (events) {
-        console.log('events', events);
-        if (events & 4) {
-            console.log(this.fd, 'EPOLLOUT');
-            this.connected = true;
-            var event = {
-                events: 1,
-                data: [this.fd, 0]
-            };
-            var res = libjs.epoll_ctl(this.poll.epfd, 3, this.fd, event);
-            if (res < 0)
-                this.onerror(Error("Could not remove write listener: " + res));
-            this.onstart();
-        }
         if ((events & 1) || (events & 2)) {
-            console.log(this.fd, 'EPOLLIN');
-            var err = null;
             do {
-                var buf = new static_buffer_1.StaticBuffer(CHUNK + libjs.sockaddr_in.size + 4);
+                var addrlen = libjs.sockaddr_in.size;
+                var buf = new static_buffer_1.StaticBuffer(CHUNK + addrlen + 4);
                 var data = buf.slice(0, CHUNK);
-                var addr = buf.slice(CHUNK, libjs.sockaddr_in.size);
-                var addrlen = buf.slice(CHUNK + libjs.sockaddr_in.size);
-                var bytes = libjs.recvfrom(this.fd, buf, CHUNK, 0, addr, addrlen);
+                var addr = buf.slice(CHUNK, CHUNK + addrlen);
+                var addrlenBuf = buf.slice(CHUNK + addrlen);
+                libjs.int32.pack(libjs.sockaddr_in.size, addrlenBuf);
+                var bytes = libjs.recvfrom(this.fd, data, CHUNK, 0, addr, addrlenBuf);
                 if (bytes < -1) {
                     this.onerror(Error("Error reading data: " + bytes));
                     break;
                 }
                 else {
-                    var from = [libjs.sockaddr_in.unpack(addr), libjs.int32.unpack(addrlen)];
+                    var retAddrLen = libjs.int32.unpack(addrlenBuf);
+                    var addrStruct = libjs.sockaddr_in.unpack(addr);
+                    var from = {
+                        address: addrStruct.sin_addr.s_addr.toString(),
+                        family: retAddrLen === addrlen ? 'IPv4' : 'IPv6',
+                        port: addrStruct.sin_port,
+                        size: bytes
+                    };
                     this.ondata(buf.slice(0, bytes), from);
                 }
             } while (bytes === CHUNK);
         }
         if (events & 8) {
-            console.log(this.fd, 'EPOLLERR');
             this.onerror(Error("Some error on " + this.fd));
         }
         if (events & 8192) {
-            console.log(this.fd, 'EPOLLRDHUP');
         }
         if (events & 16) {
-            console.log(this.fd, 'EPOLLHUP');
         }
     };
     SocketUdp4.prototype.setTtl = function (ttl) {
         if (ttl < 1 || ttl > 255)
             return -22;
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, 0, 2, buf);
+        return this.setOption(0, 2, ttl);
     };
     SocketUdp4.prototype.setMulticastTtl = function (ttl) {
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, 0, 33, buf);
+        return this.setOption(0, 33, ttl);
     };
     SocketUdp4.prototype.setMulticastLoop = function (on) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, 0, 34, buf);
-    };
-    SocketUdp4.prototype.setBroadcast = function (on) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, 65535, 32, buf);
+        return this.setOption(0, 34, on ? 1 : 0);
     };
     return SocketUdp4;
 }(Socket));
@@ -167,16 +160,13 @@ var SocketUdp6 = (function (_super) {
     SocketUdp6.prototype.setTtl = function (ttl) {
         if (ttl < 1 || ttl > 255)
             return -22;
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, 41, 16, buf);
+        return this.setOption(41, 16, ttl);
     };
     SocketUdp6.prototype.setMulticastTtl = function (ttl) {
-        var buf = libjs.optval_t.pack(ttl);
-        return libjs.setsockopt(this.fd, 41, 18, buf);
+        return this.setOption(41, 18, ttl);
     };
     SocketUdp6.prototype.setMulticastLoop = function (on) {
-        var buf = libjs.optval_t.pack(on ? 1 : 0);
-        return libjs.setsockopt(this.fd, 41, 19, buf);
+        return this.setOption(41, 19, on ? 1 : 0);
     };
     return SocketUdp6;
 }(SocketUdp4));
@@ -223,14 +213,15 @@ var Poll = (function () {
         this.epfd = 0;
         this.onerror = event_1.noop;
         this.maxEvents = 10;
-        this.bufSize = libjs.epoll_event.size;
+        this.eventSize = libjs.epoll_event.size;
+        this.eventBuf = static_buffer_1.StaticBuffer.alloc(this.maxEvents * this.eventSize, 'rw');
         this.epfd = libjs.epoll_create1(0);
         if (this.epfd < 0)
             throw Error("Could not create epoll fd: errno = " + this.epfd);
     }
     Poll.prototype.wait = function (timeout) {
-        var EVENT_SIZE = this.bufSize;
-        var evbuf = new static_buffer_1.StaticBuffer(this.maxEvents * EVENT_SIZE);
+        var EVENT_SIZE = this.eventSize;
+        var evbuf = this.eventBuf;
         var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
         if (waitres > 0) {
             for (var i = 0; i < waitres; i++) {

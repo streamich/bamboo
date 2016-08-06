@@ -35,9 +35,9 @@ intptr_t fulljs_arg_to_int(duk_context *ctx, int index) {
     if(duk_is_number(ctx, index)) {
         // printf("number\n");
         return (t_int) duk_get_int(ctx, index);
-    } else if(duk_is_buffer(ctx, index)) {
+    } else if(duk_is_fixed_buffer(ctx, index)) {
         // ArrayBuffer, StaticArrayBuffer, Uint8Array, Buffer, StaticBuffer
-        // printf("buf: %lli\n", fulljs_get_buffer_address(ctx, index));
+         printf("buf: %lli\n", fulljs_get_buffer_address(ctx, index));
         return fulljs_get_buffer_address(ctx, index);
     } else if(duk_is_string(ctx, index)) {
         // printf("string\n");
@@ -64,8 +64,23 @@ intptr_t fulljs_arg_to_int(duk_context *ctx, int index) {
 
         // printf("addr: %lli\n", addr);
         return addr;
-    } else
+    } else {
+        duk_get_global_string(ctx, "ArrayBuffer");
+        if(duk_instanceof(ctx, index, -1)) {
+            duk_pop(ctx);
+            return fulljs_get_buffer_address(ctx, index);
+        }
+        duk_pop(ctx);
+
+        duk_get_global_string(ctx, "Uint8Array");
+        if(duk_instanceof(ctx, index, -1)) {
+            duk_pop(ctx);
+            return fulljs_get_buffer_address(ctx, index);
+        }
+        duk_pop(ctx);
+
         return 0; // == NULL, for example, JavaScript may send `null` argument (or undefined).
+    }
 }
 
 

@@ -75,7 +75,7 @@ export class Asyscall {
     static _id = 0;
 
     protected recycleBlock(block) {
-        console.log(block.getAddress());
+        // console.log(block.getAddress());
         block._id = Asyscall._id;
         Asyscall._id++;
         if(!this.usedFirst) {
@@ -102,7 +102,7 @@ export class Asyscall {
             //     this.usedFirst = block._next;
             //     block._next = null;
             // }
-            console.log('freeing memory');
+            // console.log('freeing memory');
             this.usedFirst = block._next;
         }
         // } else {
@@ -111,9 +111,8 @@ export class Asyscall {
             // using `mmap` instead because for now we don't have a proper `StaticBuffer`
             // in V8.
             block = StaticBuffer.alloc(CONF.BLOCK_SIZE, 'rw');
-
             // block = new StaticBuffer(CONF.BLOCK_SIZE);
-         console.log(block.getAddress());
+         // console.log(block.getAddress());
             // block = new StaticBuffer(CONF.BLOCK_SIZE);
         // }
 

@@ -25,6 +25,15 @@ console.log('all fine...');
 
 
 
+console.log('utf\u0038');
+
+
+console.log('asdf asdf asdf asdf asdf asdf asdf sadf\nasdf asdfa dfa fasdf asdf asdfasdfasdfasd\n' +
+    'asdf asdf asdf asdf asdf asdf asdfa fasdf');
+
+
+
+
 // - [ ] `console.assert(value[, message][, ...])`
 // - [ ] `console.error([data][, ...])`
 // - [ ] `console.info([data][, ...])`
