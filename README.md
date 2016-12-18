@@ -1,4 +1,3 @@
-![](FULL.gif)
 
 # FULL.js
 
