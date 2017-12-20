@@ -1,24 +1,21 @@
 # make --trace
 
 RUNTIME = duktape
-TARGET = bamboo-engine-$(RUNTIME)
+TARGET = bamboo-$(RUNTIME)
 CC = gcc
-
-# IMPORTANT: Do not enable `-std=c99` in that case system call is defined as
-# `int syscall()`, but we need `long syscall()`, everything will break if you
-# enable `std=c99`.
-#CFLAGS = -std=c99
 CFLAGS =
+MKDIR_P = mkdir -p
+DIR_BUILD = build
+DIR_DIST = dist
 
+dist/$(TARGET): src/$(TARGET).c build/$(RUNTIME).o
+	$(CC) $(CFLAGS) -o dist/$(TARGET) -Isrc/ src/$(TARGET).c -lm build/$(RUNTIME).o -lm
 
-$(TARGET): $(TARGET).c $(RUNTIME).o
-	$(CC) $(CFLAGS) -o $(TARGET) -Isrc/ $(TARGET).c -lm $(RUNTIME).o
-
-try: try.c $(RUNTIME).o
-	$(CC) $(CFLAGS) -o try -Isrc/ try.c -lm $(RUNTIME).o
-
-%.o: %.c
+build/%.o: src/%.c directories
 	$(CC) $(CFLAGS) -c $< -o $@
 
+directories:
+	${MKDIR_P} ${DIR_BUILD} ${DIR_DIST}
+
 clean:
-	rm -f *.o *.a $(TARGET) try
+	rm -rf *.o *.a $(TARGET) $(DIR_BUILD)/ $(DIR_DIST)/
