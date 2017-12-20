@@ -1,15 +1,17 @@
 {
   "compilerOptions": {
-    "target": "es3",
+    "target": "es5",
     "module": "commonjs",
-    "removeComments": true,
-    "sourceMap": false,
+    "removeComments": false,
+    "sourceMap": true,
     "listFiles": false,
     "skipDefaultLibCheck": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "experimentalDecorators": true
   },
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "lib"
   ]
 }

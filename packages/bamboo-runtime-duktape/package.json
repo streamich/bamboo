@@ -1,0 +1,11 @@
+{
+    "name": "bamboo-runtime-duktape",
+    "version": "0.1.0",
+    "scripts": {
+        "build": "make",
+        "clean": "make clean",
+        "postpublish": "npm run clean",
+        "postinstall": "npm run build",
+        "prepare": "npm run build"
+    }
+}

@@ -1,7 +1,0 @@
-{
-    "name": "bamboo-engine-duktape",
-    "version": "0.1.0",
-    "scripts": {
-        "run": "make"
-    }
-}
