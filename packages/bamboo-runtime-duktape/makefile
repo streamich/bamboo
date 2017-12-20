@@ -1,17 +1,17 @@
 # make --trace
 
 RUNTIME = duktape
-TARGET = bamboo-$(RUNTIME)
 CC = gcc
 CFLAGS =
 MKDIR_P = mkdir -p
+DIR_SRC = src
 DIR_BUILD = build
-DIR_DIST = dist
+DIR_DIST = bin
 
-dist/$(TARGET): src/$(TARGET).c build/$(RUNTIME).o
-	$(CC) $(CFLAGS) -o dist/$(TARGET) -Isrc/ src/$(TARGET).c -lm build/$(RUNTIME).o -lm
+$(DIR_DIST)/runtime: $(DIR_SRC)/bamboo-$(RUNTIME).c $(DIR_BUILD)/$(RUNTIME).o
+	$(CC) $(CFLAGS) -o $(DIR_DIST)/runtime -Isrc/ $(DIR_SRC)/bamboo-$(RUNTIME).c -lm $(DIR_BUILD)/$(RUNTIME).o -lm
 
-build/%.o: src/%.c directories
+$(DIR_BUILD)/%.o: $(DIR_SRC)/%.c directories
 	$(CC) $(CFLAGS) -c $< -o $@
 
 directories:

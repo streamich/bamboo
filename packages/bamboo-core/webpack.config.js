@@ -1,5 +1,5 @@
 const path = require('path');
-const webpack = require('webpack');
+const {DefinePlugin} = require('webpack');
 const WrapperPlugin = require('wrapper-webpack-plugin');
 
 module.exports = {
@@ -24,7 +24,7 @@ module.exports = {
             header: 'global = this;\n',
             footer: ''
         }),
-        new webpack.DefinePlugin({
+        new DefinePlugin({
             // DEBUG mode
             __DEBUG__: JSON.stringify(JSON.parse(process.env.BAMBOO_DEBUG || false)),
         

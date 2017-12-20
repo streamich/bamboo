@@ -1,24 +1,5 @@
 {
-  "name": "full-js",
+  "name": "Bamboo.js",
   "version": "1.0.0",
-  "description": "Node.js standard library in pure JavaScript",
-  "main": "index.js",
-  "bin": "./bin/full",
-  "preferGlobal": true,
-  "scripts": {
-    "build": "webpack",
-    "watch": "webpack --watch",
-    "clean": "rimraf dist"
-  },
-  "dependencies": {
-    "buffer": "4.6.0",
-    "libsys": "*"
-  },
-  "devDependencies": {
-    "webpack": "3.10.0",
-    "wrapper-webpack-plugin": "1.0.0",
-    "ts-loader": "3.2.0",
-    "typescript": "2.6.2",
-    "rimraf": "2.6.2"
-  }
+  "description": "Node.js standard library in pure JavaScript"
 }
