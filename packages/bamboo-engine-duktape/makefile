@@ -1,7 +1,7 @@
 # make --trace
 
 RUNTIME = duktape
-TARGET = full-$(RUNTIME)
+TARGET = bamboo-engine-$(RUNTIME)
 CC = gcc
 
 # IMPORTANT: Do not enable `-std=c99` in that case system call is defined as
