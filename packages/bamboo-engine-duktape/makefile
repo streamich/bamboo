@@ -18,4 +18,4 @@ directories:
 	${MKDIR_P} ${DIR_BUILD} ${DIR_DIST}
 
 clean:
-	rm -rf *.o *.a $(TARGET) $(DIR_BUILD)/ $(DIR_DIST)/
+	rm -rf $(DIR_BUILD)/ $(DIR_DIST)/
