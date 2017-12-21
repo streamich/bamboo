@@ -1,17 +1,8 @@
 {
-  "name": "full-js",
+  "name": "bamboo.js",
   "version": "1.0.0",
   "description": "Node.js standard library in pure JavaScript",
-  "main": "index.js",
-  "bin": "./bin/full",
-  "preferGlobal": true,
-  "dependencies": {
-    "buffer": "4.6.0",
-    "libsys": "*"
-  },
   "devDependencies": {
-    "webpack": "1.13.1",
-    "webpack-node-externals": "1.3.0",
-    "wrapper-webpack-plugin": "0.1.7"
+    "lerna": "^2.5.1"
   }
 }

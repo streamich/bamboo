@@ -1,0 +1,12 @@
+{
+    "name": "bamboo-cli",
+    "version": "0.2.1",
+    "bin": {
+        "bamboo": "./bin/bamboo"
+    },
+    "preferGlobal": true,
+    "dependencies": {
+        "bamboo-core": "^0.1.0",
+        "yargs-parser": "8.1.0"
+    }
+}

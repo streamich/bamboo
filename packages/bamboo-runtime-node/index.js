@@ -46,6 +46,6 @@ if(!process.argv[1]) {
     console.log('Please provide path to full.js');
 } else {
     var fs = require('fs');
-    var full_js = fs.readFileSync(process.argv[1], 'utf8');
-    eval(full_js);
+    var bamboo = fs.readFileSync(process.argv[1], 'utf8');
+    eval(bamboo);
 }

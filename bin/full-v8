@@ -1,3 +1,0 @@
-#! /bin/bash
-
-./runtime/v8/full-v8 "$@"
