@@ -1,10 +1,14 @@
 
 # Bamboo
 
-**Bamboo** is a *drop-in* replacement for Node.js. It is written in 100% JavaScript,
-Bamboo does not have a single line written in C/C++.
+**Bamboo** is a *drop-in* replacement for Node.js.
 
-Instead of running Node
+  - Bamboo is written in 100% JavaScript, it does not have a single line in C/C++.
+  - Bamboo can run on any [JavaScript runtime](./docs/runtimes.md), not just V8
+
+## Usage
+
+Instead of using Node
 
 ```shell
 node app.js
