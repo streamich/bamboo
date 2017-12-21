@@ -16,6 +16,15 @@ you can run Bamboo
 bamboo app.js
 ```
 
+## Installation
+
+```js
+npm install -g bamboo-cli bamboo-runtime-duktape
+```
+
+## Read more
+
+  - [Platforms](./docs/platforms.md)
   - [API status](./docs/api.md)
   - [JavaScript runtimes](./docs/runtimes.md)
   - [TODOs](./docs/todos.md)

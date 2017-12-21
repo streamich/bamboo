@@ -39,8 +39,8 @@ There are also optional interfaces that JavaScript runtimes can implement to get
 greater fidelity and performance from their Bamboo builds.
 
   - `process.frame()`
-  - `process.alloc()`
-  - `process.addr()`
+  - `process.call()`
+  - `process.getAddress()`
   - `process.asyscall()`
   - `Buffer`
   - `StaticBuffer`
