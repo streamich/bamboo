@@ -1,5 +1,8 @@
 {
   "name": "bamboo.js",
   "version": "1.0.0",
-  "description": "Node.js standard library in pure JavaScript"
+  "description": "Node.js standard library in pure JavaScript",
+  "devDependencies": {
+    "lerna": "^2.5.1"
+  }
 }
