@@ -1,6 +1,7 @@
-import {UInt64} from '../../node_modules/ass-js/util';
+import {UInt64} from 'ass-js/lib/util';
 import {CONF, LOCK} from './conf';
-import {StaticBuffer} from '../lib/static-buffer';
+import {StaticBuffer} from '../../bamboo-core/src/lib/static-buffer';
+import bin from './threadpool/bin';
 
 
 function link(curr, next) {
@@ -28,7 +29,6 @@ export class Asyscall {
         // this.code = StaticBuffer.alloc(bin.length * 10, 'rwe');
         // buf.copy(this.code);
         // this.code = this.code.slice(0, bin.length);
-        var bin = require('./bin');
         this.code = StaticBuffer.alloc(bin, 'rwe');
 
         this.curr = this.code.slice(this.code.length - CONF.BLOCK_SIZE);
@@ -132,7 +132,7 @@ export class Asyscall {
         }
 
         // TODO: Should be StaticBuffer
-        if(arg instanceof Buffer) {
+        if(StaticBuffer.isStaticBuffer(arg)) {
             arg = arg.getAddress();
             // console.log('addr', arg);
         }

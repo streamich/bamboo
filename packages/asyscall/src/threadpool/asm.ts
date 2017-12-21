@@ -1,7 +1,7 @@
-import {CONF, LOCK} from './conf';
-import {rax, rsi, rdi, rcx, rdx, rsp, rip, eax, edx, r13, r14} from '../../node_modules/ass-js/x86/operand';
-import {Code} from '../../node_modules/ass-js/x86/x64/code';
-import {Abi} from '../../node_modules/ass-js/abi';
+import {CONF, LOCK} from '../conf';
+import {rax, rsi, rdi, rcx, rdx, rsp, rip, eax, edx, r13, r14} from 'ass-js/lib/x86/operand';
+import {Code} from 'ass-js/lib/x86/x64/code';
+import {Abi} from 'ass-js/lib/abi';
 
 
 // Async Syscall 2 is different from the first version because it does not

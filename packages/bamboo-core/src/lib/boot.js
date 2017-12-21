@@ -96,7 +96,29 @@ task.callback = function() {
 
 
     // Create `process.asyscall` and `process.asyscall64`
-    require('../libasyscall/create');
+    if(!process.asyscall) {
+        if(process.hasBinaryUtils && __BUILD_ASYNC_SYSCALL__) {
+            require('../../../asyscall/src/shim');
+        } else {
+            // Create fake asynchronous system calls by just wrapping the
+            // synchronous version.
+            process.asyscall = function() {
+                var len = arguments.length - 1;
+                var args = new Array(len);
+                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var res = process.syscall.apply(null, args);
+                arguments[len](res);
+            };
+            process.asyscall64 = function() {
+                var len = arguments.length - 1;
+                var args = new Array(len);
+                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var res = process.syscall64.apply(null, args);
+                arguments[len](res);
+            };
+        }
+    }
+    
     if(__STRACE__) {
         strace.overwriteAsync(process, 'asyscall', 'asyscall64');
     }

@@ -61,7 +61,7 @@ global = this;
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 44);
+/******/ 	return __webpack_require__(__webpack_require__.s = 42);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -311,7 +311,7 @@ function getConstructorOf(obj) {
 
 function ensureDebugIsInitialized() {
     if (Debug === undefined) {
-        const runInDebugContext = __webpack_require__(50).runInDebugContext;
+        const runInDebugContext = __webpack_require__(49).runInDebugContext;
         Debug = runInDebugContext('Debug');
     }
 }
@@ -1218,8 +1218,8 @@ function fromByteArray (uint8) {
 
 
 
-var ieee754 = __webpack_require__(45)
-var isArray = __webpack_require__(46)
+var ieee754 = __webpack_require__(43)
+var isArray = __webpack_require__(44)
 Buffer._full = true;
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -3047,9 +3047,9 @@ exports.arch = {
     SYS: x86_64_linux_1.SYS,
     types: types,
 };
-__export(__webpack_require__(47));
+__export(__webpack_require__(45));
 // export * from './definitions';
-__export(__webpack_require__(33));
+__export(__webpack_require__(32));
 function noop() { }
 // ## Files
 //
@@ -4530,7 +4530,7 @@ EventEmitter.init = function() {
     this.domain = null;
     if (EventEmitter.usingDomains) {
         // if there is an active domain, then attach to it.
-        domain = domain || __webpack_require__(48);
+        domain = domain || __webpack_require__(46);
         if (domain.active && !(this instanceof domain.Domain)) {
             this.domain = domain.active;
         }
@@ -4967,479 +4967,6 @@ function arrayClone(arr, i) {
 
 /***/ }),
 /* 5 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-var index_1 = __webpack_require__(2);
-var Poll;
-var platform = process.platform;
-switch (platform) {
-    case 'linux':
-        Poll = __webpack_require__(34).Poll;
-        break;
-    default:
-        // require('../libaio/epoll-et');
-        // require('../libaio/kqueue');
-        // require('../libaio/poll');
-        // require('../libaio/select');
-        // require('../libaio/fake_socket_poll');
-        throw Error("Platform not supported: " + platform);
-}
-var POINTER_NONE = -1;
-var DELAYS = [
-    -2 /* IMMEDIATE */,
-    -1 /* IO */,
-    1,
-    // 2,
-    // 4,
-    8,
-    16,
-    32,
-    64,
-    128,
-    256,
-    // 512,
-    1024,
-    // 2048,
-    4096,
-    // 8192,
-    16384,
-    // 32768,
-    65536,
-    131072,
-    // 262144,
-    524288,
-    // 1048576,
-    2097152,
-    // 4194304,
-    8388608,
-    // 16777216,
-    33554432,
-    // 67108864,
-    // 134217728,
-    268435456,
-    // 536870912,
-    // 1073741824,
-    2147483648,
-    Infinity,
-];
-var DELAY_LAST = DELAYS.length - 1;
-function findDelayIndex(delay) {
-    for (var i = 0; i <= DELAY_LAST; i++)
-        if (delay <= DELAYS[i])
-            return i;
-}
-// var _task_id = -1125899906842624;
-var MicroTask = /** @class */ (function () {
-    function MicroTask(callback, args) {
-        // id: number = _task_id++;         // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
-        this.next = null; // Previous task in list
-        this.prev = null; // Next task in list
-        this.callback = callback || null;
-        this.args = args || null;
-    }
-    MicroTask.prototype.exec = function () {
-        var args = this.args, callback = this.callback;
-        if (!args) {
-            callback();
-        }
-        else {
-            switch (args.length) {
-                case 1:
-                    callback(args[0]);
-                    break;
-                case 2:
-                    callback(args[0], args[1]);
-                    break;
-                case 3:
-                    callback(args[0], args[1], args[2]);
-                    break;
-                default:
-                    callback.apply(null, args);
-            }
-        }
-    };
-    return MicroTask;
-}());
-exports.MicroTask = MicroTask;
-var Task = /** @class */ (function (_super) {
-    __extends(Task, _super);
-    function Task() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.delay = -2 /* IMMEDIATE */; // Delay in ms
-        _this.timeout = 0; // UNIX time in ms when `delay` happens
-        _this.pointer = POINTER_NONE; // >1 if some deep pointer from queue points to this task.
-        _this.isRef = true; // Whether to keep process running while this task scheduled.
-        _this.queue = null; // `EventQueue` where this `Task` is inserted.
-        return _this;
-    }
-    // constructor() { }
-    Task.prototype.ref = function () {
-        if (!this.isRef) {
-        }
-    };
-    Task.prototype.unref = function () {
-        if (this.isRef) {
-        }
-    };
-    Task.prototype.cancel = function () {
-        this.queue.cancel(this);
-    };
-    return Task;
-}(MicroTask));
-exports.Task = Task;
-var EventQueue = /** @class */ (function () {
-    function EventQueue() {
-        this.start = null; // Macro-task queue: `setImmediate`, `I/O`, `setTimeout`, `setInterval`.
-        this.active = null; // Slice of `macroQueue` that is being executed in current event loop cycle.
-        // Deep pointers into `macroQueue` by the `delay` of the last task inserted in
-        // the queue with that delay or lesser, these give us the guidance where in the
-        // queue we should start looking for to insert a new task.
-        this.pointers = [];
-    }
-    EventQueue.prototype.setPointer = function (pointer_index, task) {
-        var pointers = this.pointers;
-        var timeout = task.timeout;
-        pointers[pointer_index] = task;
-        task.pointer = pointer_index;
-        // Make sure all pointers pointing to greater delay values are
-        // pointing at least as deep in the queue as the current pointer.
-        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
-            var p = pointers[i];
-            if (!p) {
-                pointers[i] = task;
-            }
-            else {
-                if (p.timeout <= timeout) {
-                    pointers[i] = task;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-    };
-    EventQueue.prototype.insertTask = function (curr, task) {
-        var timeout = task.timeout;
-        var prev = null;
-        if (timeout >= curr.timeout) {
-            do {
-                prev = curr;
-                curr = curr.next;
-            } while (curr && (curr.timeout <= timeout));
-            prev.next = task;
-            task.prev = prev;
-            if (curr) {
-                curr.prev = task;
-                task.next = curr;
-            }
-        }
-        else {
-            do {
-                prev = curr;
-                curr = curr.prev;
-            } while (curr && (curr.timeout > timeout));
-            prev.prev = task;
-            task.next = prev;
-            if (curr) {
-                curr.next = task;
-                task.prev = curr;
-            }
-            else {
-                this.start = task;
-            }
-        }
-    };
-    // Milliseconds when next task to be executed.
-    EventQueue.prototype.msNextTask = function () {
-        if (this.start) {
-            return this.start.timeout - Date.now();
-        }
-        return Infinity;
-    };
-    EventQueue.prototype.insert = function (task) {
-        task.queue = this;
-        var delay = task.delay;
-        var timeout = task.timeout = Date.now() + delay;
-        var pointers = this.pointers;
-        var pointer_index = findDelayIndex(delay);
-        var curr = pointers[pointer_index];
-        if (!curr) {
-            this.setPointer(pointer_index, task);
-            if (pointer_index) {
-                for (var i = pointer_index - 1; i >= 0; i--) {
-                    if (pointers[i]) {
-                        curr = pointers[i];
-                        break;
-                    }
-                }
-            }
-            if (!curr)
-                curr = this.start;
-            if (!curr) {
-                this.start = task;
-            }
-            else {
-                this.insertTask(curr, task);
-            }
-        }
-        else {
-            if (timeout >= curr.timeout) {
-                this.setPointer(pointer_index, task);
-            }
-            this.insertTask(curr, task);
-        }
-    };
-    // debug() {
-    //     var curr: Task = this.start;
-    //     if(!curr) return;
-    //     do {
-    //         console.log(curr.delay, curr.timeout);
-    //     } while(curr = curr.next);
-    // }
-    EventQueue.prototype.cancel = function (task) {
-        var prev = task.prev;
-        var next = task.next;
-        task.prev = task.next = null;
-        if (prev)
-            prev.next = next;
-        if (next)
-            next.prev = prev;
-        if (!prev) {
-            this.start = next;
-        }
-        if (task.pointer !== POINTER_NONE) {
-            var index = task.pointer;
-            if (index) {
-                this.pointers[index] = this.pointers[index - 1];
-            }
-            else {
-                this.pointers[index] = null;
-            }
-        }
-    };
-    // 1. Splice `this.activeQueue` for the beginning of the `this.macroQueue` up to the
-    //    very last Task that timed out.
-    // 2. In the process reset `this.pointers` which were sliced out.
-    EventQueue.prototype.sliceActiveQueue = function () {
-        var curr = this.start;
-        if (!curr)
-            return; // No events queued.
-        var time = Date.now();
-        var pointers = this.pointers;
-        for (var i = 0; i <= DELAY_LAST; i++) {
-            var pointer = pointers[i];
-            if (pointer) {
-                if (pointer.timeout <= time) {
-                    pointers[i] = null;
-                    // pointer.pointer = POINTER_NONE;
-                    curr = pointer;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-        if (curr.timeout > time)
-            return;
-        var prev;
-        do {
-            prev = curr;
-            curr = curr.next;
-        } while (curr && (curr.timeout <= time));
-        prev.next = null;
-        if (curr)
-            curr.prev = null;
-        this.active = this.start;
-        this.start = curr;
-    };
-    EventQueue.prototype.cycle = function () {
-        // Crate new active queue
-        this.sliceActiveQueue();
-    };
-    // Pop next task to be executed.
-    EventQueue.prototype.pop = function () {
-        var task = this.active;
-        if (!task)
-            return null;
-        this.active = task.next;
-        return task;
-    };
-    return EventQueue;
-}());
-exports.EventQueue = EventQueue;
-var EventLoop = /** @class */ (function () {
-    function EventLoop() {
-        this.microQueue = null; // Micro-task queue: `process.nextTick`.
-        this.microQueueEnd = null; // The last task in micro-task queue.
-        this.refQueue = new EventQueue; // Events that keep process running.
-        this.unrefQueue = new EventQueue; // Optional events.
-        this.poll = new Poll;
-    }
-    EventLoop.prototype.shouldStop = function () {
-        if (!this.refQueue.start)
-            return true;
-        return false;
-    };
-    EventLoop.prototype.insertMicrotask = function (microtask) {
-        var last = this.microQueueEnd;
-        this.microQueueEnd = microtask;
-        if (!last) {
-            this.microQueue = microtask;
-        }
-        else {
-            last.next = microtask; // One-way list
-        }
-    };
-    EventLoop.prototype.insert = function (task) {
-        if (task.isRef)
-            this.refQueue.insert(task);
-        else
-            this.unrefQueue.insert(task);
-    };
-    EventLoop.prototype.start = function () {
-        function exec_task(task) {
-            // TODO: BTW, which one is faster? (1) `if(task.callback)` vs. (2) `noop()`
-            if (task.callback)
-                task.callback();
-        }
-        // THE LOOP
-        while (1) {
-            // Create new active queues
-            this.refQueue.cycle();
-            this.unrefQueue.cycle();
-            var refTask = this.refQueue.pop();
-            var unrefTask = this.unrefQueue.pop();
-            // Execute all macro tasks of the current cycle in the event loop.
-            var task;
-            while (refTask || unrefTask) {
-                if (refTask && unrefTask) {
-                    if (refTask.timeout < unrefTask.timeout) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else if (refTask.timeout > unrefTask.timeout) {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                    else {
-                        // if(refTask.id <= unrefTask.id) {
-                        if (refTask.timeout <= unrefTask.timeout) {
-                            refTask.exec();
-                            refTask = null;
-                        }
-                        else {
-                            unrefTask.exec();
-                            unrefTask = null;
-                        }
-                    }
-                }
-                else {
-                    if (refTask) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                }
-                // Execute all micro tasks accumulated while executing this macro task.
-                var microtask;
-                do {
-                    microtask = this.microQueue;
-                    if (microtask) {
-                        if (microtask.callback)
-                            microtask.exec();
-                        this.microQueue = microtask.next;
-                    }
-                } while (this.microQueue);
-                this.microQueueEnd = null;
-                // Pop one more task to execute.
-                if (!refTask)
-                    refTask = this.refQueue.pop();
-                else
-                    unrefTask = this.unrefQueue.pop();
-            }
-            // Stop the program?
-            var havePollEvents = this.poll.hasRefs();
-            if (this.shouldStop() && !havePollEvents)
-                break;
-            // ----------------------------------------------------------------------------------
-            // TODO:
-            // By here we finished executing all the macro and micro tasks of the current cycle.
-            // Now we need to decide if we have immediate tasks to execute in the next cycle,
-            // or (if not) we can save CPU cycles by idling. We should use the `nanosleep`,
-            // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
-            //
-            // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
-            // we can use `sched_yield` here, if it is not available on some systems we just create a no-op
-            // shim for it.
-            //
-            // Now, `epoll` syscall is available only on Linux (other systems have different alternatives),
-            // so we don't use it here as-it-is but create an abstraction for it, so that a correct
-            // async mechanism can be used on each system.
-            //
-            // For timer tasks `setInterval` and `setTimeout` we know the exact time when we need
-            // to execute them, for `setImmediate` task we know as well that we have to execute it
-            // immediately. So, if there are only future timer tasks scheduled, we `nanosleep` just
-            // enough to wake up before the task has to be executed.
-            //
-            // The interesting part are async I/O tasks, which are of two types:
-            //
-            //  - Type 1: `process.asyscall` provided by thread pool
-            //  - Type 2: Async I/O provided by kernel using `epoll`
-            //
-            // If there are Type 1 tasks in queue (we should be able to detect that) then we cannot
-            // `nanosleep`, but if there are no immediate tasks to be executed we can `sched_yield`
-            // as it should be an order of magnitude faster than file I/O.
-            //
-            // If there are Type 2 tasks -- we can `epoll` in two ways: with or without a blocking timeout.
-            // We should detect if it is possible and use `epoll` with timeout which effectively
-            // idles the loop up until the timeout is reached or when new events are received.
-            // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
-            //
-            // Also, use `eventfd` to notify `epoll` from thread poll when task is completed.
-            var ref_ms = this.refQueue.msNextTask();
-            var unref_ms = this.unrefQueue.msNextTask();
-            var CAP = 1000000;
-            var ms = Math.min(ref_ms, unref_ms, CAP);
-            if (ms > 0) {
-                if (havePollEvents) {
-                    this.poll.wait(ms); // epoll_wait
-                }
-                else {
-                    var seconds = Math.floor(ms / 1000);
-                    var nanoseconds = (ms % 1000) * 1000000;
-                    index_1.nanosleep(seconds, nanoseconds);
-                }
-            }
-            else {
-                if (ms > 1) {
-                    index_1.sched_yield();
-                }
-            }
-        }
-    };
-    return EventLoop;
-}());
-exports.EventLoop = EventLoop;
-
-
-/***/ }),
-/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -7046,7 +6573,7 @@ else
 
 
 /***/ }),
-/* 7 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -7058,10 +6585,10 @@ const EE = __webpack_require__(4);
 const util = __webpack_require__(0);
 
 util.inherits(Stream, EE);
-Stream.Readable = __webpack_require__(11);
-Stream.Writable = __webpack_require__(12);
-Stream.Duplex = __webpack_require__(14);
-Stream.Transform = __webpack_require__(15);
+Stream.Readable = __webpack_require__(12);
+Stream.Writable = __webpack_require__(13);
+Stream.Duplex = __webpack_require__(15);
+Stream.Transform = __webpack_require__(16);
 Stream.PassThrough = __webpack_require__(22);
 
 // Backwards-compat with node 0.4.x
@@ -7160,6 +6687,479 @@ Stream.prototype.pipe = function(dest, options) {
 
 
 /***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var index_1 = __webpack_require__(2);
+var Poll;
+var platform = process.platform;
+switch (platform) {
+    case 'linux':
+        Poll = __webpack_require__(47).Poll;
+        break;
+    default:
+        // require('../libaio/epoll-et');
+        // require('../libaio/kqueue');
+        // require('../libaio/poll');
+        // require('../libaio/select');
+        // require('../libaio/fake_socket_poll');
+        throw Error("Platform not supported: " + platform);
+}
+var POINTER_NONE = -1;
+var DELAYS = [
+    -2 /* IMMEDIATE */,
+    -1 /* IO */,
+    1,
+    // 2,
+    // 4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    // 512,
+    1024,
+    // 2048,
+    4096,
+    // 8192,
+    16384,
+    // 32768,
+    65536,
+    131072,
+    // 262144,
+    524288,
+    // 1048576,
+    2097152,
+    // 4194304,
+    8388608,
+    // 16777216,
+    33554432,
+    // 67108864,
+    // 134217728,
+    268435456,
+    // 536870912,
+    // 1073741824,
+    2147483648,
+    Infinity,
+];
+var DELAY_LAST = DELAYS.length - 1;
+function findDelayIndex(delay) {
+    for (var i = 0; i <= DELAY_LAST; i++)
+        if (delay <= DELAYS[i])
+            return i;
+}
+// var _task_id = -1125899906842624;
+var MicroTask = /** @class */ (function () {
+    function MicroTask(callback, args) {
+        // id: number = _task_id++;         // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
+        this.next = null; // Previous task in list
+        this.prev = null; // Next task in list
+        this.callback = callback || null;
+        this.args = args || null;
+    }
+    MicroTask.prototype.exec = function () {
+        var args = this.args, callback = this.callback;
+        if (!args) {
+            callback();
+        }
+        else {
+            switch (args.length) {
+                case 1:
+                    callback(args[0]);
+                    break;
+                case 2:
+                    callback(args[0], args[1]);
+                    break;
+                case 3:
+                    callback(args[0], args[1], args[2]);
+                    break;
+                default:
+                    callback.apply(null, args);
+            }
+        }
+    };
+    return MicroTask;
+}());
+exports.MicroTask = MicroTask;
+var Task = /** @class */ (function (_super) {
+    __extends(Task, _super);
+    function Task() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.delay = -2 /* IMMEDIATE */; // Delay in ms
+        _this.timeout = 0; // UNIX time in ms when `delay` happens
+        _this.pointer = POINTER_NONE; // >1 if some deep pointer from queue points to this task.
+        _this.isRef = true; // Whether to keep process running while this task scheduled.
+        _this.queue = null; // `EventQueue` where this `Task` is inserted.
+        return _this;
+    }
+    // constructor() { }
+    Task.prototype.ref = function () {
+        if (!this.isRef) {
+        }
+    };
+    Task.prototype.unref = function () {
+        if (this.isRef) {
+        }
+    };
+    Task.prototype.cancel = function () {
+        this.queue.cancel(this);
+    };
+    return Task;
+}(MicroTask));
+exports.Task = Task;
+var EventQueue = /** @class */ (function () {
+    function EventQueue() {
+        this.start = null; // Macro-task queue: `setImmediate`, `I/O`, `setTimeout`, `setInterval`.
+        this.active = null; // Slice of `macroQueue` that is being executed in current event loop cycle.
+        // Deep pointers into `macroQueue` by the `delay` of the last task inserted in
+        // the queue with that delay or lesser, these give us the guidance where in the
+        // queue we should start looking for to insert a new task.
+        this.pointers = [];
+    }
+    EventQueue.prototype.setPointer = function (pointer_index, task) {
+        var pointers = this.pointers;
+        var timeout = task.timeout;
+        pointers[pointer_index] = task;
+        task.pointer = pointer_index;
+        // Make sure all pointers pointing to greater delay values are
+        // pointing at least as deep in the queue as the current pointer.
+        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
+            var p = pointers[i];
+            if (!p) {
+                pointers[i] = task;
+            }
+            else {
+                if (p.timeout <= timeout) {
+                    pointers[i] = task;
+                }
+                else {
+                    break;
+                }
+            }
+        }
+    };
+    EventQueue.prototype.insertTask = function (curr, task) {
+        var timeout = task.timeout;
+        var prev = null;
+        if (timeout >= curr.timeout) {
+            do {
+                prev = curr;
+                curr = curr.next;
+            } while (curr && (curr.timeout <= timeout));
+            prev.next = task;
+            task.prev = prev;
+            if (curr) {
+                curr.prev = task;
+                task.next = curr;
+            }
+        }
+        else {
+            do {
+                prev = curr;
+                curr = curr.prev;
+            } while (curr && (curr.timeout > timeout));
+            prev.prev = task;
+            task.next = prev;
+            if (curr) {
+                curr.next = task;
+                task.prev = curr;
+            }
+            else {
+                this.start = task;
+            }
+        }
+    };
+    // Milliseconds when next task to be executed.
+    EventQueue.prototype.msNextTask = function () {
+        if (this.start) {
+            return this.start.timeout - Date.now();
+        }
+        return Infinity;
+    };
+    EventQueue.prototype.insert = function (task) {
+        task.queue = this;
+        var delay = task.delay;
+        var timeout = task.timeout = Date.now() + delay;
+        var pointers = this.pointers;
+        var pointer_index = findDelayIndex(delay);
+        var curr = pointers[pointer_index];
+        if (!curr) {
+            this.setPointer(pointer_index, task);
+            if (pointer_index) {
+                for (var i = pointer_index - 1; i >= 0; i--) {
+                    if (pointers[i]) {
+                        curr = pointers[i];
+                        break;
+                    }
+                }
+            }
+            if (!curr)
+                curr = this.start;
+            if (!curr) {
+                this.start = task;
+            }
+            else {
+                this.insertTask(curr, task);
+            }
+        }
+        else {
+            if (timeout >= curr.timeout) {
+                this.setPointer(pointer_index, task);
+            }
+            this.insertTask(curr, task);
+        }
+    };
+    // debug() {
+    //     var curr: Task = this.start;
+    //     if(!curr) return;
+    //     do {
+    //         console.log(curr.delay, curr.timeout);
+    //     } while(curr = curr.next);
+    // }
+    EventQueue.prototype.cancel = function (task) {
+        var prev = task.prev;
+        var next = task.next;
+        task.prev = task.next = null;
+        if (prev)
+            prev.next = next;
+        if (next)
+            next.prev = prev;
+        if (!prev) {
+            this.start = next;
+        }
+        if (task.pointer !== POINTER_NONE) {
+            var index = task.pointer;
+            if (index) {
+                this.pointers[index] = this.pointers[index - 1];
+            }
+            else {
+                this.pointers[index] = null;
+            }
+        }
+    };
+    // 1. Splice `this.activeQueue` for the beginning of the `this.macroQueue` up to the
+    //    very last Task that timed out.
+    // 2. In the process reset `this.pointers` which were sliced out.
+    EventQueue.prototype.sliceActiveQueue = function () {
+        var curr = this.start;
+        if (!curr)
+            return; // No events queued.
+        var time = Date.now();
+        var pointers = this.pointers;
+        for (var i = 0; i <= DELAY_LAST; i++) {
+            var pointer = pointers[i];
+            if (pointer) {
+                if (pointer.timeout <= time) {
+                    pointers[i] = null;
+                    // pointer.pointer = POINTER_NONE;
+                    curr = pointer;
+                }
+                else {
+                    break;
+                }
+            }
+        }
+        if (curr.timeout > time)
+            return;
+        var prev;
+        do {
+            prev = curr;
+            curr = curr.next;
+        } while (curr && (curr.timeout <= time));
+        prev.next = null;
+        if (curr)
+            curr.prev = null;
+        this.active = this.start;
+        this.start = curr;
+    };
+    EventQueue.prototype.cycle = function () {
+        // Crate new active queue
+        this.sliceActiveQueue();
+    };
+    // Pop next task to be executed.
+    EventQueue.prototype.pop = function () {
+        var task = this.active;
+        if (!task)
+            return null;
+        this.active = task.next;
+        return task;
+    };
+    return EventQueue;
+}());
+exports.EventQueue = EventQueue;
+var EventLoop = /** @class */ (function () {
+    function EventLoop() {
+        this.microQueue = null; // Micro-task queue: `process.nextTick`.
+        this.microQueueEnd = null; // The last task in micro-task queue.
+        this.refQueue = new EventQueue; // Events that keep process running.
+        this.unrefQueue = new EventQueue; // Optional events.
+        this.poll = new Poll;
+    }
+    EventLoop.prototype.shouldStop = function () {
+        if (!this.refQueue.start)
+            return true;
+        return false;
+    };
+    EventLoop.prototype.insertMicrotask = function (microtask) {
+        var last = this.microQueueEnd;
+        this.microQueueEnd = microtask;
+        if (!last) {
+            this.microQueue = microtask;
+        }
+        else {
+            last.next = microtask; // One-way list
+        }
+    };
+    EventLoop.prototype.insert = function (task) {
+        if (task.isRef)
+            this.refQueue.insert(task);
+        else
+            this.unrefQueue.insert(task);
+    };
+    EventLoop.prototype.start = function () {
+        function exec_task(task) {
+            // TODO: BTW, which one is faster? (1) `if(task.callback)` vs. (2) `noop()`
+            if (task.callback)
+                task.callback();
+        }
+        // THE LOOP
+        while (1) {
+            // Create new active queues
+            this.refQueue.cycle();
+            this.unrefQueue.cycle();
+            var refTask = this.refQueue.pop();
+            var unrefTask = this.unrefQueue.pop();
+            // Execute all macro tasks of the current cycle in the event loop.
+            var task;
+            while (refTask || unrefTask) {
+                if (refTask && unrefTask) {
+                    if (refTask.timeout < unrefTask.timeout) {
+                        refTask.exec();
+                        refTask = null;
+                    }
+                    else if (refTask.timeout > unrefTask.timeout) {
+                        unrefTask.exec();
+                        unrefTask = null;
+                    }
+                    else {
+                        // if(refTask.id <= unrefTask.id) {
+                        if (refTask.timeout <= unrefTask.timeout) {
+                            refTask.exec();
+                            refTask = null;
+                        }
+                        else {
+                            unrefTask.exec();
+                            unrefTask = null;
+                        }
+                    }
+                }
+                else {
+                    if (refTask) {
+                        refTask.exec();
+                        refTask = null;
+                    }
+                    else {
+                        unrefTask.exec();
+                        unrefTask = null;
+                    }
+                }
+                // Execute all micro tasks accumulated while executing this macro task.
+                var microtask;
+                do {
+                    microtask = this.microQueue;
+                    if (microtask) {
+                        if (microtask.callback)
+                            microtask.exec();
+                        this.microQueue = microtask.next;
+                    }
+                } while (this.microQueue);
+                this.microQueueEnd = null;
+                // Pop one more task to execute.
+                if (!refTask)
+                    refTask = this.refQueue.pop();
+                else
+                    unrefTask = this.unrefQueue.pop();
+            }
+            // Stop the program?
+            var havePollEvents = this.poll.hasRefs();
+            if (this.shouldStop() && !havePollEvents)
+                break;
+            // ----------------------------------------------------------------------------------
+            // TODO:
+            // By here we finished executing all the macro and micro tasks of the current cycle.
+            // Now we need to decide if we have immediate tasks to execute in the next cycle,
+            // or (if not) we can save CPU cycles by idling. We should use the `nanosleep`,
+            // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
+            //
+            // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
+            // we can use `sched_yield` here, if it is not available on some systems we just create a no-op
+            // shim for it.
+            //
+            // Now, `epoll` syscall is available only on Linux (other systems have different alternatives),
+            // so we don't use it here as-it-is but create an abstraction for it, so that a correct
+            // async mechanism can be used on each system.
+            //
+            // For timer tasks `setInterval` and `setTimeout` we know the exact time when we need
+            // to execute them, for `setImmediate` task we know as well that we have to execute it
+            // immediately. So, if there are only future timer tasks scheduled, we `nanosleep` just
+            // enough to wake up before the task has to be executed.
+            //
+            // The interesting part are async I/O tasks, which are of two types:
+            //
+            //  - Type 1: `process.asyscall` provided by thread pool
+            //  - Type 2: Async I/O provided by kernel using `epoll`
+            //
+            // If there are Type 1 tasks in queue (we should be able to detect that) then we cannot
+            // `nanosleep`, but if there are no immediate tasks to be executed we can `sched_yield`
+            // as it should be an order of magnitude faster than file I/O.
+            //
+            // If there are Type 2 tasks -- we can `epoll` in two ways: with or without a blocking timeout.
+            // We should detect if it is possible and use `epoll` with timeout which effectively
+            // idles the loop up until the timeout is reached or when new events are received.
+            // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
+            //
+            // Also, use `eventfd` to notify `epoll` from thread poll when task is completed.
+            var ref_ms = this.refQueue.msNextTask();
+            var unref_ms = this.unrefQueue.msNextTask();
+            var CAP = 1000000;
+            var ms = Math.min(ref_ms, unref_ms, CAP);
+            if (ms > 0) {
+                if (havePollEvents) {
+                    this.poll.wait(ms); // epoll_wait
+                }
+                else {
+                    var seconds = Math.floor(ms / 1000);
+                    var nanoseconds = (ms % 1000) * 1000000;
+                    index_1.nanosleep(seconds, nanoseconds);
+                }
+            }
+            else {
+                if (ms > 1) {
+                    index_1.sched_yield();
+                }
+            }
+        }
+    };
+    return EventLoop;
+}());
+exports.EventLoop = EventLoop;
+
+
+/***/ }),
 /* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -7179,11 +7179,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var libjs = __webpack_require__(2);
 var inotify_1 = __webpack_require__(20);
 var util = __webpack_require__(0);
-var pathModule = __webpack_require__(6);
+var pathModule = __webpack_require__(5);
 var events_1 = __webpack_require__(4);
 var buffer_1 = __webpack_require__(1);
 var static_buffer_1 = __webpack_require__(3);
-var stream_1 = __webpack_require__(7);
+var stream_1 = __webpack_require__(6);
 if (false) {
     exports.isFULLjs = true;
 }
@@ -8768,7 +8768,7 @@ StaticArrayBuffer.prototype.getAddress = function(offset) {
 
 // # x86_64 Linux
 Object.defineProperty(exports, "__esModule", { value: true });
-var typebase_1 = __webpack_require__(32);
+var typebase_1 = __webpack_require__(31);
 exports.PATH_MAX = 4096;
 exports.isLE = true;
 // The C `NULL` pointer:
@@ -8790,7 +8790,7 @@ exports.optval_t = exports.int32;
 exports.ipv4 = typebase_1.Type.define(4, function (offset) {
     if (offset === void 0) { offset = 0; }
     var buf = this;
-    var socket = __webpack_require__(33);
+    var socket = __webpack_require__(32);
     var octets = socket.Ipv4.type.unpack(buf, offset);
     return new socket.Ipv4(octets);
 }, function (data, offset) {
@@ -9157,6 +9157,231 @@ exports.SYS = {
 
 /***/ }),
 /* 11 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+var EventEmitter = __webpack_require__(4).EventEmitter;
+var eloop = __webpack_require__(7);
+
+
+if(!process)
+    throw Error('`process` global not defined by JS runtime.');
+
+
+// The most important method Kappa
+process.noop = function() {};
+
+
+process.on = EventEmitter.prototype.on.bind(process);
+process.emit = EventEmitter.prototype.emit.bind(process);
+
+
+process.title = 'Bamboo';
+
+process.release = {
+    name: 'Bamboo',
+    lts: '',
+    sourceUrl: '',
+    headersUrl: ''
+};
+
+
+// Node.js does not allow to overwrite this property, so
+// in Node.js it will hold the Node.js version.
+process.version = 'v1.0.0';
+process.platform = 'linux';
+process.moduleLoadList = []; // For compatibility with node.
+process.versions = {
+    bamboo: '1.0.0'
+};
+// process.arch = process.arch;
+// process.platform = process.platform;
+// process.release = process.release;
+process.argv = process.argv || [];
+process.execArgv = [];
+
+process.env = process.env || {
+        NODE_VERSION: '',
+        HOSTNAME: '',
+        TERM: '',
+        NPM_CONFIG_LOGLEVEL: '',
+        PATH: '',
+        PWD: '',
+        SHLVL: '',
+        HOME: '',
+        _: '',
+        OLDPWD: '',
+    };
+process.env.NODE_DEBUG = '*';
+
+process.features = {
+    debug: false,
+    uv: false,
+    ipv6: false,
+    tls_npn: false,
+    tls_sni: false,
+    tls_ocsp: false,
+    tls: false
+};
+process.execPath = process.execPath || '';
+process.config = {};
+// reallyExit: [Function: reallyExit],
+
+
+var libjs = __webpack_require__(2);
+
+process.pid = libjs.getpid();
+
+process.getgid = function() {
+    return libjs.getgid();
+};
+
+process.cwd = function() {
+    try {
+        return libjs.getcwd();
+    } catch(e) {
+        console.log(e);
+        console.log(e.stack);
+        return '.';
+    }
+};
+
+process.yield = function() {
+    libjs.sched_yield();
+};
+
+process.nanosleep = function(seconds, nanoseconds) {
+    libjs.nanosleep(seconds, nanoseconds);
+};
+
+
+
+process.hrtime = function hrtime() {
+
+};
+
+
+const fs = __webpack_require__(8);
+const STDOUT = 1;
+const STDERR = 2;
+process.stdout = new fs.SyncWriteStream(STDOUT);
+process.stderr = new fs.SyncWriteStream(STDERR);
+
+// abort: [Function: abort],
+// chdir: [Function: chdir],
+// umask: [Function: umask],
+// getuid: [Function: getuid],
+// geteuid: [Function: geteuid],
+// setuid: [Function: setuid],
+// seteuid: [Function: seteuid],
+// setgid: [Function: setgid],
+// setegid: [Function: setegid],
+// getgid: [Function: getgid],
+// getegid: [Function: getegid],
+// getgroups: [Function: getgroups],
+// setgroups: [Function: setgroups],
+// initgroups: [Function: initgroups],
+// hrtime: [Function: hrtime],
+// dlopen: [Function: dlopen],
+
+// uptime: [Function: uptime],
+// memoryUsage: [Function: memoryUsage],
+
+
+// _linkedBinding: [Function: _linkedBinding],
+// _setupDomainUse: [Function: _setupDomainUse],
+// _events:
+// { newListener: [Function],
+//     removeListener: [Function],
+//     SIGWINCH: [ [Function], [Function] ] },
+// _rawDebug: [Function],
+//     _eventsCount: 3,
+//     domain: null,
+//     _maxListeners: undefined,
+//     EventEmitter:
+// { [Function: EventEmitter]
+//     EventEmitter: [Circular],
+//         usingDomains: false,
+//     defaultMaxListeners: 10,
+//     init: [Function],
+//     listenerCount: [Function] },
+// _fatalException: [Function],
+//     _exiting: false,
+//     assert: [Function],
+//     config:
+// { target_defaults:
+// { cflags: [],
+//     default_configuration: 'Release',
+//     defines: [],
+//     include_dirs: [],
+//     libraries: [] },
+//     variables:
+//     { asan: 0,
+//         gas_version: '2.23',
+//         host_arch: 'x64',
+//         icu_data_file: 'icudt56l.dat',
+//         icu_data_in: '../../deps/icu/source/data/in/icudt56l.dat',
+//         icu_endianness: 'l',
+//         icu_gyp_path: 'tools/icu/icu-generic.gyp',
+//         icu_locales: 'en,root',
+//         icu_path: './deps/icu',
+//         icu_small: true,
+//         icu_ver_major: '56',
+//         node_byteorder: 'little',
+//         node_install_npm: true,
+//         node_prefix: '/',
+//         node_release_urlbase: 'https://nodejs.org/download/release/',
+//         node_shared_http_parser: false,
+//         node_shared_libuv: false,
+//         node_shared_openssl: false,
+//         node_shared_zlib: false,
+//         node_tag: '',
+//         node_use_dtrace: false,
+//         node_use_etw: false,
+//         node_use_lttng: false,
+//         node_use_openssl: true,
+//         node_use_perfctr: false,
+//         openssl_fips: '',
+//         openssl_no_asm: 0,
+//         target_arch: 'x64',
+//         uv_parent_path: '/deps/uv/',
+//         uv_use_dtrace: false,
+//         v8_enable_gdbjit: 0,
+//         v8_enable_i18n_support: 1,
+//         v8_no_strict_aliasing: 1,
+//         v8_optimized_debug: 0,
+//         v8_random_seed: 0,
+//         v8_use_snapshot: true,
+//         want_separate_host_toolset: 0 } },
+// nextTick: [Function: nextTick],
+// _tickCallback: [Function: _tickCallback],
+// _tickDomainCallback: [Function: _tickDomainCallback],
+// stdout: [Getter],
+//     stderr: [Getter],
+//     stdin: [Getter],
+//     openStdin: [Function],
+//     exit: [Function],
+//     kill: [Function],
+//     mainModule:
+// Module {
+//     id: '.',
+//         exports: {},
+//     parent: null,
+//         filename: '/share/full-js/lib/boot.js',
+//         loaded: false,
+//         children: [ [Object], [Object] ],
+//         paths:
+//     [ '/share/full-js/lib/node_modules',
+//         '/share/full-js/node_modules',
+//         '/share/node_modules',
+//         '/node_modules' ] } }
+
+/* harmony default export */ __webpack_exports__["default"] = (process);
+
+
+/***/ }),
+/* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -9166,7 +9391,7 @@ module.exports = Readable;
 Readable.ReadableState = ReadableState;
 
 const EE = __webpack_require__(4);
-const Stream = __webpack_require__(7);
+const Stream = __webpack_require__(6);
 const Buffer = __webpack_require__(1).Buffer;
 const util = __webpack_require__(0);
 const debug = util.debuglog('stream');
@@ -9258,7 +9483,7 @@ function ReadableState(options, stream) {
     this.encoding = null;
     if (options.encoding) {
         if (!StringDecoder)
-            StringDecoder = __webpack_require__(35).StringDecoder;
+            StringDecoder = __webpack_require__(33).StringDecoder;
         this.decoder = new StringDecoder(options.encoding);
         this.encoding = options.encoding;
     }
@@ -9378,7 +9603,7 @@ function needMoreData(state) {
 // backwards compatibility.
 Readable.prototype.setEncoding = function(enc) {
     if (!StringDecoder)
-        StringDecoder = __webpack_require__(35).StringDecoder;
+        StringDecoder = __webpack_require__(33).StringDecoder;
     this._readableState.decoder = new StringDecoder(enc);
     this._readableState.encoding = enc;
     return this;
@@ -10138,7 +10363,7 @@ function endReadableNT(state, stream) {
 
 
 /***/ }),
-/* 12 */
+/* 13 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10152,8 +10377,8 @@ module.exports = Writable;
 Writable.WritableState = WritableState;
 
 const util = __webpack_require__(0);
-const internalUtil = __webpack_require__(13);
-const Stream = __webpack_require__(7);
+const internalUtil = __webpack_require__(14);
+const Stream = __webpack_require__(6);
 const Buffer = __webpack_require__(1).Buffer;
 
 util.inherits(Writable, Stream);
@@ -10675,7 +10900,7 @@ function CorkedRequest(state) {
 
 
 /***/ }),
-/* 13 */
+/* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10777,7 +11002,7 @@ exports.assertCrypto = function(exports) {
 
 
 /***/ }),
-/* 14 */
+/* 15 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10791,8 +11016,8 @@ exports.assertCrypto = function(exports) {
 module.exports = Duplex;
 
 const util = __webpack_require__(0);
-const Readable = __webpack_require__(11);
-const Writable = __webpack_require__(12);
+const Readable = __webpack_require__(12);
+const Writable = __webpack_require__(13);
 
 util.inherits(Duplex, Readable);
 
@@ -10841,7 +11066,7 @@ function onEndNT(self) {
 
 
 /***/ }),
-/* 15 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10891,7 +11116,7 @@ function onEndNT(self) {
 
 module.exports = Transform;
 
-const Duplex = __webpack_require__(14);
+const Duplex = __webpack_require__(15);
 const util = __webpack_require__(0);
 util.inherits(Transform, Duplex);
 
@@ -11043,7 +11268,7 @@ function done(stream, er, data) {
 
 
 /***/ }),
-/* 16 */
+/* 17 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -11419,7 +11644,7 @@ assert.ifError = function(err) { if (err) throw err; };
 
 
 /***/ }),
-/* 17 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -11435,7 +11660,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var eloop_1 = __webpack_require__(5);
+var eloop_1 = __webpack_require__(7);
 // TODO: We can relax this to 53 bits, right?
 var TIMEOUT_MAX = 2147483647; // 2^31-1
 var Timeout = /** @class */ (function () {
@@ -11575,7 +11800,7 @@ exports.setMicroTask = setMicroTask;
 
 
 /***/ }),
-/* 18 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // This file is in `.js` because we set global variables here, but TypeScript
@@ -11638,7 +11863,7 @@ if(typeof StaticBuffer === 'undefined') {
 
 
 // Set-up `process` global.
-__webpack_require__(19);
+__webpack_require__(11);
 
 
 // Create global `console` object.
@@ -11646,14 +11871,14 @@ console = global.console = __webpack_require__(23);
 
 
 // The main event loop, attached to `process` as `loop` property.
-var eloop = __webpack_require__(5);
+var eloop = __webpack_require__(7);
 var EventLoop = eloop.EventLoop;
 var Task = eloop.Task;
 var loop = process.loop = new EventLoop;
 
 
 // Export timers as globals.
-var timers = __webpack_require__(17);
+var timers = __webpack_require__(18);
 setTimeout = timers.setTimeout;
 clearTimeout = timers.clearTimeout;
 setInterval = timers.setInterval;
@@ -11676,7 +11901,29 @@ task.callback = function() {
 
 
     // Create `process.asyscall` and `process.asyscall64`
-    __webpack_require__(51);
+    if(!process.asyscall) {
+        if(process.hasBinaryUtils && true) {
+            __webpack_require__(50);
+        } else {
+            // Create fake asynchronous system calls by just wrapping the
+            // synchronous version.
+            process.asyscall = function() {
+                var len = arguments.length - 1;
+                var args = new Array(len);
+                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var res = process.syscall.apply(null, args);
+                arguments[len](res);
+            };
+            process.asyscall64 = function() {
+                var len = arguments.length - 1;
+                var args = new Array(len);
+                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var res = process.syscall64.apply(null, args);
+                arguments[len](res);
+            };
+        }
+    }
+    
     if(false) {
         strace.overwriteAsync(process, 'asyscall', 'asyscall64');
     }
@@ -11685,7 +11932,7 @@ task.callback = function() {
     try {
         // Eval the file specified in first argument `full app.js`
         if(process.argv[1]) {
-            var path = __webpack_require__(6);
+            var path = __webpack_require__(5);
             var Module = __webpack_require__(24).Module;
             process.argv = process.argv.splice(1);
             process.argv[1] = path.resolve(process.argv[1]);
@@ -11706,228 +11953,6 @@ task.callback = function() {
 };
 loop.insert(task);
 loop.start();
-
-
-/***/ }),
-/* 19 */
-/***/ (function(module, exports, __webpack_require__) {
-
-var EventEmitter = __webpack_require__(4).EventEmitter;
-var eloop = __webpack_require__(5);
-
-
-if(!process)
-    throw Error('`process` global not defined by JS runtime.');
-
-
-// The most important method Kappa
-process.noop = function() {};
-
-
-process.on = EventEmitter.prototype.on.bind(process);
-process.emit = EventEmitter.prototype.emit.bind(process);
-
-
-process.title = 'full.js';
-
-process.release = {
-    name: 'full.js',
-    lts: '',
-    sourceUrl: '',
-    headersUrl: ''
-};
-
-
-// Node.js does not allow to overwrite this property, so
-// in Node.js it will hold the Node.js version.
-process.version = 'v1.0.0';
-process.platform = 'linux';
-process.moduleLoadList = []; // For compatibility with node.
-process.versions = {
-    full: '1.0.0'
-};
-// process.arch = process.arch;
-// process.platform = process.platform;
-// process.release = process.release;
-process.argv = process.argv || [];
-process.execArgv = [];
-
-process.env = process.env || {
-        NODE_VERSION: '',
-        HOSTNAME: '',
-        TERM: '',
-        NPM_CONFIG_LOGLEVEL: '',
-        PATH: '',
-        PWD: '',
-        SHLVL: '',
-        HOME: '',
-        _: '',
-        OLDPWD: '',
-    };
-process.env.NODE_DEBUG = '*';
-
-process.features = {
-    debug: false,
-    uv: false,
-    ipv6: false,
-    tls_npn: false,
-    tls_sni: false,
-    tls_ocsp: false,
-    tls: false
-};
-process.execPath = process.execPath || '';
-process.config = {};
-// reallyExit: [Function: reallyExit],
-
-
-var libjs = __webpack_require__(2);
-
-process.pid = libjs.getpid();
-
-process.getgid = function() {
-    return libjs.getgid();
-};
-
-process.cwd = function() {
-    try {
-        return libjs.getcwd();
-    } catch(e) {
-        console.log(e);
-        console.log(e.stack);
-        return '.';
-    }
-};
-
-process.yield = function() {
-    libjs.sched_yield();
-};
-
-process.nanosleep = function(seconds, nanoseconds) {
-    libjs.nanosleep(seconds, nanoseconds);
-};
-
-
-
-process.hrtime = function hrtime() {
-
-};
-
-
-var fs = __webpack_require__(8);
-var STDOUT = 1;
-process.stdout = process.stderr = new fs.SyncWriteStream(STDOUT);
-
-
-
-// abort: [Function: abort],
-// chdir: [Function: chdir],
-// umask: [Function: umask],
-// getuid: [Function: getuid],
-// geteuid: [Function: geteuid],
-// setuid: [Function: setuid],
-// seteuid: [Function: seteuid],
-// setgid: [Function: setgid],
-// setegid: [Function: setegid],
-// getgid: [Function: getgid],
-// getegid: [Function: getegid],
-// getgroups: [Function: getgroups],
-// setgroups: [Function: setgroups],
-// initgroups: [Function: initgroups],
-// hrtime: [Function: hrtime],
-// dlopen: [Function: dlopen],
-
-// uptime: [Function: uptime],
-// memoryUsage: [Function: memoryUsage],
-
-
-// _linkedBinding: [Function: _linkedBinding],
-// _setupDomainUse: [Function: _setupDomainUse],
-// _events:
-// { newListener: [Function],
-//     removeListener: [Function],
-//     SIGWINCH: [ [Function], [Function] ] },
-// _rawDebug: [Function],
-//     _eventsCount: 3,
-//     domain: null,
-//     _maxListeners: undefined,
-//     EventEmitter:
-// { [Function: EventEmitter]
-//     EventEmitter: [Circular],
-//         usingDomains: false,
-//     defaultMaxListeners: 10,
-//     init: [Function],
-//     listenerCount: [Function] },
-// _fatalException: [Function],
-//     _exiting: false,
-//     assert: [Function],
-//     config:
-// { target_defaults:
-// { cflags: [],
-//     default_configuration: 'Release',
-//     defines: [],
-//     include_dirs: [],
-//     libraries: [] },
-//     variables:
-//     { asan: 0,
-//         gas_version: '2.23',
-//         host_arch: 'x64',
-//         icu_data_file: 'icudt56l.dat',
-//         icu_data_in: '../../deps/icu/source/data/in/icudt56l.dat',
-//         icu_endianness: 'l',
-//         icu_gyp_path: 'tools/icu/icu-generic.gyp',
-//         icu_locales: 'en,root',
-//         icu_path: './deps/icu',
-//         icu_small: true,
-//         icu_ver_major: '56',
-//         node_byteorder: 'little',
-//         node_install_npm: true,
-//         node_prefix: '/',
-//         node_release_urlbase: 'https://nodejs.org/download/release/',
-//         node_shared_http_parser: false,
-//         node_shared_libuv: false,
-//         node_shared_openssl: false,
-//         node_shared_zlib: false,
-//         node_tag: '',
-//         node_use_dtrace: false,
-//         node_use_etw: false,
-//         node_use_lttng: false,
-//         node_use_openssl: true,
-//         node_use_perfctr: false,
-//         openssl_fips: '',
-//         openssl_no_asm: 0,
-//         target_arch: 'x64',
-//         uv_parent_path: '/deps/uv/',
-//         uv_use_dtrace: false,
-//         v8_enable_gdbjit: 0,
-//         v8_enable_i18n_support: 1,
-//         v8_no_strict_aliasing: 1,
-//         v8_optimized_debug: 0,
-//         v8_random_seed: 0,
-//         v8_use_snapshot: true,
-//         want_separate_host_toolset: 0 } },
-// nextTick: [Function: nextTick],
-// _tickCallback: [Function: _tickCallback],
-// _tickDomainCallback: [Function: _tickDomainCallback],
-// stdout: [Getter],
-//     stderr: [Getter],
-//     stdin: [Getter],
-//     openStdin: [Function],
-//     exit: [Function],
-//     kill: [Function],
-//     mainModule:
-// Module {
-//     id: '.',
-//         exports: {},
-//     parent: null,
-//         filename: '/share/full-js/lib/boot.js',
-//         loaded: false,
-//         children: [ [Object], [Object] ],
-//         paths:
-//     [ '/share/full-js/lib/node_modules',
-//         '/share/full-js/node_modules',
-//         '/share/node_modules',
-//         '/node_modules' ] } }
-
 
 
 /***/ }),
@@ -12152,7 +12177,7 @@ BufferList.prototype.concat = function(n) {
 
 module.exports = PassThrough;
 
-const Transform = __webpack_require__(15);
+const Transform = __webpack_require__(16);
 const util = __webpack_require__(0);
 util.inherits(PassThrough, Transform);
 
@@ -12276,7 +12301,7 @@ Console.prototype.trace = function trace() {
 
 Console.prototype.assert = function(expression) {
     if (!expression) {
-        __webpack_require__(16).ok(false, util.format.apply(null, arguments));
+        __webpack_require__(17).ok(false, util.format.apply(null, arguments));
     }
 };
 
@@ -12305,12 +12330,12 @@ module.exports.Console = Console;
 
 var NativeModule = __webpack_require__(25).NativeModule;
 var util = __webpack_require__(0);
-var internalModule = __webpack_require__(28);
-var internalUtil = __webpack_require__(13);
-var vm = __webpack_require__(31);
-var assert = __webpack_require__(16).ok;
+var internalModule = __webpack_require__(27);
+var internalUtil = __webpack_require__(14);
+var vm = __webpack_require__(30);
+var assert = __webpack_require__(17).ok;
 var fs = __webpack_require__(8);
-var path = __webpack_require__(6);
+var path = __webpack_require__(5);
 var libjs = __webpack_require__(2);
 
 // const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -13164,7 +13189,7 @@ NativeModule.prototype.compile = function() {
         //     case 'https': exports = require('./https'); break;
         // }
         // this.exports = exports;
-        this.exports = __webpack_require__(54)("./" + this.id);
+        this.exports = __webpack_require__(53)("./" + this.id);
 
         this.loaded = true;
     } finally {
@@ -13193,7 +13218,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = __webpack_require__(2);
 var inotify_1 = __webpack_require__(20);
 var extend = __webpack_require__(0).extend;
-var pathModule = __webpack_require__(6);
+var pathModule = __webpack_require__(5);
 var buffer_1 = __webpack_require__(1);
 var static_buffer_1 = __webpack_require__(3);
 if (false) {
@@ -14422,258 +14447,6 @@ function writeFile(file, data, options, cb) {
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
-
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-var events_1 = __webpack_require__(4);
-var buffer_1 = __webpack_require__(1);
-var util = __webpack_require__(0);
-var errnoException = util._errnoException;
-var exceptionWithHostPort = util._exceptionWithHostPort;
-function lookup4(address, callback) {
-    callback();
-}
-function lookup6(address, callback) {
-    callback();
-}
-function sliceBuffer(buffer, offset, length) {
-    if (typeof buffer === 'string')
-        buffer = buffer_1.Buffer.from(buffer);
-    else if (!(buffer instanceof buffer_1.Buffer))
-        throw new TypeError('First argument must be a buffer or string');
-    offset = offset >>> 0;
-    length = length >>> 0;
-    return buffer.slice(offset, offset + length);
-}
-function fixBufferList(list) {
-    var newlist = new Array(list.length);
-    for (var i = 0, l = list.length; i < l; i++) {
-        var buf = list[i];
-        if (typeof buf === 'string')
-            newlist[i] = buffer_1.Buffer.from(buf);
-        else if (!(buf instanceof buffer_1.Buffer))
-            return null;
-        else
-            newlist[i] = buf;
-    }
-    return newlist;
-}
-var Socket = /** @class */ (function (_super) {
-    __extends(Socket, _super);
-    function Socket(type, listener) {
-        var _this = _super.call(this) || this;
-        _this.bindState = 0 /* UNBOUND */;
-        _this.reuseAddr = false;
-        var isIP6 = type === 'udp6';
-        _this.sock = process.loop.poll.createUdpSocket(isIP6);
-        _this.lookup = isIP6 ? lookup6 : lookup4;
-        if (listener)
-            _this.on('message', listener);
-        _this.sock.ondata = function (msg, from) {
-            _this.emit('message', msg, from);
-        };
-        _this.sock.onstart = function () {
-        };
-        _this.sock.onstop = function () {
-        };
-        _this.sock.onerror = function () {
-        };
-        return _this;
-    }
-    Socket.prototype.send = function (msg, a, b, c, d, e) {
-        var _this = this;
-        var port;
-        var address;
-        var callback;
-        var typeofb = typeof b;
-        if (typeofb[0] === 'n') {
-            var offset = a;
-            var length = b;
-            msg = sliceBuffer(msg, offset, length);
-            port = c;
-            address = d;
-            callback = e;
-        }
-        else if (typeofb[1] === 't') {
-            port = a;
-            address = b;
-            callback = c;
-        }
-        else
-            throw TypeError('3rd arguments must be length or address');
-        var list;
-        if (!Array.isArray(msg)) {
-            if (typeof msg === 'string') {
-                list = [buffer_1.Buffer.from(msg)];
-            }
-            else if (!(msg instanceof buffer_1.Buffer)) {
-                throw new TypeError('First argument must be a buffer or a string');
-            }
-            else {
-                list = [msg];
-            }
-        }
-        else if (!(list = fixBufferList(msg))) {
-            throw new TypeError('Buffer list arguments must be buffers or strings');
-        }
-        port = port >>> 0;
-        if (port === 0 || port > 65535)
-            throw new RangeError('Port should be > 0 and < 65536');
-        if (typeof callback !== 'function')
-            callback = undefined;
-        // if (self._bindState == BIND_STATE_UNBOUND)
-        //     self.bind({port: 0, exclusive: true}, null);
-        // TODO: Why send nothing, we need this?
-        if (list.length === 0)
-            list.push(new buffer_1.Buffer(0));
-        // If the socket hasn't been bound yet, push the outbound packet onto the
-        // send queue and send after binding is complete.
-        // if (self._bindState != BIND_STATE_BOUND) {
-        //     enqueue(self, self.send.bind(self, list, port, address, callback));
-        //     return;
-        // }
-        this.lookup(address, function (err, ip) {
-            var err = _this.sock.send(list[0], address, port);
-            if (callback)
-                callback(err);
-        });
-    };
-    Socket.prototype.address = function () {
-    };
-    Socket.prototype.bind = function (a, b, c) {
-        var _this = this;
-        var port;
-        var address;
-        var exclusive = false;
-        var callback;
-        if (typeof a === 'number') {
-            port = a;
-            if (typeof address === 'string') {
-                address = b;
-                callback = c;
-            }
-            else {
-                callback = b;
-            }
-        }
-        else if ((a !== null) && (typeof a === 'object')) {
-            port = a.port;
-            address = a.address || '';
-            exclusive = !!a.exclusive;
-            callback = b;
-        }
-        else
-            throw TypeError('Invalid bind() arguments.');
-        // self._healthCheck();
-        if (this.bindState !== 0 /* UNBOUND */)
-            throw Error('Socket is already bound');
-        this.bindState = 1 /* BINDING */;
-        // Defaulting address for bind to all interfaces.
-        if (!address) {
-            if (this.lookup === lookup4)
-                address = '0.0.0.0';
-            else
-                address = '::';
-        }
-        this.lookup(address, function (lookup_err, ip) {
-            if (lookup_err) {
-                _this.bindState = 0 /* UNBOUND */;
-                _this.emit('error', lookup_err);
-                return;
-            }
-            // var flags = 0;
-            // if (self._reuseAddr)
-            //     flags |= UV_UDP_REUSEADDR;
-            if (!_this.sock)
-                return; // handle has been closed in the mean time
-            var err = _this.sock.bind(port || 0, ip);
-            if (err) {
-                var ex = exceptionWithHostPort(err, 'bind', ip, port);
-                _this.emit('error', ex);
-                _this.bindState = 0 /* UNBOUND */;
-                return;
-            }
-            // TODO: We need this?
-            // this.fd = -42; // compatibility hack
-            _this.bindState = 2 /* BOUND */;
-            _this.emit('listening');
-            if (typeof callback === 'function')
-                callback();
-        });
-        return this;
-    };
-    Socket.prototype.close = function (callback) {
-        this.sock.stop();
-    };
-    Socket.prototype.addMembership = function (multicastAddress, multicastInterface) {
-    };
-    Socket.prototype.dropMembership = function (multicastAddress, multicastInterface) {
-    };
-    Socket.prototype.setBroadcast = function (flag) {
-        var res = this.sock.setBroadcast(flag);
-        if (res < 0)
-            throw errnoException(res, 'setBroadcast');
-    };
-    Socket.prototype.setMulticastLoopback = function (flag) {
-        var res = this.sock.setMulticastLoop(flag);
-        if (res < 0)
-            throw errnoException(res, 'setMulticastLoopback');
-        return flag;
-    };
-    Socket.prototype.setTTL = function (ttl) {
-        if (typeof ttl !== 'number')
-            throw TypeError('Argument must be a number');
-        var res = this.sock.setTtl(ttl);
-        if (res < 0)
-            throw errnoException(res, 'setTTL');
-        return ttl;
-    };
-    Socket.prototype.setMulticastTTL = function (ttl) {
-        if (typeof ttl !== 'number')
-            throw new TypeError('Argument must be a number');
-        var err = this.sock.setMulticastTtl(ttl);
-        if (err < 0)
-            throw errnoException(err, 'setMulticastTTL');
-        return ttl;
-    };
-    Socket.prototype.ref = function () {
-        this.sock.ref();
-    };
-    Socket.prototype.unref = function () {
-        this.sock.unref();
-    };
-    return Socket;
-}(events_1.EventEmitter));
-exports.Socket = Socket;
-function createSocket(type, callback) {
-    var socket;
-    if (typeof type === 'string')
-        socket = new Socket(type, callback);
-    else if ((type !== null) && (typeof type === 'object')) {
-        socket = new Socket(type.type, callback);
-        socket.reuseAddr = !!type.reuseAddr;
-    }
-    else
-        throw TypeError('Invalid type argument.');
-    return socket;
-}
-exports.createSocket = createSocket;
-
-
-/***/ }),
-/* 28 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
 var require;
 
 exports = module.exports = {
@@ -14749,8 +14522,8 @@ function addBuiltinLibsToObject(object) {
 };
 
     Object.defineProperty(object, name, {
-            get: function() {
-                var r = require;
+        get: function() {
+            var r = require;
             var lib = !(function webpackMissingModule() { var e = new Error("Cannot find module \".\""); e.code = 'MODULE_NOT_FOUND'; throw e; }());
 
     // Disable the current getter/setter and set up a new
@@ -14774,7 +14547,7 @@ function addBuiltinLibsToObject(object) {
 
 
 /***/ }),
-/* 29 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15292,7 +15065,7 @@ module.exports = punycode;
 
 
 /***/ }),
-/* 30 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15711,7 +15484,7 @@ function decodeStr(s, decoder) {
 
 
 /***/ }),
-/* 31 */
+/* 30 */
 /***/ (function(module, exports) {
 
 // Taken from https://github.com/substack/vm-browserify
@@ -15874,7 +15647,7 @@ exports.runInThisContext = function(code) {
 
 
 /***/ }),
-/* 32 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15984,7 +15757,7 @@ exports.Struct = Struct;
 
 
 /***/ }),
-/* 33 */
+/* 32 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -16000,7 +15773,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var typebase_1 = __webpack_require__(32);
+var typebase_1 = __webpack_require__(31);
 var buffer_1 = __webpack_require__(1);
 var x86_64_linux_1 = __webpack_require__(10);
 function flip(buf, offset, len) {
@@ -16102,7 +15875,19 @@ exports.Ipv6 = Ipv6;
 
 
 /***/ }),
+/* 33 */
+/***/ (function(module, exports) {
+
+module.exports = require("string_decoder");
+
+/***/ }),
 /* 34 */
+/***/ (function(module, exports) {
+
+throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo-core/src/lib/buffer.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:29:12)");
+
+/***/ }),
+/* 35 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -16118,902 +15903,244 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var libjs = __webpack_require__(2);
-var static_buffer_1 = __webpack_require__(3);
-var event_1 = __webpack_require__(49);
-var CHUNK = 11;
-var Socket = /** @class */ (function () {
-    function Socket() {
-        this.poll = null;
-        this.fd = 0; // socket` file descriptor
-        this.connected = false;
-        this.reffed = false;
-        this.onstart = event_1.noop; // Maps to "listening" event.
-        this.onstop = event_1.noop; // Maps to "close" event.
-        this.ondata = event_1.noop; // Maps to "message" event.
-        // TODO: Synchronous first level errors: do we (1) `return`, (2) `throw`, or (3) `.onerror()` them?
-        this.onerror = event_1.noop; // Maps to "error" event.
-    }
-    Socket.prototype.start = function () {
-        this.fd = libjs.socket(2 /* INET */, this.type, 0);
-        if (this.fd < 0)
-            return Error("Could not create scoket: errno = " + this.fd);
-        // Socket is not a file, we just created the file descriptor for it, flags
-        // for this file descriptor are set to 0 anyways, so we just overwrite 'em,
-        // no need to fetch them and OR'em.
-        var fcntl = libjs.fcntl(this.fd, 4 /* SETFL */, 2048 /* O_NONBLOCK */);
-        if (fcntl < 0)
-            return Error("Could not make socket non-blocking: errno = " + fcntl);
-    };
-    Socket.prototype.stop = function () {
-        // TODO: When closing fd, it gets removed from `epoll` automatically, right?
-        if (this.fd) {
-            // TODO: Is socket `close` non-blocking, so we just use `close`.
-            libjs.close(this.fd);
-            // libjs.closeAsync(this.fd, noop);
-            this.fd = 0;
-        }
-        this.onstop();
-    };
-    return Socket;
-}());
-exports.Socket = Socket;
-var SocketUdp4 = /** @class */ (function (_super) {
-    __extends(SocketUdp4, _super);
-    function SocketUdp4() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.type = 2 /* DGRAM */;
-        _this.isIPv4 = true;
-        return _this;
-        // setBroadcast(on: boolean) {
-        //     return this.setOption(libjs.IPPROTO.SOCKET, libjs.IP.BROADCAST, on ? 1 : 0);
-        // }
-    }
-    SocketUdp4.prototype.start = function () {
-        var err = _super.prototype.start.call(this);
-        if (err)
-            return err;
-        var fd = this.fd;
-        var event = {
-            // TODO: Do we need `EPOLLOUT` for dgram sockets, or they are ready for writing immediately?
-            // events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
-            events: 1 /* EPOLLIN */,
-            data: [fd, 0],
-        };
-        var ctl = libjs.epoll_ctl(this.poll.epfd, 1 /* ADD */, fd, event);
-        if (ctl < 0)
-            return Error("Could not add epoll events: errno = " + ctl);
-    };
-    SocketUdp4.prototype.send = function (buf, ip, port) {
-        var addr = {
-            sin_family: 2 /* INET */,
-            sin_port: libjs.hton16(port),
-            sin_addr: {
-                s_addr: new libjs.Ipv4(ip),
-            },
-            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
-        };
-        // Make sure socket is non-blocking and don't rise `SIGPIPE` signal if the other end is not receiving.
-        var flags = 64 /* DONTWAIT */ | 16384 /* NOSIGNAL */;
-        var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
-        if (res < 0) {
-            if (-res == 11 /* EAGAIN */) {
-                // This just means, we executed the send *asynchronously*, so no worries.
-                return;
-            }
-            else {
-                return Error("sendto error, errno = " + res);
-                // return res;
-            }
-        }
-    };
-    SocketUdp4.prototype.setOption = function (level, option, value) {
-        var buf = libjs.optval_t.pack(value);
-        return libjs.setsockopt(this.fd, level, option, buf);
-    };
-    SocketUdp4.prototype.bind = function (port, ip, reuse) {
-        if (ip === void 0) { ip = '0.0.0.0'; }
-        if (reuse) {
-            var reuseRes = this.setOption(65535 /* SOCKET */, 4 /* REUSEADDR */, 1);
-            if (reuseRes < 0)
-                return reuseRes;
-        }
-        var addr = {
-            sin_family: 2 /* INET */,
-            sin_port: libjs.hton16(port),
-            sin_addr: {
-                s_addr: new libjs.Ipv4(ip),
-            },
-            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
-        };
-        var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
-        if (res < 0)
-            return res;
-        this.reffed = true;
-        this.poll.refs++;
-    };
-    SocketUdp4.prototype.update = function (events) {
-        // console.log('events', events);
-        // TODO: Do we need this or UDP sockets are automatically writable after `bind()`.
-        // if(events & libjs.EPOLL_EVENTS.EPOLLOUT) {
-        //     console.log(this.fd, 'EPOLLOUT');
-        //
-        //     this.connected = true;
-        //
-        //     var event: libjs.epoll_event = {
-        //         events: libjs.EPOLL_EVENTS.EPOLLIN,
-        //         data: [this.fd, 0],
-        //     };
-        //     var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event);
-        //     if(res < 0) this.onerror(Error(`Could not remove write listener: ${res}`));
-        //
-        //     this.onstart();
-        // }
-        if ((events & 1 /* EPOLLIN */) || (events & 2 /* EPOLLPRI */)) {
-            // console.log(this.fd, 'EPOLLIN');
-            do {
-                var addrlen = libjs.sockaddr_in.size;
-                var buf = new static_buffer_1.StaticBuffer(CHUNK + addrlen + 4);
-                // var data = new StaticBuffer(CHUNK);
-                var data = buf.slice(0, CHUNK);
-                // var addr = new StaticBuffer(libjs.sockaddr_in.size);
-                var addr = buf.slice(CHUNK, CHUNK + addrlen);
-                // var addrlenBuf = new StaticBuffer(4);
-                var addrlenBuf = buf.slice(CHUNK + addrlen);
-                libjs.int32.pack(libjs.sockaddr_in.size, addrlenBuf);
-                var bytes = libjs.recvfrom(this.fd, data, CHUNK, 0, addr, addrlenBuf);
-                if (bytes < -1) {
-                    this.onerror(Error("Error reading data: " + bytes));
-                    break;
-                }
-                else {
-                    var retAddrLen = libjs.int32.unpack(addrlenBuf);
-                    var addrStruct = libjs.sockaddr_in.unpack(addr);
-                    var from = {
-                        address: addrStruct.sin_addr.s_addr.toString(),
-                        family: retAddrLen === addrlen ? 'IPv4' : 'IPv6',
-                        port: addrStruct.sin_port,
-                        size: bytes,
-                    };
-                    this.ondata(buf.slice(0, bytes), from);
-                }
-            } while (bytes === CHUNK);
-        }
-        if (events & 8 /* EPOLLERR */) {
-            // console.log(this.fd, 'EPOLLERR');
-            this.onerror(Error("Some error on " + this.fd));
-        }
-        if (events & 8192 /* EPOLLRDHUP */) {
-            // console.log(this.fd, 'EPOLLRDHUP');
-        }
-        if (events & 16 /* EPOLLHUP */) {
-            // console.log(this.fd, 'EPOLLHUP');
-        }
-    };
-    SocketUdp4.prototype.setTtl = function (ttl) {
-        if (ttl < 1 || ttl > 255)
-            return -22 /* EINVAL */;
-        return this.setOption(0 /* IP */, 2 /* TTL */, ttl);
-    };
-    SocketUdp4.prototype.setMulticastTtl = function (ttl) {
-        return this.setOption(0 /* IP */, 33 /* MULTICAST_TTL */, ttl);
-    };
-    SocketUdp4.prototype.setMulticastLoop = function (on) {
-        return this.setOption(0 /* IP */, 34 /* MULTICAST_LOOP */, on ? 1 : 0);
-    };
-    return SocketUdp4;
-}(Socket));
-exports.SocketUdp4 = SocketUdp4;
-var SocketUdp6 = /** @class */ (function (_super) {
-    __extends(SocketUdp6, _super);
-    function SocketUdp6() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.isIPv4 = false;
-        return _this;
-    }
-    SocketUdp6.prototype.setTtl = function (ttl) {
-        if (ttl < 1 || ttl > 255)
-            return -22 /* EINVAL */;
-        return this.setOption(41 /* IPV6 */, 16 /* UNICAST_HOPS */, ttl);
-    };
-    SocketUdp6.prototype.setMulticastTtl = function (ttl) {
-        return this.setOption(41 /* IPV6 */, 18 /* MULTICAST_HOPS */, ttl);
-    };
-    SocketUdp6.prototype.setMulticastLoop = function (on) {
-        return this.setOption(41 /* IPV6 */, 19 /* MULTICAST_LOOP */, on ? 1 : 0);
-    };
-    return SocketUdp6;
-}(SocketUdp4));
-exports.SocketUdp6 = SocketUdp6;
-var SocketTcp = /** @class */ (function (_super) {
-    __extends(SocketTcp, _super);
-    function SocketTcp() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.type = 1 /* STREAM */;
-        _this.connected = false;
-        return _this;
-    }
-    SocketTcp.prototype.connect = function (opts) {
-        // on read check for:
-        // EAGAINN and EWOULDBLOCK
-        var addr_in = {
-            sin_family: 2 /* INET */,
-            sin_port: libjs.hton16(opts.port),
-            sin_addr: {
-                s_addr: new libjs.Ipv4(opts.host),
-            },
-            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
-        };
-        var res = libjs.connect(this.fd, addr_in);
-        // Everything is OK, we are connecting...
-        if (res == -115 /* EINPROGRESS */) {
-            this.poll(); // Start event loop.
-            return;
-        }
-        // Error occured.
-        if (res < 0)
-            throw Error("Could no connect: " + res);
-        // TODO: undefined behaviour.
-        throw Error('Something went not according to plan.');
-    };
-    // This function has been called by the event loop.
-    SocketTcp.prototype.onRead = function () {
-    };
-    SocketTcp.prototype.write = function (data) {
-        var sb = static_buffer_1.StaticBuffer.from(data + '\0');
-        var res = libjs.write(this.fd, sb);
-        return res;
-    };
-    return SocketTcp;
-}(Socket));
-exports.SocketTcp = SocketTcp;
-// export class EpollPool extends Pool {
-var Poll = /** @class */ (function () {
-    function Poll() {
-        this.socks = {};
-        this.refs = 0;
-        // `epoll` file descriptor
-        this.epfd = 0;
-        this.onerror = event_1.noop;
-        this.maxEvents = 10;
-        this.eventSize = libjs.epoll_event.size;
-        this.eventBuf = static_buffer_1.StaticBuffer.alloc(this.maxEvents * this.eventSize, 'rw');
-        this.epfd = libjs.epoll_create1(0);
-        if (this.epfd < 0)
-            throw Error("Could not create epoll fd: errno = " + this.epfd);
-    }
-    Poll.prototype.wait = function (timeout) {
-        var EVENT_SIZE = this.eventSize;
-        var evbuf = this.eventBuf;
-        var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
-        if (waitres > 0) {
-            // console.log(waitres);
-            // evbuf.print();
-            // console.log(this.socks);
-            for (var i = 0; i < waitres; i++) {
-                var event = libjs.epoll_event.unpack(evbuf, i * EVENT_SIZE);
-                // console.log(event);
-                var fd = event.data[0];
-                var socket = this.socks[fd];
-                if (socket) {
-                    socket.update(event.events);
-                }
-                else {
-                    this.onerror(Error("Socket not in pool: " + fd));
-                }
-            }
-        }
-        else if (waitres < 0) {
-            this.onerror(Error("Error while waiting for connection: " + waitres));
-        }
-        // Hook to the global event loop.
-        setTimeout(this.wait.bind(this), 1000);
-    };
-    Poll.prototype.hasRefs = function () {
-        return !!this.refs;
-    };
-    Poll.prototype.createUdpSocket = function (udp6) {
-        var sock = !udp6 ? new SocketUdp4 : new SocketUdp6;
-        sock.poll = this;
-        var err = sock.start();
-        this.socks[sock.fd] = sock;
-        if (err)
-            return err;
-        else
-            return sock;
-    };
-    return Poll;
-}());
-exports.Poll = Poll;
-
-
-/***/ }),
-/* 35 */
-/***/ (function(module, exports) {
-
-module.exports = require("string_decoder");
-
-/***/ }),
-/* 36 */
-/***/ (function(module, exports) {
-
-throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo/src/lib/buffer.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:29:12)");
-
-/***/ }),
-/* 37 */
-/***/ (function(module, exports) {
-
-/*
-'use strict';
-
-const assert = require('assert');
-const Buffer = require('buffer').Buffer;
-const util = require('util');
-const EventEmitter = require('events');
-const UV_UDP_REUSEADDR = process.binding('constants').os.UV_UDP_REUSEADDR;
-
-const UDP = process.binding('udp_wrap').UDP;
-const SendWrap = process.binding('udp_wrap').SendWrap;
-
-const BIND_STATE_UNBOUND = 0;
-const BIND_STATE_BINDING = 1;
-const BIND_STATE_BOUND = 2;
-
-// lazily loaded
-var cluster = null;
-var dns = null;
-
-const errnoException = util._errnoException;
-const exceptionWithHostPort = util._exceptionWithHostPort;
-
-function lookup(address, family, callback) {
-    if (!dns)
-        dns = require('dns');
-
-    return dns.lookup(address, family, callback);
-}
-
-
+var events_1 = __webpack_require__(4);
+var buffer_1 = __webpack_require__(1);
+var process_1 = __webpack_require__(11);
+var util = __webpack_require__(0);
+var errnoException = util._errnoException;
+var exceptionWithHostPort = util._exceptionWithHostPort;
 function lookup4(address, callback) {
-    return lookup(address || '127.0.0.1', 4, callback);
+    callback();
 }
-
-
 function lookup6(address, callback) {
-    return lookup(address || '::1', 6, callback);
+    callback();
 }
-
-
-function newHandle(type) {
-    if (type == 'udp4') {
-        const handle = new UDP();
-        handle.lookup = lookup4;
-        return handle;
-    }
-
-    if (type == 'udp6') {
-        const handle = new UDP();
-        handle.lookup = lookup6;
-        handle.bind = handle.bind6;
-        handle.send = handle.send6;
-        return handle;
-    }
-
-    if (type == 'unix_dgram')
-        throw new Error('"unix_dgram" type sockets are not supported any more');
-
-    throw new Error('Bad socket type specified. Valid types are: udp4, udp6');
-}
-
-
-exports._createSocketHandle = function(address, port, addressType, fd, flags) {
-    // Opening an existing fd is not supported for UDP handles.
-    assert(typeof fd !== 'number' || fd < 0);
-
-    var handle = newHandle(addressType);
-
-    if (port || address) {
-        var err = handle.bind(address, port || 0, flags);
-        if (err) {
-            handle.close();
-            return err;
-        }
-    }
-
-    return handle;
-};
-
-
-function Socket(type, listener) {
-    EventEmitter.call(this);
-
-    if (typeof type === 'object') {
-        var options = type;
-        type = options.type;
-    }
-
-    var handle = newHandle(type);
-    handle.owner = this;
-
-    this._handle = handle;
-    this._receiving = false;
-    this._bindState = BIND_STATE_UNBOUND;
-    this.type = type;
-    this.fd = null; // compatibility hack
-
-    // If true - UV_UDP_REUSEADDR flag will be set
-    this._reuseAddr = options && options.reuseAddr;
-
-    if (typeof listener === 'function')
-        this.on('message', listener);
-}
-util.inherits(Socket, EventEmitter);
-exports.Socket = Socket;
-
-
-exports.createSocket = function(type, listener) {
-    return new Socket(type, listener);
-};
-
-
-function startListening(socket) {
-    socket._handle.onmessage = onMessage;
-    // Todo: handle errors
-    socket._handle.recvStart();
-    socket._receiving = true;
-    socket._bindState = BIND_STATE_BOUND;
-    socket.fd = -42; // compatibility hack
-
-    socket.emit('listening');
-}
-
-function replaceHandle(self, newHandle) {
-
-    // Set up the handle that we got from master.
-    newHandle.lookup = self._handle.lookup;
-    newHandle.bind = self._handle.bind;
-    newHandle.send = self._handle.send;
-    newHandle.owner = self;
-
-    // Replace the existing handle by the handle we got from master.
-    self._handle.close();
-    self._handle = newHandle;
-}
-
-Socket.prototype.bind = function(port_ /!*, address, callback*!/) {
-    var self = this;
-    let port = port_;
-
-    self._healthCheck();
-
-    if (this._bindState != BIND_STATE_UNBOUND)
-        throw new Error('Socket is already bound');
-
-    this._bindState = BIND_STATE_BINDING;
-
-    if (typeof arguments[arguments.length - 1] === 'function')
-        self.once('listening', arguments[arguments.length - 1]);
-
-    if (port instanceof UDP) {
-        replaceHandle(self, port);
-        startListening(self);
-        return self;
-    }
-
-    var address;
-    var exclusive;
-
-    if (port !== null && typeof port === 'object') {
-        address = port.address || '';
-        exclusive = !!port.exclusive;
-        port = port.port;
-    } else {
-        address = typeof arguments[1] === 'function' ? '' : arguments[1];
-        exclusive = false;
-    }
-
-    // defaulting address for bind to all interfaces
-    if (!address && self._handle.lookup === lookup4) {
-        address = '0.0.0.0';
-    } else if (!address && self._handle.lookup === lookup6) {
-        address = '::';
-    }
-
-    // resolve address first
-    self._handle.lookup(address, function(err, ip) {
-        if (err) {
-            self._bindState = BIND_STATE_UNBOUND;
-            self.emit('error', err);
-            return;
-        }
-
-        if (!cluster)
-            cluster = require('cluster');
-
-        var flags = 0;
-        if (self._reuseAddr)
-            flags |= UV_UDP_REUSEADDR;
-
-        if (cluster.isWorker && !exclusive) {
-            function onHandle(err, handle) {
-                if (err) {
-                    var ex = exceptionWithHostPort(err, 'bind', ip, port);
-                    self.emit('error', ex);
-                    self._bindState = BIND_STATE_UNBOUND;
-                    return;
-                }
-
-                if (!self._handle)
-                // handle has been closed in the mean time.
-                    return handle.close();
-
-                replaceHandle(self, handle);
-                startListening(self);
-            }
-            cluster._getServer(self, {
-                address: ip,
-                port: port,
-                addressType: self.type,
-                fd: -1,
-                flags: flags
-            }, onHandle);
-
-        } else {
-            if (!self._handle)
-                return; // handle has been closed in the mean time
-
-            const err = self._handle.bind(ip, port || 0, flags);
-            if (err) {
-                var ex = exceptionWithHostPort(err, 'bind', ip, port);
-                self.emit('error', ex);
-                self._bindState = BIND_STATE_UNBOUND;
-                // Todo: close?
-                return;
-            }
-
-            startListening(self);
-        }
-    });
-
-    return self;
-};
-
-
-// thin wrapper around `send`, here for compatibility with dgram_legacy.js
-Socket.prototype.sendto = function(buffer,
-                                   offset,
-                                   length,
-                                   port,
-                                   address,
-                                   callback) {
-    if (typeof offset !== 'number' || typeof length !== 'number')
-        throw new Error('Send takes "offset" and "length" as args 2 and 3');
-
-    if (typeof address !== 'string')
-        throw new Error(this.type + ' sockets must send to port, address');
-
-    this.send(buffer, offset, length, port, address, callback);
-};
-
-
 function sliceBuffer(buffer, offset, length) {
     if (typeof buffer === 'string')
-        buffer = Buffer.from(buffer);
-    else if (!(buffer instanceof Buffer))
+        buffer = buffer_1.Buffer.from(buffer);
+    else if (!(buffer instanceof buffer_1.Buffer))
         throw new TypeError('First argument must be a buffer or string');
-
     offset = offset >>> 0;
     length = length >>> 0;
-
     return buffer.slice(offset, offset + length);
 }
-
-
 function fixBufferList(list) {
-    const newlist = new Array(list.length);
-
+    var newlist = new Array(list.length);
     for (var i = 0, l = list.length; i < l; i++) {
         var buf = list[i];
         if (typeof buf === 'string')
-            newlist[i] = Buffer.from(buf);
-        else if (!(buf instanceof Buffer))
+            newlist[i] = buffer_1.Buffer.from(buf);
+        else if (!(buf instanceof buffer_1.Buffer))
             return null;
         else
             newlist[i] = buf;
     }
-
     return newlist;
 }
-
-
-function enqueue(self, toEnqueue) {
-    // If the send queue hasn't been initialized yet, do it, and install an
-    // event handler that flushes the send queue after binding is done.
-    if (!self._queue) {
-        self._queue = [];
-        self.once('listening', clearQueue);
+var Socket = /** @class */ (function (_super) {
+    __extends(Socket, _super);
+    function Socket(type, listener) {
+        var _this = _super.call(this) || this;
+        _this.bindState = 0 /* UNBOUND */;
+        _this.reuseAddr = false;
+        var isIP6 = type === 'udp6';
+        _this.sock = process_1.default.loop.poll.createUdpSocket(isIP6);
+        _this.lookup = isIP6 ? lookup6 : lookup4;
+        if (listener)
+            _this.on('message', listener);
+        _this.sock.ondata = function (msg, from) {
+            _this.emit('message', msg, from);
+        };
+        _this.sock.onstart = function () {
+        };
+        _this.sock.onstop = function () {
+        };
+        _this.sock.onerror = function () {
+        };
+        return _this;
     }
-    self._queue.push(toEnqueue);
-    return;
-}
-
-
-function clearQueue() {
-    const queue = this._queue;
-    this._queue = undefined;
-
-    // Flush the send queue.
-    for (var i = 0; i < queue.length; i++)
-        queue[i]();
-}
-
-
-// valid combinations
-// send(buffer, offset, length, port, address, callback)
-// send(buffer, offset, length, port, address)
-// send(buffer, offset, length, port)
-// send(bufferOrList, port, address, callback)
-// send(bufferOrList, port, address)
-// send(bufferOrList, port)
-Socket.prototype.send = function(buffer,
-                                 offset,
-                                 length,
-                                 port,
-                                 address,
-                                 callback) {
-    const self = this;
-    let list;
-
-    if (address || (port && typeof port !== 'function')) {
-        buffer = sliceBuffer(buffer, offset, length);
-    } else {
-        callback = port;
-        port = offset;
-        address = length;
-    }
-
-    if (!Array.isArray(buffer)) {
-        if (typeof buffer === 'string') {
-            list = [ Buffer.from(buffer) ];
-        } else if (!(buffer instanceof Buffer)) {
-            throw new TypeError('First argument must be a buffer or a string');
-        } else {
-            list = [ buffer ];
+    Socket.prototype.send = function (msg, a, b, c, d, e) {
+        var _this = this;
+        var port;
+        var address;
+        var callback;
+        var typeofb = typeof b;
+        if (typeofb[0] === 'n') {
+            var offset = a;
+            var length = b;
+            msg = sliceBuffer(msg, offset, length);
+            port = c;
+            address = d;
+            callback = e;
         }
-    } else if (!(list = fixBufferList(buffer))) {
-        throw new TypeError('Buffer list arguments must be buffers or strings');
-    }
-
-    port = port >>> 0;
-    if (port === 0 || port > 65535)
-        throw new RangeError('Port should be > 0 and < 65536');
-
-    // Normalize callback so it's either a function or undefined but not anything
-    // else.
-    if (typeof callback !== 'function')
-        callback = undefined;
-
-    self._healthCheck();
-
-    if (self._bindState == BIND_STATE_UNBOUND)
-        self.bind({port: 0, exclusive: true}, null);
-
-    if (list.length === 0)
-        list.push(Buffer.allocUnsafe(0));
-
-    // If the socket hasn't been bound yet, push the outbound packet onto the
-    // send queue and send after binding is complete.
-    if (self._bindState != BIND_STATE_BOUND) {
-        enqueue(self, self.send.bind(self, list, port, address, callback));
-        return;
-    }
-
-    self._handle.lookup(address, function afterDns(ex, ip) {
-        doSend(ex, self, ip, list, address, port, callback);
-    });
-};
-
-
-function doSend(ex, self, ip, list, address, port, callback) {
-    if (ex) {
-        if (typeof callback === 'function') {
-            callback(ex);
-            return;
+        else if (typeofb[1] === 't') {
+            port = a;
+            address = b;
+            callback = c;
         }
-
-        self.emit('error', ex);
-        return;
-    } else if (!self._handle) {
-        return;
-    }
-
-    var req = new SendWrap();
-    req.list = list;  // Keep reference alive.
-    req.address = address;
-    req.port = port;
-    if (callback) {
-        req.callback = callback;
-        req.oncomplete = afterSend;
-    }
-    var err = self._handle.send(req,
-        list,
-        list.length,
-        port,
-        ip,
-        !!callback);
-    if (err && callback) {
-        // don't emit as error, dgram_legacy.js compatibility
-        const ex = exceptionWithHostPort(err, 'send', address, port);
-        process.nextTick(callback, ex);
-    }
-}
-
-function afterSend(err, sent) {
-    if (err) {
-        err = exceptionWithHostPort(err, 'send', this.address, this.port);
-    } else {
-        err = null;
-    }
-
-    this.callback(err, sent);
-}
-
-Socket.prototype.close = function(callback) {
-    if (typeof callback === 'function')
-        this.on('close', callback);
-
-    if (this._queue) {
-        this._queue.push(this.close.bind(this));
+        else
+            throw TypeError('3rd arguments must be length or address');
+        var list;
+        if (!Array.isArray(msg)) {
+            if (typeof msg === 'string') {
+                list = [buffer_1.Buffer.from(msg)];
+            }
+            else if (!(msg instanceof buffer_1.Buffer)) {
+                throw new TypeError('First argument must be a buffer or a string');
+            }
+            else {
+                list = [msg];
+            }
+        }
+        else if (!(list = fixBufferList(msg))) {
+            throw new TypeError('Buffer list arguments must be buffers or strings');
+        }
+        port = port >>> 0;
+        if (port === 0 || port > 65535)
+            throw new RangeError('Port should be > 0 and < 65536');
+        if (typeof callback !== 'function')
+            callback = undefined;
+        // if (self._bindState == BIND_STATE_UNBOUND)
+        //     self.bind({port: 0, exclusive: true}, null);
+        // TODO: Why send nothing, we need this?
+        if (list.length === 0)
+            list.push(new buffer_1.Buffer(0));
+        // If the socket hasn't been bound yet, push the outbound packet onto the
+        // send queue and send after binding is complete.
+        // if (self._bindState != BIND_STATE_BOUND) {
+        //     enqueue(self, self.send.bind(self, list, port, address, callback));
+        //     return;
+        // }
+        this.lookup(address, function (err, ip) {
+            var sendError = _this.sock.send(list[0], address, port);
+            if (callback)
+                callback(sendError);
+        });
+    };
+    Socket.prototype.address = function () {
+    };
+    Socket.prototype.bind = function (a, b, c) {
+        var _this = this;
+        var port;
+        var address;
+        var exclusive = false;
+        var callback;
+        if (typeof a === 'number') {
+            port = a;
+            if (typeof address === 'string') {
+                address = b;
+                callback = c;
+            }
+            else {
+                callback = b;
+            }
+        }
+        else if ((a !== null) && (typeof a === 'object')) {
+            port = a.port;
+            address = a.address || '';
+            exclusive = !!a.exclusive;
+            callback = b;
+        }
+        else
+            throw TypeError('Invalid bind() arguments.');
+        // self._healthCheck();
+        if (this.bindState !== 0 /* UNBOUND */)
+            throw Error('Socket is already bound');
+        this.bindState = 1 /* BINDING */;
+        // Defaulting address for bind to all interfaces.
+        if (!address) {
+            if (this.lookup === lookup4)
+                address = '0.0.0.0';
+            else
+                address = '::';
+        }
+        this.lookup(address, function (lookup_err, ip) {
+            if (lookup_err) {
+                _this.bindState = 0 /* UNBOUND */;
+                _this.emit('error', lookup_err);
+                return;
+            }
+            // var flags = 0;
+            // if (self._reuseAddr)
+            //     flags |= UV_UDP_REUSEADDR;
+            if (!_this.sock)
+                return; // handle has been closed in the mean time
+            var err = _this.sock.bind(port || 0, ip);
+            if (err) {
+                var ex = exceptionWithHostPort(err, 'bind', ip, port);
+                _this.emit('error', ex);
+                _this.bindState = 0 /* UNBOUND */;
+                return;
+            }
+            // TODO: We need this?
+            // this.fd = -42; // compatibility hack
+            _this.bindState = 2 /* BOUND */;
+            _this.emit('listening');
+            if (typeof callback === 'function')
+                callback();
+        });
         return this;
+    };
+    Socket.prototype.close = function (callback) {
+        this.sock.stop();
+    };
+    Socket.prototype.addMembership = function (multicastAddress, multicastInterface) {
+    };
+    Socket.prototype.dropMembership = function (multicastAddress, multicastInterface) {
+    };
+    Socket.prototype.setBroadcast = function (flag) {
+        var res = this.sock.setBroadcast(flag);
+        if (res < 0)
+            throw errnoException(res, 'setBroadcast');
+    };
+    Socket.prototype.setMulticastLoopback = function (flag) {
+        var res = this.sock.setMulticastLoop(flag);
+        if (res < 0)
+            throw errnoException(res, 'setMulticastLoopback');
+        return flag;
+    };
+    Socket.prototype.setTTL = function (ttl) {
+        if (typeof ttl !== 'number')
+            throw TypeError('Argument must be a number');
+        var res = this.sock.setTtl(ttl);
+        if (res < 0)
+            throw errnoException(res, 'setTTL');
+        return ttl;
+    };
+    Socket.prototype.setMulticastTTL = function (ttl) {
+        if (typeof ttl !== 'number')
+            throw new TypeError('Argument must be a number');
+        var err = this.sock.setMulticastTtl(ttl);
+        if (err < 0)
+            throw errnoException(err, 'setMulticastTTL');
+        return ttl;
+    };
+    Socket.prototype.ref = function () {
+        this.sock.ref();
+    };
+    Socket.prototype.unref = function () {
+        this.sock.unref();
+    };
+    return Socket;
+}(events_1.EventEmitter));
+exports.Socket = Socket;
+function createSocket(type, callback) {
+    var socket;
+    if (typeof type === 'string')
+        socket = new Socket(type, callback);
+    else if ((type !== null) && (typeof type === 'object')) {
+        socket = new Socket(type.type, callback);
+        socket.reuseAddr = !!type.reuseAddr;
     }
-
-    this._healthCheck();
-    this._stopReceiving();
-    this._handle.close();
-    this._handle = null;
-    process.nextTick(socketCloseNT, this);
-
-    return this;
-};
-
-
-function socketCloseNT(self) {
-    self.emit('close');
+    else
+        throw TypeError('Invalid type argument.');
+    return socket;
 }
-
-
-Socket.prototype.address = function() {
-    this._healthCheck();
-
-    var out = {};
-    var err = this._handle.getsockname(out);
-    if (err) {
-        throw errnoException(err, 'getsockname');
-    }
-
-    return out;
-};
-
-Socket.prototype.setBroadcast = function(arg) {
-    var err = this._handle.setBroadcast(arg ? 1 : 0);
-    if (err) {
-        throw errnoException(err, 'setBroadcast');
-    }
-};
-
-
-Socket.prototype.setTTL = function(arg) {
-    if (typeof arg !== 'number') {
-        throw new TypeError('Argument must be a number');
-    }
-
-    var err = this._handle.setTTL(arg);
-    if (err) {
-        throw errnoException(err, 'setTTL');
-    }
-
-    return arg;
-};
-
-
-Socket.prototype.setMulticastTTL = function(arg) {
-    if (typeof arg !== 'number') {
-        throw new TypeError('Argument must be a number');
-    }
-
-    var err = this._handle.setMulticastTTL(arg);
-    if (err) {
-        throw errnoException(err, 'setMulticastTTL');
-    }
-
-    return arg;
-};
-
-
-Socket.prototype.setMulticastLoopback = function(arg) {
-    var err = this._handle.setMulticastLoopback(arg ? 1 : 0);
-    if (err) {
-        throw errnoException(err, 'setMulticastLoopback');
-    }
-
-    return arg; // 0.4 compatibility
-};
-
-
-Socket.prototype.addMembership = function(multicastAddress,
-                                          interfaceAddress) {
-    this._healthCheck();
-
-    if (!multicastAddress) {
-        throw new Error('multicast address must be specified');
-    }
-
-    var err = this._handle.addMembership(multicastAddress, interfaceAddress);
-    if (err) {
-        throw errnoException(err, 'addMembership');
-    }
-};
-
-
-Socket.prototype.dropMembership = function(multicastAddress,
-                                           interfaceAddress) {
-    this._healthCheck();
-
-    if (!multicastAddress) {
-        throw new Error('multicast address must be specified');
-    }
-
-    var err = this._handle.dropMembership(multicastAddress, interfaceAddress);
-    if (err) {
-        throw errnoException(err, 'dropMembership');
-    }
-};
-
-
-Socket.prototype._healthCheck = function() {
-    if (!this._handle)
-        throw new Error('Not running'); // error message from dgram_legacy.js
-};
-
-
-Socket.prototype._stopReceiving = function() {
-    if (!this._receiving)
-        return;
-
-    this._handle.recvStop();
-    this._receiving = false;
-    this.fd = null; // compatibility hack
-};
-
-
-function onMessage(nread, handle, buf, rinfo) {
-    var self = handle.owner;
-    if (nread < 0) {
-        return self.emit('error', errnoException(nread, 'recvmsg'));
-    }
-    rinfo.size = buf.length; // compatibility
-    self.emit('message', buf, rinfo);
-}
-
-
-Socket.prototype.ref = function() {
-    if (this._handle)
-        this._handle.ref();
-
-    return this;
-};
-
-
-Socket.prototype.unref = function() {
-    if (this._handle)
-        this._handle.unref();
-
-    return this;
-};*/
+exports.createSocket = createSocket;
 
 
 /***/ }),
-/* 38 */
+/* 36 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -17050,13 +16177,13 @@ exports.CANCELLED = 'ECANCELLED';
 
 
 /***/ }),
-/* 39 */
+/* 37 */
 /***/ (function(module, exports) {
 
-throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo/src/lib/events.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:29:12)");
+throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo-core/src/lib/events.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:29:12)");
 
 /***/ }),
-/* 40 */
+/* 38 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -17065,7 +16192,7 @@ throw new Error("Module build failed: Error: Typescript emitted no output for /m
 // for the stream, one conventional and one non-conventional.
 
 
-const stream = __webpack_require__(7);
+const stream = __webpack_require__(6);
 const util = __webpack_require__(0);
 
 module.exports = LazyTransform;
@@ -17102,25 +16229,25 @@ util.inherits(LazyTransform, stream.Transform);
 
 
 /***/ }),
+/* 39 */
+/***/ (function(module, exports) {
+
+throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo-core/src/lib/static-buffer.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:29:12)");
+
+/***/ }),
+/* 40 */
+/***/ (function(module, exports) {
+
+throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo-core/src/lib/stream.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo-core/node_modules/ts-loader/dist/index.js:29:12)");
+
+/***/ }),
 /* 41 */
-/***/ (function(module, exports) {
-
-throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo/src/lib/static-buffer.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:29:12)");
-
-/***/ }),
-/* 42 */
-/***/ (function(module, exports) {
-
-throw new Error("Module build failed: Error: Typescript emitted no output for /mnt/c/dev/full-js/packages/bamboo/src/lib/stream.d.ts.\n    at successLoader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:47:15)\n    at Object.loader (/mnt/c/dev/full-js/packages/bamboo/node_modules/ts-loader/dist/index.js:29:12)");
-
-/***/ }),
-/* 43 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // 'use strict';
 
 
-var toASCII = __webpack_require__(29).toASCII;
+var toASCII = __webpack_require__(28).toASCII;
 
 exports.parse = urlParse;
 exports.resolve = urlResolve;
@@ -17179,7 +16306,7 @@ var slashedProtocol = {
     'file:': true
 };
 
-var querystring = __webpack_require__(30);
+var querystring = __webpack_require__(29);
 
 // This constructor is used to store parsed query string values. Instantiating
 // this is faster than explicitly calling `Object.create(null)` to get a
@@ -18123,15 +17250,15 @@ function encodeAuth(str) {
 
 
 /***/ }),
-/* 44 */
+/* 42 */
 /***/ (function(module, exports, __webpack_require__) {
 
-
-__webpack_require__(18);
+/// <reference path="../../../typing.d.ts" />
+__webpack_require__(19);
 
 
 /***/ }),
-/* 45 */
+/* 43 */
 /***/ (function(module, exports) {
 
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
@@ -18221,7 +17348,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 
 
 /***/ }),
-/* 46 */
+/* 44 */
 /***/ (function(module, exports) {
 
 var toString = {}.toString;
@@ -18232,7 +17359,7 @@ module.exports = Array.isArray || function (arr) {
 
 
 /***/ }),
-/* 47 */
+/* 45 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -18275,13 +17402,339 @@ exports.UInt64 = UInt64;
 
 
 /***/ }),
-/* 48 */
+/* 46 */
 /***/ (function(module, exports) {
 
 module.exports = require("domain");
 
 /***/ }),
-/* 49 */
+/* 47 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var libjs = __webpack_require__(2);
+var static_buffer_1 = __webpack_require__(3);
+var event_1 = __webpack_require__(48);
+var CHUNK = 11;
+var Socket = /** @class */ (function () {
+    function Socket() {
+        this.poll = null;
+        this.fd = 0; // socket` file descriptor
+        this.connected = false;
+        this.reffed = false;
+        this.onstart = event_1.noop; // Maps to "listening" event.
+        this.onstop = event_1.noop; // Maps to "close" event.
+        this.ondata = event_1.noop; // Maps to "message" event.
+        // TODO: Synchronous first level errors: do we (1) `return`, (2) `throw`, or (3) `.onerror()` them?
+        this.onerror = event_1.noop; // Maps to "error" event.
+    }
+    Socket.prototype.start = function () {
+        this.fd = libjs.socket(2 /* INET */, this.type, 0);
+        if (this.fd < 0)
+            return Error("Could not create scoket: errno = " + this.fd);
+        // Socket is not a file, we just created the file descriptor for it, flags
+        // for this file descriptor are set to 0 anyways, so we just overwrite 'em,
+        // no need to fetch them and OR'em.
+        var fcntl = libjs.fcntl(this.fd, 4 /* SETFL */, 2048 /* O_NONBLOCK */);
+        if (fcntl < 0)
+            return Error("Could not make socket non-blocking: errno = " + fcntl);
+    };
+    Socket.prototype.stop = function () {
+        // TODO: When closing fd, it gets removed from `epoll` automatically, right?
+        if (this.fd) {
+            // TODO: Is socket `close` non-blocking, so we just use `close`.
+            libjs.close(this.fd);
+            // libjs.closeAsync(this.fd, noop);
+            this.fd = 0;
+        }
+        this.onstop();
+    };
+    return Socket;
+}());
+exports.Socket = Socket;
+var SocketUdp4 = /** @class */ (function (_super) {
+    __extends(SocketUdp4, _super);
+    function SocketUdp4() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.type = 2 /* DGRAM */;
+        _this.isIPv4 = true;
+        return _this;
+        // setBroadcast(on: boolean) {
+        //     return this.setOption(libjs.IPPROTO.SOCKET, libjs.IP.BROADCAST, on ? 1 : 0);
+        // }
+    }
+    SocketUdp4.prototype.start = function () {
+        var err = _super.prototype.start.call(this);
+        if (err)
+            return err;
+        var fd = this.fd;
+        var event = {
+            // TODO: Do we need `EPOLLOUT` for dgram sockets, or they are ready for writing immediately?
+            // events: libjs.EPOLL_EVENTS.EPOLLIN | libjs.EPOLL_EVENTS.EPOLLOUT,
+            events: 1 /* EPOLLIN */,
+            data: [fd, 0],
+        };
+        var ctl = libjs.epoll_ctl(this.poll.epfd, 1 /* ADD */, fd, event);
+        if (ctl < 0)
+            return Error("Could not add epoll events: errno = " + ctl);
+    };
+    SocketUdp4.prototype.send = function (buf, ip, port) {
+        var addr = {
+            sin_family: 2 /* INET */,
+            sin_port: libjs.hton16(port),
+            sin_addr: {
+                s_addr: new libjs.Ipv4(ip),
+            },
+            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        // Make sure socket is non-blocking and don't rise `SIGPIPE` signal if the other end is not receiving.
+        var flags = 64 /* DONTWAIT */ | 16384 /* NOSIGNAL */;
+        var res = libjs.sendto(this.fd, buf, flags, addr, libjs.sockaddr_in);
+        if (res < 0) {
+            if (-res == 11 /* EAGAIN */) {
+                // This just means, we executed the send *asynchronously*, so no worries.
+                return;
+            }
+            else {
+                return Error("sendto error, errno = " + res);
+                // return res;
+            }
+        }
+    };
+    SocketUdp4.prototype.setOption = function (level, option, value) {
+        var buf = libjs.optval_t.pack(value);
+        return libjs.setsockopt(this.fd, level, option, buf);
+    };
+    SocketUdp4.prototype.bind = function (port, ip, reuse) {
+        if (ip === void 0) { ip = '0.0.0.0'; }
+        if (reuse) {
+            var reuseRes = this.setOption(65535 /* SOCKET */, 4 /* REUSEADDR */, 1);
+            if (reuseRes < 0)
+                return reuseRes;
+        }
+        var addr = {
+            sin_family: 2 /* INET */,
+            sin_port: libjs.hton16(port),
+            sin_addr: {
+                s_addr: new libjs.Ipv4(ip),
+            },
+            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        var res = libjs.bind(this.fd, addr, libjs.sockaddr_in);
+        if (res < 0)
+            return res;
+        this.reffed = true;
+        this.poll.refs++;
+    };
+    SocketUdp4.prototype.update = function (events) {
+        // console.log('events', events);
+        // TODO: Do we need this or UDP sockets are automatically writable after `bind()`.
+        // if(events & libjs.EPOLL_EVENTS.EPOLLOUT) {
+        //     console.log(this.fd, 'EPOLLOUT');
+        //
+        //     this.connected = true;
+        //
+        //     var event: libjs.epoll_event = {
+        //         events: libjs.EPOLL_EVENTS.EPOLLIN,
+        //         data: [this.fd, 0],
+        //     };
+        //     var res = libjs.epoll_ctl(this.poll.epfd, libjs.EPOLL_CTL.MOD, this.fd, event);
+        //     if(res < 0) this.onerror(Error(`Could not remove write listener: ${res}`));
+        //
+        //     this.onstart();
+        // }
+        if ((events & 1 /* EPOLLIN */) || (events & 2 /* EPOLLPRI */)) {
+            // console.log(this.fd, 'EPOLLIN');
+            do {
+                var addrlen = libjs.sockaddr_in.size;
+                var buf = new static_buffer_1.StaticBuffer(CHUNK + addrlen + 4);
+                // var data = new StaticBuffer(CHUNK);
+                var data = buf.slice(0, CHUNK);
+                // var addr = new StaticBuffer(libjs.sockaddr_in.size);
+                var addr = buf.slice(CHUNK, CHUNK + addrlen);
+                // var addrlenBuf = new StaticBuffer(4);
+                var addrlenBuf = buf.slice(CHUNK + addrlen);
+                libjs.int32.pack(libjs.sockaddr_in.size, addrlenBuf);
+                var bytes = libjs.recvfrom(this.fd, data, CHUNK, 0, addr, addrlenBuf);
+                if (bytes < -1) {
+                    this.onerror(Error("Error reading data: " + bytes));
+                    break;
+                }
+                else {
+                    var retAddrLen = libjs.int32.unpack(addrlenBuf);
+                    var addrStruct = libjs.sockaddr_in.unpack(addr);
+                    var from = {
+                        address: addrStruct.sin_addr.s_addr.toString(),
+                        family: retAddrLen === addrlen ? 'IPv4' : 'IPv6',
+                        port: addrStruct.sin_port,
+                        size: bytes,
+                    };
+                    this.ondata(buf.slice(0, bytes), from);
+                }
+            } while (bytes === CHUNK);
+        }
+        if (events & 8 /* EPOLLERR */) {
+            // console.log(this.fd, 'EPOLLERR');
+            this.onerror(Error("Some error on " + this.fd));
+        }
+        if (events & 8192 /* EPOLLRDHUP */) {
+            // console.log(this.fd, 'EPOLLRDHUP');
+        }
+        if (events & 16 /* EPOLLHUP */) {
+            // console.log(this.fd, 'EPOLLHUP');
+        }
+    };
+    SocketUdp4.prototype.setTtl = function (ttl) {
+        if (ttl < 1 || ttl > 255)
+            return -22 /* EINVAL */;
+        return this.setOption(0 /* IP */, 2 /* TTL */, ttl);
+    };
+    SocketUdp4.prototype.setMulticastTtl = function (ttl) {
+        return this.setOption(0 /* IP */, 33 /* MULTICAST_TTL */, ttl);
+    };
+    SocketUdp4.prototype.setMulticastLoop = function (on) {
+        return this.setOption(0 /* IP */, 34 /* MULTICAST_LOOP */, on ? 1 : 0);
+    };
+    return SocketUdp4;
+}(Socket));
+exports.SocketUdp4 = SocketUdp4;
+var SocketUdp6 = /** @class */ (function (_super) {
+    __extends(SocketUdp6, _super);
+    function SocketUdp6() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.isIPv4 = false;
+        return _this;
+    }
+    SocketUdp6.prototype.setTtl = function (ttl) {
+        if (ttl < 1 || ttl > 255)
+            return -22 /* EINVAL */;
+        return this.setOption(41 /* IPV6 */, 16 /* UNICAST_HOPS */, ttl);
+    };
+    SocketUdp6.prototype.setMulticastTtl = function (ttl) {
+        return this.setOption(41 /* IPV6 */, 18 /* MULTICAST_HOPS */, ttl);
+    };
+    SocketUdp6.prototype.setMulticastLoop = function (on) {
+        return this.setOption(41 /* IPV6 */, 19 /* MULTICAST_LOOP */, on ? 1 : 0);
+    };
+    return SocketUdp6;
+}(SocketUdp4));
+exports.SocketUdp6 = SocketUdp6;
+var SocketTcp = /** @class */ (function (_super) {
+    __extends(SocketTcp, _super);
+    function SocketTcp() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.type = 1 /* STREAM */;
+        _this.connected = false;
+        return _this;
+    }
+    SocketTcp.prototype.connect = function (opts) {
+        // on read check for:
+        // EAGAINN and EWOULDBLOCK
+        var addr_in = {
+            sin_family: 2 /* INET */,
+            sin_port: libjs.hton16(opts.port),
+            sin_addr: {
+                s_addr: new libjs.Ipv4(opts.host),
+            },
+            sin_zero: [0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        var res = libjs.connect(this.fd, addr_in);
+        // Everything is OK, we are connecting...
+        if (res == -115 /* EINPROGRESS */) {
+            this.poll(); // Start event loop.
+            return;
+        }
+        // Error occured.
+        if (res < 0)
+            throw Error("Could no connect: " + res);
+        // TODO: undefined behaviour.
+        throw Error('Something went not according to plan.');
+    };
+    // This function has been called by the event loop.
+    SocketTcp.prototype.onRead = function () {
+    };
+    SocketTcp.prototype.write = function (data) {
+        var sb = static_buffer_1.StaticBuffer.from(data + '\0');
+        var res = libjs.write(this.fd, sb);
+        return res;
+    };
+    return SocketTcp;
+}(Socket));
+exports.SocketTcp = SocketTcp;
+// export class EpollPool extends Pool {
+var Poll = /** @class */ (function () {
+    function Poll() {
+        this.socks = {};
+        this.refs = 0;
+        // `epoll` file descriptor
+        this.epfd = 0;
+        this.onerror = event_1.noop;
+        this.maxEvents = 10;
+        this.eventSize = libjs.epoll_event.size;
+        this.eventBuf = static_buffer_1.StaticBuffer.alloc(this.maxEvents * this.eventSize, 'rw');
+        this.epfd = libjs.epoll_create1(0);
+        if (this.epfd < 0)
+            throw Error("Could not create epoll fd: errno = " + this.epfd);
+    }
+    Poll.prototype.wait = function (timeout) {
+        var EVENT_SIZE = this.eventSize;
+        var evbuf = this.eventBuf;
+        var waitres = libjs.epoll_wait(this.epfd, evbuf, this.maxEvents, timeout);
+        if (waitres > 0) {
+            // console.log(waitres);
+            // evbuf.print();
+            // console.log(this.socks);
+            for (var i = 0; i < waitres; i++) {
+                var event = libjs.epoll_event.unpack(evbuf, i * EVENT_SIZE);
+                // console.log(event);
+                var fd = event.data[0];
+                var socket = this.socks[fd];
+                if (socket) {
+                    socket.update(event.events);
+                }
+                else {
+                    this.onerror(Error("Socket not in pool: " + fd));
+                }
+            }
+        }
+        else if (waitres < 0) {
+            this.onerror(Error("Error while waiting for connection: " + waitres));
+        }
+        // Hook to the global event loop.
+        setTimeout(this.wait.bind(this), 1000);
+    };
+    Poll.prototype.hasRefs = function () {
+        return !!this.refs;
+    };
+    Poll.prototype.createUdpSocket = function (udp6) {
+        var sock = !udp6 ? new SocketUdp4 : new SocketUdp6;
+        sock.poll = this;
+        var err = sock.start();
+        this.socks[sock.fd] = sock;
+        if (err)
+            return err;
+        else
+            return sock;
+    };
+    return Poll;
+}());
+exports.Poll = Poll;
+
+
+/***/ }),
+/* 48 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -18292,57 +17745,37 @@ exports.noop = noop;
 
 
 /***/ }),
-/* 50 */
+/* 49 */
 /***/ (function(module, exports) {
 
 module.exports = require("vm");
 
 /***/ }),
-/* 51 */
+/* 50 */
 /***/ (function(module, exports, __webpack_require__) {
 
-if (!process.asyscall) {
-    if (process.hasBinaryUtils && true) {
-        // Here we create on the fly a thread pool to run the
-        // asynchronous system call function, we use `process.call`
-        // and `process.frame`.
-        var Asyscall = __webpack_require__(52).Asyscall;
-        var asyscall = new Asyscall;
-        asyscall.build();
-        process.asyscall = asyscall.exec.bind(asyscall);
-        process.asyscall64 = asyscall.exec64.bind(asyscall);
-    }
-    else {
-        // Create fake asynchronous system calls by just wrapping the
-        // synchronous version.
-        process.asyscall = function () {
-            var len = arguments.length - 1;
-            var args = new Array(len);
-            for (var i = 0; i < len; i++)
-                args[i] = arguments[i];
-            var res = process.syscall.apply(null, args);
-            arguments[len](res);
-        };
-        process.asyscall64 = function () {
-            var len = arguments.length - 1;
-            var args = new Array(len);
-            for (var i = 0; i < len; i++)
-                args[i] = arguments[i];
-            var res = process.syscall64.apply(null, args);
-            arguments[len](res);
-        };
-    }
-}
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var _1 = __webpack_require__(51);
+// Here we create on the fly a thread pool to run the
+// asynchronous system call function, we use `process.call`
+// and `process.frame`.
+var asyscall = new _1.Asyscall;
+asyscall.build();
+process.asyscall = asyscall.exec.bind(asyscall);
+process.asyscall64 = asyscall.exec64.bind(asyscall);
 
 
 /***/ }),
-/* 52 */
+/* 51 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
 var static_buffer_1 = __webpack_require__(3);
+var bin_1 = __webpack_require__(52);
 function link(curr, next) {
     var _a = next.getAddress(), lo = _a[0], hi = _a[1];
     curr.writeInt32LE(lo, 72 /* BLOCK_SIZE */ - 8 /* INT */);
@@ -18365,8 +17798,7 @@ var Asyscall = /** @class */ (function () {
         // this.code = StaticBuffer.alloc(bin.length * 10, 'rwe');
         // buf.copy(this.code);
         // this.code = this.code.slice(0, bin.length);
-        var bin = __webpack_require__(53);
-        this.code = static_buffer_1.StaticBuffer.alloc(bin, 'rwe');
+        this.code = static_buffer_1.StaticBuffer.alloc(bin_1.default, 'rwe');
         this.curr = this.code.slice(this.code.length - 72 /* BLOCK_SIZE */);
         this.curr.writeInt32LE(0 /* UNINITIALIZED */, 0);
         this.curr.writeInt32LE(0, 4); // Number of threads left this block.
@@ -18432,7 +17864,7 @@ var Asyscall = /** @class */ (function () {
                 arg[l] = str.charCodeAt(l);
         }
         // TODO: Should be StaticBuffer
-        if (arg instanceof Buffer) {
+        if (static_buffer_1.StaticBuffer.isStaticBuffer(arg)) {
             arg = arg.getAddress();
             // console.log('addr', arg);
         }
@@ -18568,95 +18000,95 @@ exports.Asyscall = Asyscall;
 
 
 /***/ }),
-/* 53 */
-/***/ (function(module, exports) {
+/* 52 */
+/***/ (function(module, exports, __webpack_require__) {
 
-module.exports = [72,199,199,1,0,0,0,232,13,0,0,0,72,199,199,2,0,0,0,232,1,0,0,0,195,72,137,248,72,199,193,40,0,0,0,72,247,225,72,141,53,179,0,0,0,72,1,198,72,141,21,24,0,0,0,72,137,22,72,137,126,8,72,199,192,56,0,0,0,72,199,199,0,143,1,128,15,5,195,76,141,45,242,0,0,0,77,139,117,64,65,139,69,0,131,248,4,15,132,107,0,0,0,131,248,0,117,11,72,199,192,24,0,0,0,15,5,235,227,131,248,1,117,68,186,2,0,0,0,240,65,15,177,85,0,65,131,125,0,2,117,50,73,139,69,8,73,139,125,16,73,139,117,24,73,139,85,32,77,139,85,40,77,139,69,48,77,139,77,56,15,5,73,137,69,56,65,199,69,0,3,0,0,0,72,139,4,36,73,137,69,48,240,65,131,69,4,1,77,137,245,77,139,117,64,233,136,255,255,255,65,199,69,8,186,190,0,0,72,199,192,60,0,0,0,15,5,195,15,31,64,0,115,116,97,99,107,15,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49,32,98,108,111,99,107,144,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = [72, 199, 199, 1, 0, 0, 0, 232, 13, 0, 0, 0, 72, 199, 199, 2, 0, 0, 0, 232, 1, 0, 0, 0, 195, 72, 137, 248, 72, 199, 193, 40, 0, 0, 0, 72, 247, 225, 72, 141, 53, 179, 0, 0, 0, 72, 1, 198, 72, 141, 21, 24, 0, 0, 0, 72, 137, 22, 72, 137, 126, 8, 72, 199, 192, 56, 0, 0, 0, 72, 199, 199, 0, 143, 1, 128, 15, 5, 195, 76, 141, 45, 242, 0, 0, 0, 77, 139, 117, 64, 65, 139, 69, 0, 131, 248, 4, 15, 132, 107, 0, 0, 0, 131, 248, 0, 117, 11, 72, 199, 192, 24, 0, 0, 0, 15, 5, 235, 227, 131, 248, 1, 117, 68, 186, 2, 0, 0, 0, 240, 65, 15, 177, 85, 0, 65, 131, 125, 0, 2, 117, 50, 73, 139, 69, 8, 73, 139, 125, 16, 73, 139, 117, 24, 73, 139, 85, 32, 77, 139, 85, 40, 77, 139, 69, 48, 77, 139, 77, 56, 15, 5, 73, 137, 69, 56, 65, 199, 69, 0, 3, 0, 0, 0, 72, 139, 4, 36, 73, 137, 69, 48, 240, 65, 131, 69, 4, 1, 77, 137, 245, 77, 139, 117, 64, 233, 136, 255, 255, 255, 65, 199, 69, 8, 186, 190, 0, 0, 72, 199, 192, 60, 0, 0, 0, 15, 5, 195, 15, 31, 64, 0, 115, 116, 97, 99, 107, 15, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 49, 32, 98, 108, 111, 99, 107, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
 
 /***/ }),
-/* 54 */
+/* 53 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var map = {
 	"./": 26,
-	"./_stream_duplex": 14,
-	"./_stream_duplex.js": 14,
+	"./_stream_duplex": 15,
+	"./_stream_duplex.js": 15,
 	"./_stream_passthrough": 22,
 	"./_stream_passthrough.js": 22,
-	"./_stream_readable": 11,
-	"./_stream_readable.js": 11,
-	"./_stream_transform": 15,
-	"./_stream_transform.js": 15,
-	"./_stream_writable": 12,
-	"./_stream_writable.js": 12,
-	"./assert": 16,
-	"./assert.js": 16,
-	"./boot": 18,
-	"./boot.js": 18,
+	"./_stream_readable": 12,
+	"./_stream_readable.js": 12,
+	"./_stream_transform": 16,
+	"./_stream_transform.js": 16,
+	"./_stream_writable": 13,
+	"./_stream_writable.js": 13,
+	"./assert": 17,
+	"./assert.js": 17,
+	"./boot": 19,
+	"./boot.js": 19,
 	"./buffer": 1,
-	"./buffer.d": 36,
-	"./buffer.d.ts": 36,
+	"./buffer.d": 34,
+	"./buffer.d.ts": 34,
 	"./buffer.js": 1,
 	"./console": 23,
 	"./console.js": 23,
-	"./dgram": 27,
-	"./dgram-reference": 37,
-	"./dgram-reference.js": 37,
-	"./dgram.js": 55,
-	"./dgram.ts": 27,
-	"./dns": 38,
-	"./dns.js": 38,
-	"./eloop": 5,
-	"./eloop.js": 56,
-	"./eloop.ts": 5,
+	"./dgram": 35,
+	"./dgram.ts": 35,
+	"./dns": 36,
+	"./dns.js": 36,
+	"./eloop": 7,
+	"./eloop.ts": 7,
 	"./events": 4,
-	"./events.d": 39,
-	"./events.d.ts": 39,
+	"./events.d": 37,
+	"./events.d.ts": 37,
 	"./events.js": 4,
 	"./fs": 8,
-	"./fs.js": 57,
+	"./fs.js": 54,
 	"./fs.ts": 8,
 	"./index": 26,
 	"./index.js": 26,
-	"./internal/module": 28,
-	"./internal/module.js": 28,
+	"./internal/module": 27,
+	"./internal/module.js": 27,
 	"./internal/streams/BufferList": 21,
 	"./internal/streams/BufferList.js": 21,
-	"./internal/streams/lazy_transform": 40,
-	"./internal/streams/lazy_transform.js": 40,
-	"./internal/util": 13,
-	"./internal/util.js": 13,
+	"./internal/streams/lazy_transform": 38,
+	"./internal/streams/lazy_transform.js": 38,
+	"./internal/util": 14,
+	"./internal/util.js": 14,
 	"./module": 24,
 	"./module.js": 24,
 	"./native_module": 25,
 	"./native_module.js": 25,
-	"./path": 6,
-	"./path.js": 6,
-	"./process": 19,
-	"./process.js": 19,
-	"./punycode": 29,
-	"./punycode.js": 29,
-	"./querystring": 30,
-	"./querystring.js": 30,
+	"./path": 5,
+	"./path.js": 5,
+	"./process": 11,
+	"./process.js": 11,
+	"./punycode": 28,
+	"./punycode.js": 28,
+	"./querystring": 29,
+	"./querystring.js": 29,
 	"./static-arraybuffer": 9,
 	"./static-arraybuffer.js": 9,
 	"./static-buffer": 3,
-	"./static-buffer.d": 41,
-	"./static-buffer.d.ts": 41,
+	"./static-buffer.d": 39,
+	"./static-buffer.d.ts": 39,
 	"./static-buffer.js": 3,
-	"./stream": 7,
-	"./stream.d": 42,
-	"./stream.d.ts": 42,
-	"./stream.js": 7,
-	"./timers": 17,
-	"./timers.js": 59,
-	"./timers.ts": 17,
-	"./url": 43,
-	"./url.js": 43,
+	"./stream": 6,
+	"./stream.d": 40,
+	"./stream.d.ts": 40,
+	"./stream.js": 6,
+	"./timers": 18,
+	"./timers.js": 56,
+	"./timers.ts": 18,
+	"./url": 41,
+	"./url.js": 41,
 	"./util": 0,
 	"./util.js": 0,
-	"./vm": 31,
-	"./vm.js": 31
+	"./vm": 30,
+	"./vm.js": 30
 };
 function webpackContext(req) {
 	return __webpack_require__(webpackContextResolve(req));
@@ -18672,622 +18104,10 @@ webpackContext.keys = function webpackContextKeys() {
 };
 webpackContext.resolve = webpackContextResolve;
 module.exports = webpackContext;
-webpackContext.id = 54;
+webpackContext.id = 53;
 
 /***/ }),
-/* 55 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var events_1 = __webpack_require__(4);
-var buffer_1 = __webpack_require__(1);
-var util = __webpack_require__(0);
-var errnoException = util._errnoException;
-var exceptionWithHostPort = util._exceptionWithHostPort;
-function lookup4(address, callback) {
-    callback();
-}
-function lookup6(address, callback) {
-    callback();
-}
-function sliceBuffer(buffer, offset, length) {
-    if (typeof buffer === 'string')
-        buffer = buffer_1.Buffer.from(buffer);
-    else if (!(buffer instanceof buffer_1.Buffer))
-        throw new TypeError('First argument must be a buffer or string');
-    offset = offset >>> 0;
-    length = length >>> 0;
-    return buffer.slice(offset, offset + length);
-}
-function fixBufferList(list) {
-    var newlist = new Array(list.length);
-    for (var i = 0, l = list.length; i < l; i++) {
-        var buf = list[i];
-        if (typeof buf === 'string')
-            newlist[i] = buffer_1.Buffer.from(buf);
-        else if (!(buf instanceof buffer_1.Buffer))
-            return null;
-        else
-            newlist[i] = buf;
-    }
-    return newlist;
-}
-var Socket = (function (_super) {
-    __extends(Socket, _super);
-    function Socket(type, listener) {
-        var _this = this;
-        _super.call(this);
-        this.bindState = 0;
-        this.reuseAddr = false;
-        var isIP6 = type === 'udp6';
-        this.sock = process.loop.poll.createUdpSocket(isIP6);
-        this.lookup = isIP6 ? lookup6 : lookup4;
-        if (listener)
-            this.on('message', listener);
-        this.sock.ondata = function (msg, from) {
-            _this.emit('message', msg, from);
-        };
-        this.sock.onstart = function () {
-        };
-        this.sock.onstop = function () {
-        };
-        this.sock.onerror = function () {
-        };
-    }
-    Socket.prototype.send = function (msg, a, b, c, d, e) {
-        var _this = this;
-        var port;
-        var address;
-        var callback;
-        var typeofb = typeof b;
-        if (typeofb[0] === 'n') {
-            var offset = a;
-            var length = b;
-            msg = sliceBuffer(msg, offset, length);
-            port = c;
-            address = d;
-            callback = e;
-        }
-        else if (typeofb[1] === 't') {
-            port = a;
-            address = b;
-            callback = c;
-        }
-        else
-            throw TypeError('3rd arguments must be length or address');
-        var list;
-        if (!Array.isArray(msg)) {
-            if (typeof msg === 'string') {
-                list = [buffer_1.Buffer.from(msg)];
-            }
-            else if (!(msg instanceof buffer_1.Buffer)) {
-                throw new TypeError('First argument must be a buffer or a string');
-            }
-            else {
-                list = [msg];
-            }
-        }
-        else if (!(list = fixBufferList(msg))) {
-            throw new TypeError('Buffer list arguments must be buffers or strings');
-        }
-        port = port >>> 0;
-        if (port === 0 || port > 65535)
-            throw new RangeError('Port should be > 0 and < 65536');
-        if (typeof callback !== 'function')
-            callback = undefined;
-        if (list.length === 0)
-            list.push(new buffer_1.Buffer(0));
-        this.lookup(address, function (err, ip) {
-            var err = _this.sock.send(list[0], address, port);
-            if (callback)
-                callback(err);
-        });
-    };
-    Socket.prototype.address = function () {
-    };
-    Socket.prototype.bind = function (a, b, c) {
-        var _this = this;
-        var port;
-        var address;
-        var exclusive = false;
-        var callback;
-        if (typeof a === 'number') {
-            port = a;
-            if (typeof address === 'string') {
-                address = b;
-                callback = c;
-            }
-            else {
-                callback = b;
-            }
-        }
-        else if ((a !== null) && (typeof a === 'object')) {
-            port = a.port;
-            address = a.address || '';
-            exclusive = !!a.exclusive;
-            callback = b;
-        }
-        else
-            throw TypeError('Invalid bind() arguments.');
-        if (this.bindState !== 0)
-            throw Error('Socket is already bound');
-        this.bindState = 1;
-        if (!address) {
-            if (this.lookup === lookup4)
-                address = '0.0.0.0';
-            else
-                address = '::';
-        }
-        this.lookup(address, function (lookup_err, ip) {
-            if (lookup_err) {
-                _this.bindState = 0;
-                _this.emit('error', lookup_err);
-                return;
-            }
-            if (!_this.sock)
-                return;
-            var err = _this.sock.bind(port || 0, ip);
-            if (err) {
-                var ex = exceptionWithHostPort(err, 'bind', ip, port);
-                _this.emit('error', ex);
-                _this.bindState = 0;
-                return;
-            }
-            _this.bindState = 2;
-            _this.emit('listening');
-            if (typeof callback === 'function')
-                callback();
-        });
-        return this;
-    };
-    Socket.prototype.close = function (callback) {
-        this.sock.stop();
-    };
-    Socket.prototype.addMembership = function (multicastAddress, multicastInterface) {
-    };
-    Socket.prototype.dropMembership = function (multicastAddress, multicastInterface) {
-    };
-    Socket.prototype.setBroadcast = function (flag) {
-        var res = this.sock.setBroadcast(flag);
-        if (res < 0)
-            throw errnoException(res, 'setBroadcast');
-    };
-    Socket.prototype.setMulticastLoopback = function (flag) {
-        var res = this.sock.setMulticastLoop(flag);
-        if (res < 0)
-            throw errnoException(res, 'setMulticastLoopback');
-        return flag;
-    };
-    Socket.prototype.setTTL = function (ttl) {
-        if (typeof ttl !== 'number')
-            throw TypeError('Argument must be a number');
-        var res = this.sock.setTtl(ttl);
-        if (res < 0)
-            throw errnoException(res, 'setTTL');
-        return ttl;
-    };
-    Socket.prototype.setMulticastTTL = function (ttl) {
-        if (typeof ttl !== 'number')
-            throw new TypeError('Argument must be a number');
-        var err = this.sock.setMulticastTtl(ttl);
-        if (err < 0)
-            throw errnoException(err, 'setMulticastTTL');
-        return ttl;
-    };
-    Socket.prototype.ref = function () {
-        this.sock.ref();
-    };
-    Socket.prototype.unref = function () {
-        this.sock.unref();
-    };
-    return Socket;
-}(events_1.EventEmitter));
-exports.Socket = Socket;
-function createSocket(type, callback) {
-    var socket;
-    if (typeof type === 'string')
-        socket = new Socket(type, callback);
-    else if ((type !== null) && (typeof type === 'object')) {
-        socket = new Socket(type.type, callback);
-        socket.reuseAddr = !!type.reuseAddr;
-    }
-    else
-        throw TypeError('Invalid type argument.');
-    return socket;
-}
-exports.createSocket = createSocket;
-
-
-/***/ }),
-/* 56 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var index_1 = __webpack_require__(2);
-var Poll;
-var platform = process.platform;
-switch (platform) {
-    case 'linux':
-        Poll = __webpack_require__(34).Poll;
-        break;
-    default:
-        throw Error("Platform not supported: " + platform);
-}
-var POINTER_NONE = -1;
-var DELAYS = [
-    -2,
-    -1,
-    1,
-    8,
-    16,
-    32,
-    64,
-    128,
-    256,
-    1024,
-    4096,
-    16384,
-    65536,
-    131072,
-    524288,
-    2097152,
-    8388608,
-    33554432,
-    268435456,
-    2147483648,
-    Infinity,
-];
-var DELAY_LAST = DELAYS.length - 1;
-function findDelayIndex(delay) {
-    for (var i = 0; i <= DELAY_LAST; i++)
-        if (delay <= DELAYS[i])
-            return i;
-}
-var MicroTask = (function () {
-    function MicroTask(callback, args) {
-        this.next = null;
-        this.prev = null;
-        this.callback = callback || null;
-        this.args = args || null;
-    }
-    MicroTask.prototype.exec = function () {
-        var args = this.args, callback = this.callback;
-        if (!args) {
-            callback();
-        }
-        else {
-            switch (args.length) {
-                case 1:
-                    callback(args[0]);
-                    break;
-                case 2:
-                    callback(args[0], args[1]);
-                    break;
-                case 3:
-                    callback(args[0], args[1], args[2]);
-                    break;
-                default:
-                    callback.apply(null, args);
-            }
-        }
-    };
-    return MicroTask;
-}());
-exports.MicroTask = MicroTask;
-var Task = (function (_super) {
-    __extends(Task, _super);
-    function Task() {
-        _super.apply(this, arguments);
-        this.delay = -2;
-        this.timeout = 0;
-        this.pointer = POINTER_NONE;
-        this.isRef = true;
-        this.queue = null;
-    }
-    Task.prototype.ref = function () {
-        if (!this.isRef) {
-        }
-    };
-    Task.prototype.unref = function () {
-        if (this.isRef) {
-        }
-    };
-    Task.prototype.cancel = function () {
-        this.queue.cancel(this);
-    };
-    return Task;
-}(MicroTask));
-exports.Task = Task;
-var EventQueue = (function () {
-    function EventQueue() {
-        this.start = null;
-        this.active = null;
-        this.pointers = [];
-    }
-    EventQueue.prototype.setPointer = function (pointer_index, task) {
-        var pointers = this.pointers;
-        var timeout = task.timeout;
-        pointers[pointer_index] = task;
-        task.pointer = pointer_index;
-        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
-            var p = pointers[i];
-            if (!p) {
-                pointers[i] = task;
-            }
-            else {
-                if (p.timeout <= timeout) {
-                    pointers[i] = task;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-    };
-    EventQueue.prototype.insertTask = function (curr, task) {
-        var timeout = task.timeout;
-        var prev = null;
-        if (timeout >= curr.timeout) {
-            do {
-                prev = curr;
-                curr = curr.next;
-            } while (curr && (curr.timeout <= timeout));
-            prev.next = task;
-            task.prev = prev;
-            if (curr) {
-                curr.prev = task;
-                task.next = curr;
-            }
-        }
-        else {
-            do {
-                prev = curr;
-                curr = curr.prev;
-            } while (curr && (curr.timeout > timeout));
-            prev.prev = task;
-            task.next = prev;
-            if (curr) {
-                curr.next = task;
-                task.prev = curr;
-            }
-            else {
-                this.start = task;
-            }
-        }
-    };
-    EventQueue.prototype.msNextTask = function () {
-        if (this.start) {
-            return this.start.timeout - Date.now();
-        }
-        return Infinity;
-    };
-    EventQueue.prototype.insert = function (task) {
-        task.queue = this;
-        var delay = task.delay;
-        var timeout = task.timeout = Date.now() + delay;
-        var pointers = this.pointers;
-        var pointer_index = findDelayIndex(delay);
-        var curr = pointers[pointer_index];
-        if (!curr) {
-            this.setPointer(pointer_index, task);
-            if (pointer_index) {
-                for (var i = pointer_index - 1; i >= 0; i--) {
-                    if (pointers[i]) {
-                        curr = pointers[i];
-                        break;
-                    }
-                }
-            }
-            if (!curr)
-                curr = this.start;
-            if (!curr) {
-                this.start = task;
-            }
-            else {
-                this.insertTask(curr, task);
-            }
-        }
-        else {
-            if (timeout >= curr.timeout) {
-                this.setPointer(pointer_index, task);
-            }
-            this.insertTask(curr, task);
-        }
-    };
-    EventQueue.prototype.cancel = function (task) {
-        var prev = task.prev;
-        var next = task.next;
-        task.prev = task.next = null;
-        if (prev)
-            prev.next = next;
-        if (next)
-            next.prev = prev;
-        if (!prev) {
-            this.start = next;
-        }
-        if (task.pointer !== POINTER_NONE) {
-            var index = task.pointer;
-            if (index) {
-                this.pointers[index] = this.pointers[index - 1];
-            }
-            else {
-                this.pointers[index] = null;
-            }
-        }
-    };
-    EventQueue.prototype.sliceActiveQueue = function () {
-        var curr = this.start;
-        if (!curr)
-            return;
-        var time = Date.now();
-        var pointers = this.pointers;
-        for (var i = 0; i <= DELAY_LAST; i++) {
-            var pointer = pointers[i];
-            if (pointer) {
-                if (pointer.timeout <= time) {
-                    pointers[i] = null;
-                    curr = pointer;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-        if (curr.timeout > time)
-            return;
-        var prev;
-        do {
-            prev = curr;
-            curr = curr.next;
-        } while (curr && (curr.timeout <= time));
-        prev.next = null;
-        if (curr)
-            curr.prev = null;
-        this.active = this.start;
-        this.start = curr;
-    };
-    EventQueue.prototype.cycle = function () {
-        this.sliceActiveQueue();
-    };
-    EventQueue.prototype.pop = function () {
-        var task = this.active;
-        if (!task)
-            return null;
-        this.active = task.next;
-        return task;
-    };
-    return EventQueue;
-}());
-exports.EventQueue = EventQueue;
-var EventLoop = (function () {
-    function EventLoop() {
-        this.microQueue = null;
-        this.microQueueEnd = null;
-        this.refQueue = new EventQueue;
-        this.unrefQueue = new EventQueue;
-        this.poll = new Poll;
-    }
-    EventLoop.prototype.shouldStop = function () {
-        if (!this.refQueue.start)
-            return true;
-        return false;
-    };
-    EventLoop.prototype.insertMicrotask = function (microtask) {
-        var last = this.microQueueEnd;
-        this.microQueueEnd = microtask;
-        if (!last) {
-            this.microQueue = microtask;
-        }
-        else {
-            last.next = microtask;
-        }
-    };
-    EventLoop.prototype.insert = function (task) {
-        if (task.isRef)
-            this.refQueue.insert(task);
-        else
-            this.unrefQueue.insert(task);
-    };
-    EventLoop.prototype.start = function () {
-        function exec_task(task) {
-            if (task.callback)
-                task.callback();
-        }
-        while (1) {
-            this.refQueue.cycle();
-            this.unrefQueue.cycle();
-            var refTask = this.refQueue.pop();
-            var unrefTask = this.unrefQueue.pop();
-            var task;
-            while (refTask || unrefTask) {
-                if (refTask && unrefTask) {
-                    if (refTask.timeout < unrefTask.timeout) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else if (refTask.timeout > unrefTask.timeout) {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                    else {
-                        if (refTask.timeout <= unrefTask.timeout) {
-                            refTask.exec();
-                            refTask = null;
-                        }
-                        else {
-                            unrefTask.exec();
-                            unrefTask = null;
-                        }
-                    }
-                }
-                else {
-                    if (refTask) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                }
-                var microtask;
-                do {
-                    microtask = this.microQueue;
-                    if (microtask) {
-                        if (microtask.callback)
-                            microtask.exec();
-                        this.microQueue = microtask.next;
-                    }
-                } while (this.microQueue);
-                this.microQueueEnd = null;
-                if (!refTask)
-                    refTask = this.refQueue.pop();
-                else
-                    unrefTask = this.unrefQueue.pop();
-            }
-            var havePollEvents = this.poll.hasRefs();
-            if (this.shouldStop() && !havePollEvents)
-                break;
-            var ref_ms = this.refQueue.msNextTask();
-            var unref_ms = this.unrefQueue.msNextTask();
-            var CAP = 1000000;
-            var ms = Math.min(ref_ms, unref_ms, CAP);
-            if (ms > 0) {
-                if (havePollEvents) {
-                    this.poll.wait(ms);
-                }
-                else {
-                    var seconds = Math.floor(ms / 1000);
-                    var nanoseconds = (ms % 1000) * 1000000;
-                    index_1.nanosleep(seconds, nanoseconds);
-                }
-            }
-            else {
-                if (ms > 1) {
-                    index_1.sched_yield();
-                }
-            }
-        }
-    };
-    return EventLoop;
-}());
-exports.EventLoop = EventLoop;
-
-
-/***/ }),
-/* 57 */
+/* 54 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -19300,11 +18120,11 @@ var __extends = (this && this.__extends) || function (d, b) {
 var libjs = __webpack_require__(2);
 var inotify_1 = __webpack_require__(20);
 var util = __webpack_require__(0);
-var pathModule = __webpack_require__(6);
+var pathModule = __webpack_require__(5);
 var events_1 = __webpack_require__(4);
 var buffer_1 = __webpack_require__(1);
 var static_buffer_1 = __webpack_require__(3);
-var stream_1 = __webpack_require__(7);
+var stream_1 = __webpack_require__(6);
 if (false) {
     exports.isFULLjs = true;
 }
@@ -20644,7 +19464,7 @@ SyncWriteStream.prototype.destroySoon = SyncWriteStream.prototype.destroy;
 
 
 /***/ }),
-/* 58 */
+/* 55 */
 /***/ (function(module, exports) {
 
 function webpackEmptyContext(req) {
@@ -20653,10 +19473,10 @@ function webpackEmptyContext(req) {
 webpackEmptyContext.keys = function() { return []; };
 webpackEmptyContext.resolve = webpackEmptyContext;
 module.exports = webpackEmptyContext;
-webpackEmptyContext.id = 58;
+webpackEmptyContext.id = 55;
 
 /***/ }),
-/* 59 */
+/* 56 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -20666,7 +19486,7 @@ var __extends = (this && this.__extends) || function (d, b) {
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
-var eloop_1 = __webpack_require__(5);
+var eloop_1 = __webpack_require__(7);
 var TIMEOUT_MAX = 2147483647;
 var Timeout = (function () {
     function Timeout(callback, args) {

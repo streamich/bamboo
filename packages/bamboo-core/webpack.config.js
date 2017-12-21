@@ -14,8 +14,20 @@ module.exports = {
         extensions: ['.ts', '.js']
     },
     module: {
-        loaders: [
-            {test: /\.ts$/, loader: 'ts-loader'}
+        rules: [
+            {test: /\.ts$/, loader: 'ts-loader'},
+            /*
+            {
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['babel-preset-es2015']
+                    }
+                }
+            }
+            */
         ],
     },
     target: 'node', // in order to ignore built-in modules like path, fs, etc.

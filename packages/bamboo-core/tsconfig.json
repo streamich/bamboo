@@ -7,8 +7,15 @@
     "listFiles": false,
     "skipDefaultLibCheck": true,
     "noImplicitAny": false,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "allowJs": true
   },
+  "include": [
+    "src/**/*"
+  ],
+  "files": [
+    "typing.d.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",

@@ -1,24 +1,16 @@
 
 // Constant set by Webpack, whether to print debug info.
-declare var __DEBUG__: boolean;
+declare const __DEBUG__: boolean;
 
 // Constant set by Webpack, whether to trace syscalls.
-declare var __STRACE__: boolean;
+declare const __STRACE__: boolean;
 
 // Constant set by Webpack, whether JIT compile `process.asyscall` function.
-declare var __BUILD_ASYNC_SYSCALL__: boolean;
+declare const __BUILD_ASYNC_SYSCALL__: boolean;
 
-
-// declare var __dirname;
-// declare var __filename;
-// declare var exports;
-// declare var require;
-// declare var process;
-
-
-type TcallbackTyped <E, D> = (err?: E, data?: D) => void;
-type Tcallback = TcallbackTyped <Error, any>;
-type TcallbackData <D> = TcallbackTyped <Error, D>;
+type TCallbackTyped <E, D> = (err?: E, data?: D) => void;
+type TCallback = TCallbackTyped <Error, any>;
+type TCallbackData <D> = TCallbackTyped <Error, D>;
 
 type number64 = [number, number];
 
@@ -37,7 +29,7 @@ interface StaticArrayBufferConstructor extends ArrayBufferConstructor {
 declare var StaticArrayBuffer: StaticArrayBufferConstructor;
 
 
-declare namespace NodeJS {
+declare module NodeJS {
     export interface Process {
         loop: any; // Main event loop
 
