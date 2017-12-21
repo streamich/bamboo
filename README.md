@@ -16,6 +16,6 @@ you can run Bamboo
 bamboo app.js
 ```
 
-  - [API status](./docs/api/md)
+  - [API status](./docs/api.md)
   - [JavaScript runtimes](./docs/runtimes.md)
   - [TODOs](./docs/todos.md)

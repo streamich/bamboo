@@ -10,17 +10,23 @@ In order for Bamboo to start-up and provide at least basic functionality it requ
 all JavaScript runtimes to provide:
 
   - [`global`](#global)
-  - [`process.syscall()`](#process-syscall
+  - [`process.syscall()`](#processsyscall)
 
 ### `global`
 
 Bamboo requires that there is a global `global` object in the JavaScript environmet.
 
+### `process`
+
+`global` object should have a property called `process`, which itself is an object.
+
 ### `process.syscall()`
 
 `process.syscall` allows Bamboo to execute system calls, it is basically the only
 major dependency required for Bamboo to provide at least the basic implementation
-of Node's standard library. The `process.syscall()` function is of the following type:
+of Node's standard library.
+
+The `process.syscall()` function is of the following type:
 
 ```ts
 type TSyscall = (num: number, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?) => number;
