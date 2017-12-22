@@ -54,7 +54,7 @@ module.exports = {
         
             // Whether to create a thread pool to make async syscall function `process.asyscall`,
             // if it is ont provided by JavaScript runtime.
-            __BUILD_ASYNC_SYSCALL__: JSON.stringify(JSON.parse(process.env.BAMBOO_ASYSCALL || true)),
+            __BUILD_ASYNC_SYSCALL__: JSON.stringify(JSON.parse(process.env.BAMBOO_ASYSCALL || '1')),
         }),
     ]
 };

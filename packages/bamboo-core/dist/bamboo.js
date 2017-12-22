@@ -11900,7 +11900,7 @@ task.callback = function() {
 
     // Create `process.asyscall` and `process.asyscall64`
     if(!process.asyscall) {
-        if(process.hasBinaryUtils && true) {
+        if(process.hasBinaryUtils && 0) {
             __webpack_require__(50);
         } else {
             // Create fake asynchronous system calls by just wrapping the
