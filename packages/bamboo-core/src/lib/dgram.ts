@@ -2,6 +2,7 @@ import {ISocketUdp} from '../libaio/event';
 import {EventEmitter} from './events';
 import {Buffer} from './buffer';
 import {StaticBuffer} from './static-buffer';
+import process from './process';
 var util = require('./util');
 
 
@@ -91,13 +92,13 @@ export class Socket extends EventEmitter {
         };
     }
 
-    send(msg: Tmsg, offset: number, length: number,     port: number,           address: string,    callback?: Tcallback);
-    send(msg: Tmsg, port: number,   address: string,    callback?: Tcallback);
-    send(msg: Tmsg, a: number,      b: number|string,   c?: number|Tcallback,   d?: string,         e?: Tcallback) {
+    send(msg: Tmsg, offset: number, length: number,     port: number,           address: string,    callback?: TCallback);
+    send(msg: Tmsg, port: number,   address: string,    callback?: TCallback);
+    send(msg: Tmsg, a: number,      b: number|string,   c?: number|TCallback,   d?: string,         e?: TCallback) {
 
         var port: number;
         var address: string;
-        var callback: Tcallback;
+        var callback: TCallback;
 
         const typeofb = typeof b;
         if(typeofb[0] === 'n') {
@@ -110,7 +111,7 @@ export class Socket extends EventEmitter {
         } else if(typeofb[1] === 't') {
             port = a;
             address = b as string;
-            callback = c as Tcallback;
+            callback = c as TCallback;
         } else
             throw TypeError('3rd arguments must be length or address');
 
@@ -151,8 +152,8 @@ export class Socket extends EventEmitter {
         // }
 
         this.lookup(address, (err, ip) => {
-            var err = this.sock.send(list[0], address, port);
-            if(callback) callback(err);
+            const sendError = this.sock.send(list[0], address, port);
+            if(callback) callback(sendError);
         });
     }
 
@@ -160,10 +161,10 @@ export class Socket extends EventEmitter {
 
     }
 
-    bind(options: IbindOptions,     callback?: Tcallback): this;
-    bind(port?: number,             callback?: Tcallback): this;
-    bind(port?: number,             address?: string,       callback?: Tcallback): this;
-    bind(a?: number|IbindOptions,   b?: string|Tcallback,   c?: Tcallback): this {
+    bind(options: IbindOptions,     callback?: TCallback): this;
+    bind(port?: number,             callback?: TCallback): this;
+    bind(port?: number,             address?: string,       callback?: TCallback): this;
+    bind(a?: number|IbindOptions,   b?: string|TCallback,   c?: TCallback): this {
         var port: number;
         var address: string;
         var exclusive = false;
@@ -175,13 +176,13 @@ export class Socket extends EventEmitter {
                 address = b as string;
                 callback = c;
             } else {
-                callback = b as Tcallback;
+                callback = b as TCallback;
             }
         } else if((a !== null) && (typeof a === 'object')) {
             port = a.port;
             address = a.address || '';
             exclusive = !!a.exclusive;
-            callback = b as Tcallback;
+            callback = b as TCallback;
         } else
             throw TypeError('Invalid bind() arguments.');
 

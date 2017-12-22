@@ -14,10 +14,10 @@ process.on = EventEmitter.prototype.on.bind(process);
 process.emit = EventEmitter.prototype.emit.bind(process);
 
 
-process.title = 'full.js';
+process.title = 'Bamboo';
 
 process.release = {
-    name: 'full.js',
+    name: 'Bamboo',
     lts: '',
     sourceUrl: '',
     headersUrl: ''
@@ -30,7 +30,7 @@ process.version = 'v1.0.0';
 process.platform = 'linux';
 process.moduleLoadList = []; // For compatibility with node.
 process.versions = {
-    full: '1.0.0'
+    bamboo: '1.0.0'
 };
 // process.arch = process.arch;
 // process.platform = process.platform;
@@ -66,7 +66,7 @@ process.config = {};
 // reallyExit: [Function: reallyExit],
 
 
-var libjs = require('../libjs/index');
+var libjs = require('../../../libjs/index');
 
 process.pid = libjs.getpid();
 
@@ -99,11 +99,11 @@ process.hrtime = function hrtime() {
 };
 
 
-var fs = require('./fs');
-var STDOUT = 1;
-process.stdout = process.stderr = new fs.SyncWriteStream(STDOUT);
-
-
+const fs = require('./fs');
+const STDOUT = 1;
+const STDERR = 2;
+process.stdout = new fs.SyncWriteStream(STDOUT);
+process.stderr = new fs.SyncWriteStream(STDERR);
 
 // abort: [Function: abort],
 // chdir: [Function: chdir],
@@ -214,3 +214,4 @@ process.stdout = process.stderr = new fs.SyncWriteStream(STDOUT);
 //         '/share/node_modules',
 //         '/node_modules' ] } }
 
+export default process;

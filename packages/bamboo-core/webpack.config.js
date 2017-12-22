@@ -14,8 +14,26 @@ module.exports = {
         extensions: ['.ts', '.js']
     },
     module: {
-        loaders: [
-            {test: /\.ts$/, loader: 'ts-loader'}
+        rules: [
+            {
+                test: /\.ts$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'ts-loader'
+                }
+            },
+            /*
+            {
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['babel-preset-es2015']
+                    }
+                }
+            }
+            */
         ],
     },
     target: 'node', // in order to ignore built-in modules like path, fs, etc.
@@ -36,7 +54,7 @@ module.exports = {
         
             // Whether to create a thread pool to make async syscall function `process.asyscall`,
             // if it is ont provided by JavaScript runtime.
-            __BUILD_ASYNC_SYSCALL__: JSON.stringify(JSON.parse(process.env.BAMBOO_ASYSCALL || true)),
+            __BUILD_ASYNC_SYSCALL__: JSON.stringify(JSON.parse(process.env.BAMBOO_ASYSCALL || '1')),
         }),
     ]
 };

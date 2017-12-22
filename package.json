@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Node.js standard library in pure JavaScript",
   "devDependencies": {
+    "@types/node": "8.5.2",
     "lerna": "^2.5.1"
   }
 }

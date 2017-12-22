@@ -1,4 +1,4 @@
-import * as libjs from '../libjs/index';
+import * as libjs from '../../../libjs/index';
 import {Buffer} from '../lib/buffer';
 import {StaticBuffer} from '../lib/static-buffer';
 import {IEventPoll, ISocket, noop, Tfrom, TonData, TonError, TonStart, TonStop, Tcallback} from "./event";

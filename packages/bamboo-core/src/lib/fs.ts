@@ -1,4 +1,4 @@
-import * as libjs from '../libjs/index';
+import * as libjs from '../../../libjs/index';
 import {Inotify, IInotifyEvent} from '../libaio/inotify';
 var util = require('./util');
 var pathModule = require('./path');
@@ -275,13 +275,13 @@ export function accessSync(path: Tpath, mode: number = F_OK): void {
     var res = libjs.access(vpath, mode);
     if(res < 0) throwError(res, 'access', vpath);
 }
-export function access(path: string|Buffer, callback: TcallbackData <void>);
-export function access(path: string|Buffer, mode: number, callback: TcallbackData <void>);
-export function access(path: string|Buffer, a: number|TcallbackData <void>, b?: TcallbackData <void>) {
-    var mode: number, callback: TcallbackData <void>;
+export function access(path: string|Buffer, callback: TCallbackData <void>);
+export function access(path: string|Buffer, mode: number, callback: TCallbackData <void>);
+export function access(path: string|Buffer, a: number|TCallbackData <void>, b?: TCallbackData <void>) {
+    var mode: number, callback: TCallbackData <void>;
 
     if(typeof a === 'function') {
-        callback = a as TcallbackData <void>;
+        callback = a as TCallbackData <void>;
         mode = F_OK;
     } else {
         mode = a as number;
@@ -346,12 +346,12 @@ export function appendFileSync(file: Tfile, data: Tdata, options?: IFileOptions)
     // Close fd only if WE opened it.
     if(!is_fd) libjs.close(fd);
 }
-export function appendFile(file: Tfile, data: Tdata, callback: TcallbackData <void>);
-export function appendFile(file: Tfile, data: Tdata, options: IFileOptions, callback: TcallbackData <void>);
-export function appendFile(file: Tfile, data: Tdata, options: IFileOptions|TcallbackData <void>, callback?: TcallbackData <void>) {
+export function appendFile(file: Tfile, data: Tdata, callback: TCallbackData <void>);
+export function appendFile(file: Tfile, data: Tdata, options: IFileOptions, callback: TCallbackData <void>);
+export function appendFile(file: Tfile, data: Tdata, options: IFileOptions|TCallbackData <void>, callback?: TCallbackData <void>) {
     var opts: IFileOptions;
     if(typeof options === 'function') {
-        callback = options as any as TcallbackData <void>;
+        callback = options as any as TCallbackData <void>;
         opts = appendFileDefaults;
     } else {
         var tipof = typeof options;
@@ -412,7 +412,7 @@ export function chmodSync(path: Tpath, mode: number) {
     var result = libjs.chmod(vpath, mode);
     if(result < 0) throwError(result, 'chmod', vpath);
 }
-export function chmod(path: Tpath, mode: number, callback: TcallbackData <void>) {
+export function chmod(path: Tpath, mode: number, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
     libjs.chmodAsync(vpath, mode, (result) => {
@@ -428,7 +428,7 @@ export function fchmodSync(fd: number, mode: number) {
     var result = libjs.fchmod(fd, mode);
     if(result < 0) throwError(result, 'chmod');
 }
-export function fchmod(fd: number, mode: number, callback: TcallbackData <void>) {
+export function fchmod(fd: number, mode: number, callback: TCallbackData <void>) {
     validateFd(fd);
     if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
     libjs.fchmodAsync(fd, mode, (result) => {
@@ -449,7 +449,7 @@ export function chownSync(path: Tpath, uid: number, gid: number) {
     var result = libjs.chown(vpath, uid, gid);
     if(result < 0) throwError(result, 'chown', vpath);
 }
-export function chown(path: Tpath, uid: number, gid: number, callback: TcallbackData <void>) {
+export function chown(path: Tpath, uid: number, gid: number, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
     if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
@@ -466,7 +466,7 @@ export function fchownSync(fd: number, uid: number, gid: number) {
     var result = libjs.fchown(fd, uid, gid);
     if(result < 0) throwError(result, 'fchown');
 }
-export function fchown(fd: number, uid: number, gid: number, callback: TcallbackData <void>) {
+export function fchown(fd: number, uid: number, gid: number, callback: TCallbackData <void>) {
     validateFd(fd);
     if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
     if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
@@ -483,7 +483,7 @@ export function lchownSync(path: Tpath, uid: number, gid: number) {
     var result = libjs.lchown(vpath, uid, gid);
     if(result < 0) throwError(result, 'lchown', vpath);
 }
-export function lchown(path: Tpath, uid: number, gid: number, callback: TcallbackData <void>) {
+export function lchown(path: Tpath, uid: number, gid: number, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     if(typeof uid !== 'number') throw TypeError(ERRSTR.UID);
     if(typeof gid !== 'number') throw TypeError(ERRSTR.GID);
@@ -499,7 +499,7 @@ export function closeSync(fd: number) {
     var result = libjs.close(fd);
     if(result < 0) throwError(result, 'close');
 }
-export function close(fd: number, callback: TcallbackData <void>) {
+export function close(fd: number, callback: TCallbackData <void>) {
     if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
     libjs.closeAsync(fd, result => {
         if(result < 0) callback(Error(formatError(result, 'close')));
@@ -527,7 +527,7 @@ export function fsyncSync(fd: number) {
     var result = libjs.fsync(fd);
     if(result < 0) throwError(result, 'fsync');
 }
-export function fsync(fd: number, callback: TcallbackData <void>) {
+export function fsync(fd: number, callback: TCallbackData <void>) {
     if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
     libjs.fsyncAsync(fd, result => {
         if(result < 0) callback(Error(formatError(result, 'fsync')));
@@ -541,7 +541,7 @@ export function fdatasyncSync(fd: number) {
     var result = libjs.fdatasync(fd);
     if(result < 0) throwError(result, 'fdatasync');
 }
-export function fdatasync(fd: number, callback: TcallbackData <void>) {
+export function fdatasync(fd: number, callback: TCallbackData <void>) {
     if(typeof fd !== 'number') throw TypeError(ERRSTR.FD);
     libjs.fdatasyncAsync(fd, result => {
         if(result < 0) callback(Error(formatError(result, 'fdatasync')));
@@ -579,7 +579,7 @@ export function statSync(path: Tpath): Stats {
         throwError(errno, 'stat', vpath);
     }
 }
-export function stat(path: string|Buffer, callback: TcallbackData <Stats>) {
+export function stat(path: string|Buffer, callback: TCallbackData <Stats>) {
     var vpath = validPathOrThrow(path);
     libjs.statAsync(vpath, (err, res) => {
         if(err) callback(Error(formatError(err, 'stat', vpath)));
@@ -596,7 +596,7 @@ export function fstatSync(fd: number): Stats {
         throwError(errno, 'fstat');
     }
 }
-export function fstat(fd: number, callback: TcallbackData <Stats>) {
+export function fstat(fd: number, callback: TCallbackData <Stats>) {
     validateFd(fd);
     libjs.fstatAsync(fd, (err, res) => {
         if(err) callback(Error(formatError(err, 'fstat')));
@@ -613,7 +613,7 @@ export function lstatSync(path: Tpath): Stats {
         throwError(errno, 'lstat', vpath);
     }
 }
-export function lstat(path: Tpath, callback: TcallbackData <Stats>) {
+export function lstat(path: Tpath, callback: TCallbackData <Stats>) {
     var vpath = validPathOrThrow(path);
     libjs.lstatAsync(vpath, (err, res) => {
         if(err) callback(Error(formatError(err, 'lstat', vpath)));
@@ -628,7 +628,7 @@ export function truncateSync(path: Tpath, len: number) {
     var res = libjs.truncate(vpath, len);
     if(res < 0) throwError(res, 'truncate', vpath);
 }
-export function truncate(path: Tpath, len: number, callback: TcallbackData <void>) {
+export function truncate(path: Tpath, len: number, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
     libjs.truncateAsync(vpath, len, res => {
@@ -643,7 +643,7 @@ export function ftruncateSync(fd: number, len: number) {
     var res = libjs.ftruncate(fd, len);
     if(res < 0) throwError(res, 'ftruncate');
 }
-export function ftruncate(fd: number, len: number, callback: TcallbackData <void>) {
+export function ftruncate(fd: number, len: number, callback: TCallbackData <void>) {
     validateFd(fd);
     if(typeof len !== 'number') throw TypeError(ERRSTR.LEN);
     libjs.ftruncateAsync(fd, len, res => {
@@ -681,7 +681,7 @@ export function utimesSync(path: Tpath, atime: number, mtime: number) {
     var res = libjs.utime(vpath, times);
     if(res < 0) throwError(res, 'utimes', vpath);
 }
-export function utimes(path: Tpath, atime: number, mtime: number, callback: TcallbackData <void>) {
+export function utimes(path: Tpath, atime: number, mtime: number, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     // if(typeof atime === 'string') atime = parseInt(atime as string);
     // if(typeof mtime === 'string') mtime = parseInt(mtime as string);
@@ -719,7 +719,7 @@ export function linkSync(srcpath: Tpath, dstpath: Tpath) {
     var res = libjs.link(vsrcpath, vdstpath);
     if(res < 0) throwError(res, 'link', vsrcpath, vdstpath);
 }
-export function link(srcpath: Tpath, dstpath: Tpath, callback: TcallbackData <void>) {
+export function link(srcpath: Tpath, dstpath: Tpath, callback: TCallbackData <void>) {
     var vsrcpath = validPathOrThrow(srcpath);
     var vdstpath = validPathOrThrow(dstpath);
     libjs.linkAsync(vsrcpath, vdstpath, res => {
@@ -735,11 +735,11 @@ export function mkdirSync(path: Tpath, mode: number = MODE.DIR) {
     var res = libjs.mkdir(vpath, mode);
     if(res < 0) throwError(res, 'mkdir', vpath);
 }
-export function mkdir(path: Tpath, mode: number|TcallbackData <void> = MODE.DIR, callback?: TcallbackData <void>) {
+export function mkdir(path: Tpath, mode: number|TCallbackData <void> = MODE.DIR, callback?: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
 
     if(typeof mode === 'function') {
-        callback = mode as any as TcallbackData <void>;
+        callback = mode as any as TCallbackData <void>;
         mode = MODE.DIR;
     } else {
         if(typeof mode !== 'number') throw TypeError(ERRSTR.MODE_INT);
@@ -781,7 +781,7 @@ export function mkdtempSync(prefix: string): string {
         throw Error(`Could not find a new name, mkdtemp`);
     }
 }
-export function mkdtemp(prefix: string, callback: TcallbackData <string>) {
+export function mkdtemp(prefix: string, callback: TCallbackData <string>) {
     if (!prefix || typeof prefix !== 'string')
         throw new TypeError(ERRSTR.PREFIX);
 
@@ -821,9 +821,9 @@ export function openSync(path: string|Buffer, flags: string|number, mode: number
     if(res < 0) throwError(res, 'open', vpath);
     return res;
 }
-export function open(path: string|Buffer, flags: string|number, mode: number, callback?: TcallbackData <number>) {
+export function open(path: string|Buffer, flags: string|number, mode: number, callback?: TCallbackData <number>) {
     if(typeof mode === 'function') {
-        callback = mode as any as TcallbackData <number>;
+        callback = mode as any as TCallbackData <number>;
         mode = MODE.FILE;
     }
 
@@ -912,12 +912,12 @@ export function readdirSync(path: string|Buffer, options?: string|IOptions): str
 }
 // TODO: `readdir` (unlike `readdirSync`) often returns `-71 = EPROTO` (Invalid protocol) when
 // TODO: opening a directory, but directory clearly exists.
-export function readdir(path: string|Buffer, options: string|IOptions|TcallbackData <string[]>, callback?: TcallbackData <string[]>) {
+export function readdir(path: string|Buffer, options: string|IOptions|TCallbackData <string[]>, callback?: TCallbackData <string[]>) {
     var vpath = validPathOrThrow(path);
 
     var encoding: string;
     if(typeof options === 'function') {
-        callback = options as TcallbackData <string[]>;
+        callback = options as TCallbackData <string[]>;
         encoding = optionsDefaults.encoding;
     } else {
         encoding = optsEncoding(options);
@@ -970,7 +970,7 @@ export function readFileSync(file: string|Buffer|number, options?: IReadFileOpti
 
 const getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
 
-export function readFile(file: string|Buffer|number, options: IReadFileOptions|string = {}, cb?: TcallbackData <string|Buffer>) {
+export function readFile(file: string|Buffer|number, options: IReadFileOptions|string = {}, cb?: TCallbackData <string|Buffer>) {
     var [opts, callback] = getReadFileOptionsAndCallback(options, cb);
     var is_fd = typeof file === 'number';
 
@@ -1046,7 +1046,7 @@ export function renameSync(oldPath: Tpath, newPath: Tpath) {
     var res = libjs.rename(voldPath, vnewPath);
     if(res < 0) throwError(res, 'rename', voldPath, vnewPath);
 }
-export function rename(oldPath: Tpath, newPath: Tpath, callback: TcallbackData <void>) {
+export function rename(oldPath: Tpath, newPath: Tpath, callback: TCallbackData <void>) {
     var voldPath = validPathOrThrow(oldPath);
     var vnewPath = validPathOrThrow(newPath);
     libjs.renameAsync(voldPath, vnewPath, res => {
@@ -1061,7 +1061,7 @@ export function rmdirSync(path: Tpath) {
     var res = libjs.rmdir(vpath);
     if(res < 0) throwError(res, 'rmdir', vpath);
 }
-export function rmdir(path: Tpath, callback: TcallbackData <void>) {
+export function rmdir(path: Tpath, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     libjs.rmdirAsync(vpath, res => {
         if(res < 0) callback(Error(formatError(res, 'rmdir', vpath)));
@@ -1078,7 +1078,7 @@ export function symlinkSync(target: Tpath, path: Tpath/*, type?: string*/) {
     var res = libjs.symlink(vtarget, vpath);
     if(res < 0) throwError(res, 'symlink', vtarget, vpath);
 }
-export function symlink(target: Tpath, path: Tpath, type, callback?: TcallbackData <void>) {
+export function symlink(target: Tpath, path: Tpath, type, callback?: TCallbackData <void>) {
     var vtarget = validPathOrThrow(target);
     var vpath = validPathOrThrow(path);
     if(typeof type === 'function') {
@@ -1101,7 +1101,7 @@ export function unlinkSync(path: Tpath) {
     var res = libjs.unlink(vpath);
     if(res < 0) throwError(res, 'unlink', vpath);
 }
-export function unlink(path: Tpath, callback: TcallbackData <void>) {
+export function unlink(path: Tpath, callback: TCallbackData <void>) {
     var vpath = validPathOrThrow(path);
     libjs.unlinkAsync(vpath, res => {
         if(res < 0) callback(Error(formatError(res, 'unlink', vpath)));
@@ -1213,8 +1213,8 @@ export function writeFileSync(file: Tfile, data: Tdata, options?: IFileOptions|s
 
 const getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
 
-export function writeFile(file: Tfile, data: Tdata, callback: TcallbackData <void>);
-export function writeFile(file: Tfile, data: Tdata, options: IFileOptions|string|TcallbackData <void>, cb?: TcallbackData <void>) {
+export function writeFile(file: Tfile, data: Tdata, callback: TCallbackData <void>);
+export function writeFile(file: Tfile, data: Tdata, options: IFileOptions|string|TCallbackData <void>, cb?: TCallbackData <void>) {
     var [opts, callback] = getWriteFileOptionsAndCallback(options, cb);
     var is_fd = typeof file === 'number';
 

@@ -73,8 +73,8 @@ function addBuiltinLibsToObject(object) {
 };
 
     Object.defineProperty(object, name, {
-            get: function() {
-                var r = require;
+        get: function() {
+            var r = require;
             var lib = r(name);
 
     // Disable the current getter/setter and set up a new

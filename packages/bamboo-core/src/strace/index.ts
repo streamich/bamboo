@@ -1,6 +1,6 @@
 import {SYS, ARGS, RESULT, ERROR, ERROR_MSG} from './arch_linux_x64';
 import {style, STYLE, interval} from './style';
-import {UInt64} from '../libjs/ctypes';
+import {UInt64} from '../../../libjs/ctypes';
 var util = require('../lib/util');
 
 declare var StaticBuffer;

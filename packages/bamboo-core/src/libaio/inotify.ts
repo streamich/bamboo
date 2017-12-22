@@ -1,4 +1,4 @@
-import * as libjs from '../libjs/index';
+import * as libjs from '../../../libjs/index';
 import {StaticBuffer} from '../lib/static-buffer';
 import {Buffer} from '../lib/buffer';
 

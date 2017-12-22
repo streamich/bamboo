@@ -1,4 +1,4 @@
-import {sched_yield, nanosleep} from '../libjs/index';
+import {sched_yield, nanosleep} from '../../../libjs/index';
 import {IEventPoll, IEventPollConstructor} from '../libaio/event';
 
 

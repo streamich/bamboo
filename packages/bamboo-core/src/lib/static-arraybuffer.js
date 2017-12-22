@@ -39,7 +39,7 @@ function alloc(size, prot) {
 
     var flags = 2 /* MAP_PRIVATE */ | 32 /* MAP_ANONYMOUS */;
     var protnum = prot2num(prot);
-    var libjs = require('../libjs/index');
+    var libjs = require('../../../libjs/index');
     var addr = libjs.mmap(0, size, protnum, flags, -1, 0);
 
     // Address in 64-bit x86 can be negative and errors are from -1 to -124.
@@ -109,14 +109,14 @@ StaticArrayBuffer.prototype.call = function(offset, args) {
 StaticArrayBuffer.prototype.setProtection = function(prot) {
     var protnum = prot2num(prot);
     // return libjs.mprotect(this, this.length, protnum);
-    var libjs = require('../libjs/index');
+    var libjs = require('../../../libjs/index');
     var res = libjs.mprotect(this, this.length, protnum);
     if(res < -1)
         throw Error('Could not change protection level.');
 };
 
 StaticArrayBuffer.prototype.free = function() {
-    var libjs = require('../libjs/index');
+    var libjs = require('../../../libjs/index');
     var res = libjs.munmap(this, this.length);
     if(res < 0)
         throw Error('Error on freeing memory.');
