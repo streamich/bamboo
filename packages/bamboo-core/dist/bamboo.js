@@ -3031,9 +3031,9 @@ function malloc(size) {
 //     syscall(cmd: number, ...args): number
 // `defs` provides platform specific constants and structs, the default one we use is `x86_64_linux`.
 // import {SYS, types} from './definitions';
-var x86_64_linux_1 = __webpack_require__(10);
-var types = __webpack_require__(10);
-__export(__webpack_require__(10));
+var x86_64_linux_1 = __webpack_require__(9);
+var types = __webpack_require__(9);
+__export(__webpack_require__(9));
 // In development mode we use `debug` library to trace all our system calls.
 // var debug = require('debug')('libjs:syscall');
 // To see the debug output, set `DEBUG` environment variable to `libjs:*`, example:
@@ -3049,7 +3049,7 @@ exports.arch = {
 };
 __export(__webpack_require__(45));
 // export * from './definitions';
-__export(__webpack_require__(32));
+__export(__webpack_require__(31));
 function noop() { }
 // ## Files
 //
@@ -4294,7 +4294,7 @@ exports.shmctl = shmctl;
 /* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
-var StaticArrayBuffer = __webpack_require__(9).StaticArrayBuffer;
+var StaticArrayBuffer = __webpack_require__(8).StaticArrayBuffer;
 
 
 exports.StaticBuffer = StaticBuffer;
@@ -4967,6 +4967,479 @@ function arrayClone(arr, i) {
 
 /***/ }),
 /* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var index_1 = __webpack_require__(2);
+var Poll;
+var platform = process.platform;
+switch (platform) {
+    case 'linux':
+        Poll = __webpack_require__(47).Poll;
+        break;
+    default:
+        // require('../libaio/epoll-et');
+        // require('../libaio/kqueue');
+        // require('../libaio/poll');
+        // require('../libaio/select');
+        // require('../libaio/fake_socket_poll');
+        throw Error("Platform not supported: " + platform);
+}
+var POINTER_NONE = -1;
+var DELAYS = [
+    -2 /* IMMEDIATE */,
+    -1 /* IO */,
+    1,
+    // 2,
+    // 4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    // 512,
+    1024,
+    // 2048,
+    4096,
+    // 8192,
+    16384,
+    // 32768,
+    65536,
+    131072,
+    // 262144,
+    524288,
+    // 1048576,
+    2097152,
+    // 4194304,
+    8388608,
+    // 16777216,
+    33554432,
+    // 67108864,
+    // 134217728,
+    268435456,
+    // 536870912,
+    // 1073741824,
+    2147483648,
+    Infinity,
+];
+var DELAY_LAST = DELAYS.length - 1;
+function findDelayIndex(delay) {
+    for (var i = 0; i <= DELAY_LAST; i++)
+        if (delay <= DELAYS[i])
+            return i;
+}
+// var _task_id = -1125899906842624;
+var MicroTask = /** @class */ (function () {
+    function MicroTask(callback, args) {
+        // id: number = _task_id++;         // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
+        this.next = null; // Previous task in list
+        this.prev = null; // Next task in list
+        this.callback = callback || null;
+        this.args = args || null;
+    }
+    MicroTask.prototype.exec = function () {
+        var args = this.args, callback = this.callback;
+        if (!args) {
+            callback();
+        }
+        else {
+            switch (args.length) {
+                case 1:
+                    callback(args[0]);
+                    break;
+                case 2:
+                    callback(args[0], args[1]);
+                    break;
+                case 3:
+                    callback(args[0], args[1], args[2]);
+                    break;
+                default:
+                    callback.apply(null, args);
+            }
+        }
+    };
+    return MicroTask;
+}());
+exports.MicroTask = MicroTask;
+var Task = /** @class */ (function (_super) {
+    __extends(Task, _super);
+    function Task() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.delay = -2 /* IMMEDIATE */; // Delay in ms
+        _this.timeout = 0; // UNIX time in ms when `delay` happens
+        _this.pointer = POINTER_NONE; // >1 if some deep pointer from queue points to this task.
+        _this.isRef = true; // Whether to keep process running while this task scheduled.
+        _this.queue = null; // `EventQueue` where this `Task` is inserted.
+        return _this;
+    }
+    // constructor() { }
+    Task.prototype.ref = function () {
+        if (!this.isRef) {
+        }
+    };
+    Task.prototype.unref = function () {
+        if (this.isRef) {
+        }
+    };
+    Task.prototype.cancel = function () {
+        this.queue.cancel(this);
+    };
+    return Task;
+}(MicroTask));
+exports.Task = Task;
+var EventQueue = /** @class */ (function () {
+    function EventQueue() {
+        this.start = null; // Macro-task queue: `setImmediate`, `I/O`, `setTimeout`, `setInterval`.
+        this.active = null; // Slice of `macroQueue` that is being executed in current event loop cycle.
+        // Deep pointers into `macroQueue` by the `delay` of the last task inserted in
+        // the queue with that delay or lesser, these give us the guidance where in the
+        // queue we should start looking for to insert a new task.
+        this.pointers = [];
+    }
+    EventQueue.prototype.setPointer = function (pointer_index, task) {
+        var pointers = this.pointers;
+        var timeout = task.timeout;
+        pointers[pointer_index] = task;
+        task.pointer = pointer_index;
+        // Make sure all pointers pointing to greater delay values are
+        // pointing at least as deep in the queue as the current pointer.
+        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
+            var p = pointers[i];
+            if (!p) {
+                pointers[i] = task;
+            }
+            else {
+                if (p.timeout <= timeout) {
+                    pointers[i] = task;
+                }
+                else {
+                    break;
+                }
+            }
+        }
+    };
+    EventQueue.prototype.insertTask = function (curr, task) {
+        var timeout = task.timeout;
+        var prev = null;
+        if (timeout >= curr.timeout) {
+            do {
+                prev = curr;
+                curr = curr.next;
+            } while (curr && (curr.timeout <= timeout));
+            prev.next = task;
+            task.prev = prev;
+            if (curr) {
+                curr.prev = task;
+                task.next = curr;
+            }
+        }
+        else {
+            do {
+                prev = curr;
+                curr = curr.prev;
+            } while (curr && (curr.timeout > timeout));
+            prev.prev = task;
+            task.next = prev;
+            if (curr) {
+                curr.next = task;
+                task.prev = curr;
+            }
+            else {
+                this.start = task;
+            }
+        }
+    };
+    // Milliseconds when next task to be executed.
+    EventQueue.prototype.msNextTask = function () {
+        if (this.start) {
+            return this.start.timeout - Date.now();
+        }
+        return Infinity;
+    };
+    EventQueue.prototype.insert = function (task) {
+        task.queue = this;
+        var delay = task.delay;
+        var timeout = task.timeout = Date.now() + delay;
+        var pointers = this.pointers;
+        var pointer_index = findDelayIndex(delay);
+        var curr = pointers[pointer_index];
+        if (!curr) {
+            this.setPointer(pointer_index, task);
+            if (pointer_index) {
+                for (var i = pointer_index - 1; i >= 0; i--) {
+                    if (pointers[i]) {
+                        curr = pointers[i];
+                        break;
+                    }
+                }
+            }
+            if (!curr)
+                curr = this.start;
+            if (!curr) {
+                this.start = task;
+            }
+            else {
+                this.insertTask(curr, task);
+            }
+        }
+        else {
+            if (timeout >= curr.timeout) {
+                this.setPointer(pointer_index, task);
+            }
+            this.insertTask(curr, task);
+        }
+    };
+    // debug() {
+    //     var curr: Task = this.start;
+    //     if(!curr) return;
+    //     do {
+    //         console.log(curr.delay, curr.timeout);
+    //     } while(curr = curr.next);
+    // }
+    EventQueue.prototype.cancel = function (task) {
+        var prev = task.prev;
+        var next = task.next;
+        task.prev = task.next = null;
+        if (prev)
+            prev.next = next;
+        if (next)
+            next.prev = prev;
+        if (!prev) {
+            this.start = next;
+        }
+        if (task.pointer !== POINTER_NONE) {
+            var index = task.pointer;
+            if (index) {
+                this.pointers[index] = this.pointers[index - 1];
+            }
+            else {
+                this.pointers[index] = null;
+            }
+        }
+    };
+    // 1. Splice `this.activeQueue` for the beginning of the `this.macroQueue` up to the
+    //    very last Task that timed out.
+    // 2. In the process reset `this.pointers` which were sliced out.
+    EventQueue.prototype.sliceActiveQueue = function () {
+        var curr = this.start;
+        if (!curr)
+            return; // No events queued.
+        var time = Date.now();
+        var pointers = this.pointers;
+        for (var i = 0; i <= DELAY_LAST; i++) {
+            var pointer = pointers[i];
+            if (pointer) {
+                if (pointer.timeout <= time) {
+                    pointers[i] = null;
+                    // pointer.pointer = POINTER_NONE;
+                    curr = pointer;
+                }
+                else {
+                    break;
+                }
+            }
+        }
+        if (curr.timeout > time)
+            return;
+        var prev;
+        do {
+            prev = curr;
+            curr = curr.next;
+        } while (curr && (curr.timeout <= time));
+        prev.next = null;
+        if (curr)
+            curr.prev = null;
+        this.active = this.start;
+        this.start = curr;
+    };
+    EventQueue.prototype.cycle = function () {
+        // Crate new active queue
+        this.sliceActiveQueue();
+    };
+    // Pop next task to be executed.
+    EventQueue.prototype.pop = function () {
+        var task = this.active;
+        if (!task)
+            return null;
+        this.active = task.next;
+        return task;
+    };
+    return EventQueue;
+}());
+exports.EventQueue = EventQueue;
+var EventLoop = /** @class */ (function () {
+    function EventLoop() {
+        this.microQueue = null; // Micro-task queue: `process.nextTick`.
+        this.microQueueEnd = null; // The last task in micro-task queue.
+        this.refQueue = new EventQueue; // Events that keep process running.
+        this.unrefQueue = new EventQueue; // Optional events.
+        this.poll = new Poll;
+    }
+    EventLoop.prototype.shouldStop = function () {
+        if (!this.refQueue.start)
+            return true;
+        return false;
+    };
+    EventLoop.prototype.insertMicrotask = function (microtask) {
+        var last = this.microQueueEnd;
+        this.microQueueEnd = microtask;
+        if (!last) {
+            this.microQueue = microtask;
+        }
+        else {
+            last.next = microtask; // One-way list
+        }
+    };
+    EventLoop.prototype.insert = function (task) {
+        if (task.isRef)
+            this.refQueue.insert(task);
+        else
+            this.unrefQueue.insert(task);
+    };
+    EventLoop.prototype.start = function () {
+        function exec_task(task) {
+            // TODO: BTW, which one is faster? (1) `if(task.callback)` vs. (2) `noop()`
+            if (task.callback)
+                task.callback();
+        }
+        // THE LOOP
+        while (1) {
+            // Create new active queues
+            this.refQueue.cycle();
+            this.unrefQueue.cycle();
+            var refTask = this.refQueue.pop();
+            var unrefTask = this.unrefQueue.pop();
+            // Execute all macro tasks of the current cycle in the event loop.
+            var task;
+            while (refTask || unrefTask) {
+                if (refTask && unrefTask) {
+                    if (refTask.timeout < unrefTask.timeout) {
+                        refTask.exec();
+                        refTask = null;
+                    }
+                    else if (refTask.timeout > unrefTask.timeout) {
+                        unrefTask.exec();
+                        unrefTask = null;
+                    }
+                    else {
+                        // if(refTask.id <= unrefTask.id) {
+                        if (refTask.timeout <= unrefTask.timeout) {
+                            refTask.exec();
+                            refTask = null;
+                        }
+                        else {
+                            unrefTask.exec();
+                            unrefTask = null;
+                        }
+                    }
+                }
+                else {
+                    if (refTask) {
+                        refTask.exec();
+                        refTask = null;
+                    }
+                    else {
+                        unrefTask.exec();
+                        unrefTask = null;
+                    }
+                }
+                // Execute all micro tasks accumulated while executing this macro task.
+                var microtask;
+                do {
+                    microtask = this.microQueue;
+                    if (microtask) {
+                        if (microtask.callback)
+                            microtask.exec();
+                        this.microQueue = microtask.next;
+                    }
+                } while (this.microQueue);
+                this.microQueueEnd = null;
+                // Pop one more task to execute.
+                if (!refTask)
+                    refTask = this.refQueue.pop();
+                else
+                    unrefTask = this.unrefQueue.pop();
+            }
+            // Stop the program?
+            var havePollEvents = this.poll.hasRefs();
+            if (this.shouldStop() && !havePollEvents)
+                break;
+            // ----------------------------------------------------------------------------------
+            // TODO:
+            // By here we finished executing all the macro and micro tasks of the current cycle.
+            // Now we need to decide if we have immediate tasks to execute in the next cycle,
+            // or (if not) we can save CPU cycles by idling. We should use the `nanosleep`,
+            // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
+            //
+            // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
+            // we can use `sched_yield` here, if it is not available on some systems we just create a no-op
+            // shim for it.
+            //
+            // Now, `epoll` syscall is available only on Linux (other systems have different alternatives),
+            // so we don't use it here as-it-is but create an abstraction for it, so that a correct
+            // async mechanism can be used on each system.
+            //
+            // For timer tasks `setInterval` and `setTimeout` we know the exact time when we need
+            // to execute them, for `setImmediate` task we know as well that we have to execute it
+            // immediately. So, if there are only future timer tasks scheduled, we `nanosleep` just
+            // enough to wake up before the task has to be executed.
+            //
+            // The interesting part are async I/O tasks, which are of two types:
+            //
+            //  - Type 1: `process.asyscall` provided by thread pool
+            //  - Type 2: Async I/O provided by kernel using `epoll`
+            //
+            // If there are Type 1 tasks in queue (we should be able to detect that) then we cannot
+            // `nanosleep`, but if there are no immediate tasks to be executed we can `sched_yield`
+            // as it should be an order of magnitude faster than file I/O.
+            //
+            // If there are Type 2 tasks -- we can `epoll` in two ways: with or without a blocking timeout.
+            // We should detect if it is possible and use `epoll` with timeout which effectively
+            // idles the loop up until the timeout is reached or when new events are received.
+            // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
+            //
+            // Also, use `eventfd` to notify `epoll` from thread poll when task is completed.
+            var ref_ms = this.refQueue.msNextTask();
+            var unref_ms = this.unrefQueue.msNextTask();
+            var CAP = 1000000;
+            var ms = Math.min(ref_ms, unref_ms, CAP);
+            if (ms > 0) {
+                if (havePollEvents) {
+                    this.poll.wait(ms); // epoll_wait
+                }
+                else {
+                    var seconds = Math.floor(ms / 1000);
+                    var nanoseconds = (ms % 1000) * 1000000;
+                    index_1.nanosleep(seconds, nanoseconds);
+                }
+            }
+            else {
+                if (ms > 1) {
+                    index_1.sched_yield();
+                }
+            }
+        }
+    };
+    return EventLoop;
+}());
+exports.EventLoop = EventLoop;
+
+
+/***/ }),
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6573,7 +7046,7 @@ else
 
 
 /***/ }),
-/* 6 */
+/* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6589,7 +7062,7 @@ Stream.Readable = __webpack_require__(12);
 Stream.Writable = __webpack_require__(13);
 Stream.Duplex = __webpack_require__(15);
 Stream.Transform = __webpack_require__(16);
-Stream.PassThrough = __webpack_require__(22);
+Stream.PassThrough = __webpack_require__(21);
 
 // Backwards-compat with node 0.4.x
 Stream.Stream = Stream;
@@ -6687,480 +7160,760 @@ Stream.prototype.pipe = function(dest, options) {
 
 
 /***/ }),
-/* 7 */
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports.StaticArrayBuffer = StaticArrayBuffer;
+
+// new StaticArrayBuffer(size);
+// StaticArrayBuffer.frame(address, size);
+// StaticArrayBuffer.alloc(size, protection);
+
+
+function prot2num(prot) {
+    if(typeof prot !== 'string')
+        throw TypeError('Protection must be a string.');
+    if(prot.match(/[^rwe]/))
+        throw TypeError('Protection string can contain only "r", "w" and "e" characters, given "' + prot + '".');
+
+    var val = 0 /* PROT_NONE */;
+    if(prot.indexOf('r') > -1) val |= 1 /* PROT_READ */;
+    if(prot.indexOf('w') > -1) val |= 2 /* PROT_WRITE */;
+    if(prot.indexOf('e') > -1) val |= 4 /* PROT_EXEC */;
+    return val;
+}
+
+
+// "frame" because it does not allocate,
+// just frames a slice of memory into ArrayBuffer.
+function frame(addr, size) {
+    var ab = process.frame(addr, size);
+    if(!(ab instanceof ArrayBuffer))
+        throw Error('Could not allocate ArrayBuffer.');
+    return ab;
+}
+
+
+function alloc(size, prot) {
+    if (typeof size !== 'number')
+        throw TypeError('size must be a number.');
+    if (size < 0)
+        throw TypeError('Invalid size argument.');
+
+    if (!prot) prot = 'rw';
+
+    var flags = 2 /* MAP_PRIVATE */ | 32 /* MAP_ANONYMOUS */;
+    var protnum = prot2num(prot);
+    var libjs = __webpack_require__(2);
+    var addr = libjs.mmap(0, size, protnum, flags, -1, 0);
+
+    // Address in 64-bit x86 can be negative and errors are from -1 to -124.
+    if ((addr[1] === -1) && ((addr[0] < 0) && (addr[0] > -125)))
+        throw Error('Could not allocate memory.');
+
+    var ab = frame(addr, size);
+    return ab;
+}
+
+
+// Two constructors, one exposed externally to user:
+//
+//  1. new StaticArrayBuffer(size)
+//
+// Another one that we just use internally here:
+//
+//  2. new StaticArrayBuffer(arrayBuffer);
+//
+function StaticArrayBuffer(size) {
+    var ab;
+    if(size instanceof ArrayBuffer) {
+        ab = size;
+    } else {
+        ab = new ArrayBuffer(size); // Let's pray it's actually 'static'.
+    }
+    ab.__proto__ = StaticArrayBuffer.prototype;
+    return ab;
+}
+
+
+// # Static methods
+
+// StaticArrayBuffers allocated with `alloc` have to be (currently) freed using `buffer.free`.
+StaticArrayBuffer.alloc = function(size, prot) {
+    return new StaticArrayBuffer(alloc(size, prot));
+};
+
+StaticArrayBuffer.frame = function(addr, size) {
+    return new StaticArrayBuffer(frame(addr, size));
+};
+
+StaticArrayBuffer.isStaticArrayBuffer = function(sab) {
+    if((sab instanceof StaticArrayBuffer) && (typeof sab.getAddress === 'function')) return true;
+    return false;
+};
+
+
+
+StaticArrayBuffer.prototype.__proto__ =
+    ArrayBuffer.prototype;
+
+
+
+// # Member instance methods
+
+StaticArrayBuffer.prototype.call = function(offset, args) {
+    if(typeof offset !== 'number') offset = 0;
+    if(offset < 0) offset = 0;
+    if(!isFinite(offset)) offset = 0;
+
+    if(!(args instanceof Array)) args = [];
+
+    return process.call(this, offset, args);
+};
+
+StaticArrayBuffer.prototype.setProtection = function(prot) {
+    var protnum = prot2num(prot);
+    // return libjs.mprotect(this, this.length, protnum);
+    var libjs = __webpack_require__(2);
+    var res = libjs.mprotect(this, this.length, protnum);
+    if(res < -1)
+        throw Error('Could not change protection level.');
+};
+
+StaticArrayBuffer.prototype.free = function() {
+    var libjs = __webpack_require__(2);
+    var res = libjs.munmap(this, this.length);
+    if(res < 0)
+        throw Error('Error on freeing memory.');
+};
+
+StaticArrayBuffer.prototype.getAddress = function(offset) {
+    return process.getAddress(this, offset);
+};
+
+
+/***/ }),
+/* 9 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+// # x86_64 Linux
 Object.defineProperty(exports, "__esModule", { value: true });
-var index_1 = __webpack_require__(2);
-var Poll;
-var platform = process.platform;
-switch (platform) {
-    case 'linux':
-        Poll = __webpack_require__(47).Poll;
-        break;
-    default:
-        // require('../libaio/epoll-et');
-        // require('../libaio/kqueue');
-        // require('../libaio/poll');
-        // require('../libaio/select');
-        // require('../libaio/fake_socket_poll');
-        throw Error("Platform not supported: " + platform);
-}
-var POINTER_NONE = -1;
-var DELAYS = [
-    -2 /* IMMEDIATE */,
-    -1 /* IO */,
-    1,
-    // 2,
-    // 4,
-    8,
-    16,
-    32,
-    64,
-    128,
-    256,
-    // 512,
-    1024,
-    // 2048,
-    4096,
-    // 8192,
-    16384,
-    // 32768,
-    65536,
-    131072,
-    // 262144,
-    524288,
-    // 1048576,
-    2097152,
-    // 4194304,
-    8388608,
-    // 16777216,
-    33554432,
-    // 67108864,
-    // 134217728,
-    268435456,
-    // 536870912,
-    // 1073741824,
-    2147483648,
-    Infinity,
-];
-var DELAY_LAST = DELAYS.length - 1;
-function findDelayIndex(delay) {
-    for (var i = 0; i <= DELAY_LAST; i++)
-        if (delay <= DELAYS[i])
-            return i;
-}
-// var _task_id = -1125899906842624;
-var MicroTask = /** @class */ (function () {
-    function MicroTask(callback, args) {
-        // id: number = _task_id++;         // Every task has a unique ID in increasing order, used to merge queues with equal IDs.
-        this.next = null; // Previous task in list
-        this.prev = null; // Next task in list
-        this.callback = callback || null;
-        this.args = args || null;
-    }
-    MicroTask.prototype.exec = function () {
-        var args = this.args, callback = this.callback;
-        if (!args) {
-            callback();
-        }
-        else {
-            switch (args.length) {
-                case 1:
-                    callback(args[0]);
-                    break;
-                case 2:
-                    callback(args[0], args[1]);
-                    break;
-                case 3:
-                    callback(args[0], args[1], args[2]);
-                    break;
-                default:
-                    callback.apply(null, args);
-            }
-        }
-    };
-    return MicroTask;
-}());
-exports.MicroTask = MicroTask;
-var Task = /** @class */ (function (_super) {
-    __extends(Task, _super);
-    function Task() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.delay = -2 /* IMMEDIATE */; // Delay in ms
-        _this.timeout = 0; // UNIX time in ms when `delay` happens
-        _this.pointer = POINTER_NONE; // >1 if some deep pointer from queue points to this task.
-        _this.isRef = true; // Whether to keep process running while this task scheduled.
-        _this.queue = null; // `EventQueue` where this `Task` is inserted.
-        return _this;
-    }
-    // constructor() { }
-    Task.prototype.ref = function () {
-        if (!this.isRef) {
-        }
-    };
-    Task.prototype.unref = function () {
-        if (this.isRef) {
-        }
-    };
-    Task.prototype.cancel = function () {
-        this.queue.cancel(this);
-    };
-    return Task;
-}(MicroTask));
-exports.Task = Task;
-var EventQueue = /** @class */ (function () {
-    function EventQueue() {
-        this.start = null; // Macro-task queue: `setImmediate`, `I/O`, `setTimeout`, `setInterval`.
-        this.active = null; // Slice of `macroQueue` that is being executed in current event loop cycle.
-        // Deep pointers into `macroQueue` by the `delay` of the last task inserted in
-        // the queue with that delay or lesser, these give us the guidance where in the
-        // queue we should start looking for to insert a new task.
-        this.pointers = [];
-    }
-    EventQueue.prototype.setPointer = function (pointer_index, task) {
-        var pointers = this.pointers;
-        var timeout = task.timeout;
-        pointers[pointer_index] = task;
-        task.pointer = pointer_index;
-        // Make sure all pointers pointing to greater delay values are
-        // pointing at least as deep in the queue as the current pointer.
-        for (var i = pointer_index + 1; i <= DELAY_LAST; i++) {
-            var p = pointers[i];
-            if (!p) {
-                pointers[i] = task;
-            }
-            else {
-                if (p.timeout <= timeout) {
-                    pointers[i] = task;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-    };
-    EventQueue.prototype.insertTask = function (curr, task) {
-        var timeout = task.timeout;
-        var prev = null;
-        if (timeout >= curr.timeout) {
-            do {
-                prev = curr;
-                curr = curr.next;
-            } while (curr && (curr.timeout <= timeout));
-            prev.next = task;
-            task.prev = prev;
-            if (curr) {
-                curr.prev = task;
-                task.next = curr;
-            }
-        }
-        else {
-            do {
-                prev = curr;
-                curr = curr.prev;
-            } while (curr && (curr.timeout > timeout));
-            prev.prev = task;
-            task.next = prev;
-            if (curr) {
-                curr.next = task;
-                task.prev = curr;
-            }
-            else {
-                this.start = task;
-            }
-        }
-    };
-    // Milliseconds when next task to be executed.
-    EventQueue.prototype.msNextTask = function () {
-        if (this.start) {
-            return this.start.timeout - Date.now();
-        }
-        return Infinity;
-    };
-    EventQueue.prototype.insert = function (task) {
-        task.queue = this;
-        var delay = task.delay;
-        var timeout = task.timeout = Date.now() + delay;
-        var pointers = this.pointers;
-        var pointer_index = findDelayIndex(delay);
-        var curr = pointers[pointer_index];
-        if (!curr) {
-            this.setPointer(pointer_index, task);
-            if (pointer_index) {
-                for (var i = pointer_index - 1; i >= 0; i--) {
-                    if (pointers[i]) {
-                        curr = pointers[i];
-                        break;
-                    }
-                }
-            }
-            if (!curr)
-                curr = this.start;
-            if (!curr) {
-                this.start = task;
-            }
-            else {
-                this.insertTask(curr, task);
-            }
-        }
-        else {
-            if (timeout >= curr.timeout) {
-                this.setPointer(pointer_index, task);
-            }
-            this.insertTask(curr, task);
-        }
-    };
-    // debug() {
-    //     var curr: Task = this.start;
-    //     if(!curr) return;
-    //     do {
-    //         console.log(curr.delay, curr.timeout);
-    //     } while(curr = curr.next);
-    // }
-    EventQueue.prototype.cancel = function (task) {
-        var prev = task.prev;
-        var next = task.next;
-        task.prev = task.next = null;
-        if (prev)
-            prev.next = next;
-        if (next)
-            next.prev = prev;
-        if (!prev) {
-            this.start = next;
-        }
-        if (task.pointer !== POINTER_NONE) {
-            var index = task.pointer;
-            if (index) {
-                this.pointers[index] = this.pointers[index - 1];
-            }
-            else {
-                this.pointers[index] = null;
-            }
-        }
-    };
-    // 1. Splice `this.activeQueue` for the beginning of the `this.macroQueue` up to the
-    //    very last Task that timed out.
-    // 2. In the process reset `this.pointers` which were sliced out.
-    EventQueue.prototype.sliceActiveQueue = function () {
-        var curr = this.start;
-        if (!curr)
-            return; // No events queued.
-        var time = Date.now();
-        var pointers = this.pointers;
-        for (var i = 0; i <= DELAY_LAST; i++) {
-            var pointer = pointers[i];
-            if (pointer) {
-                if (pointer.timeout <= time) {
-                    pointers[i] = null;
-                    // pointer.pointer = POINTER_NONE;
-                    curr = pointer;
-                }
-                else {
-                    break;
-                }
-            }
-        }
-        if (curr.timeout > time)
-            return;
-        var prev;
-        do {
-            prev = curr;
-            curr = curr.next;
-        } while (curr && (curr.timeout <= time));
-        prev.next = null;
-        if (curr)
-            curr.prev = null;
-        this.active = this.start;
-        this.start = curr;
-    };
-    EventQueue.prototype.cycle = function () {
-        // Crate new active queue
-        this.sliceActiveQueue();
-    };
-    // Pop next task to be executed.
-    EventQueue.prototype.pop = function () {
-        var task = this.active;
-        if (!task)
-            return null;
-        this.active = task.next;
-        return task;
-    };
-    return EventQueue;
-}());
-exports.EventQueue = EventQueue;
-var EventLoop = /** @class */ (function () {
-    function EventLoop() {
-        this.microQueue = null; // Micro-task queue: `process.nextTick`.
-        this.microQueueEnd = null; // The last task in micro-task queue.
-        this.refQueue = new EventQueue; // Events that keep process running.
-        this.unrefQueue = new EventQueue; // Optional events.
-        this.poll = new Poll;
-    }
-    EventLoop.prototype.shouldStop = function () {
-        if (!this.refQueue.start)
-            return true;
-        return false;
-    };
-    EventLoop.prototype.insertMicrotask = function (microtask) {
-        var last = this.microQueueEnd;
-        this.microQueueEnd = microtask;
-        if (!last) {
-            this.microQueue = microtask;
-        }
-        else {
-            last.next = microtask; // One-way list
-        }
-    };
-    EventLoop.prototype.insert = function (task) {
-        if (task.isRef)
-            this.refQueue.insert(task);
-        else
-            this.unrefQueue.insert(task);
-    };
-    EventLoop.prototype.start = function () {
-        function exec_task(task) {
-            // TODO: BTW, which one is faster? (1) `if(task.callback)` vs. (2) `noop()`
-            if (task.callback)
-                task.callback();
-        }
-        // THE LOOP
-        while (1) {
-            // Create new active queues
-            this.refQueue.cycle();
-            this.unrefQueue.cycle();
-            var refTask = this.refQueue.pop();
-            var unrefTask = this.unrefQueue.pop();
-            // Execute all macro tasks of the current cycle in the event loop.
-            var task;
-            while (refTask || unrefTask) {
-                if (refTask && unrefTask) {
-                    if (refTask.timeout < unrefTask.timeout) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else if (refTask.timeout > unrefTask.timeout) {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                    else {
-                        // if(refTask.id <= unrefTask.id) {
-                        if (refTask.timeout <= unrefTask.timeout) {
-                            refTask.exec();
-                            refTask = null;
-                        }
-                        else {
-                            unrefTask.exec();
-                            unrefTask = null;
-                        }
-                    }
-                }
-                else {
-                    if (refTask) {
-                        refTask.exec();
-                        refTask = null;
-                    }
-                    else {
-                        unrefTask.exec();
-                        unrefTask = null;
-                    }
-                }
-                // Execute all micro tasks accumulated while executing this macro task.
-                var microtask;
-                do {
-                    microtask = this.microQueue;
-                    if (microtask) {
-                        if (microtask.callback)
-                            microtask.exec();
-                        this.microQueue = microtask.next;
-                    }
-                } while (this.microQueue);
-                this.microQueueEnd = null;
-                // Pop one more task to execute.
-                if (!refTask)
-                    refTask = this.refQueue.pop();
-                else
-                    unrefTask = this.unrefQueue.pop();
-            }
-            // Stop the program?
-            var havePollEvents = this.poll.hasRefs();
-            if (this.shouldStop() && !havePollEvents)
-                break;
-            // ----------------------------------------------------------------------------------
-            // TODO:
-            // By here we finished executing all the macro and micro tasks of the current cycle.
-            // Now we need to decide if we have immediate tasks to execute in the next cycle,
-            // or (if not) we can save CPU cycles by idling. We should use the `nanosleep`,
-            // `sched_yield` and `epoll` system calls to idle this infinite loop when possible.
-            //
-            // `nanosleep` should be available on all systems, so we can use it right here. Similarly,
-            // we can use `sched_yield` here, if it is not available on some systems we just create a no-op
-            // shim for it.
-            //
-            // Now, `epoll` syscall is available only on Linux (other systems have different alternatives),
-            // so we don't use it here as-it-is but create an abstraction for it, so that a correct
-            // async mechanism can be used on each system.
-            //
-            // For timer tasks `setInterval` and `setTimeout` we know the exact time when we need
-            // to execute them, for `setImmediate` task we know as well that we have to execute it
-            // immediately. So, if there are only future timer tasks scheduled, we `nanosleep` just
-            // enough to wake up before the task has to be executed.
-            //
-            // The interesting part are async I/O tasks, which are of two types:
-            //
-            //  - Type 1: `process.asyscall` provided by thread pool
-            //  - Type 2: Async I/O provided by kernel using `epoll`
-            //
-            // If there are Type 1 tasks in queue (we should be able to detect that) then we cannot
-            // `nanosleep`, but if there are no immediate tasks to be executed we can `sched_yield`
-            // as it should be an order of magnitude faster than file I/O.
-            //
-            // If there are Type 2 tasks -- we can `epoll` in two ways: with or without a blocking timeout.
-            // We should detect if it is possible and use `epoll` with timeout which effectively
-            // idles the loop up until the timeout is reached or when new events are received.
-            // Otherwise we just use `epoll` asynchronously -- without the blocking timeout.
-            //
-            // Also, use `eventfd` to notify `epoll` from thread poll when task is completed.
-            var ref_ms = this.refQueue.msNextTask();
-            var unref_ms = this.unrefQueue.msNextTask();
-            var CAP = 1000000;
-            var ms = Math.min(ref_ms, unref_ms, CAP);
-            if (ms > 0) {
-                if (havePollEvents) {
-                    this.poll.wait(ms); // epoll_wait
-                }
-                else {
-                    var seconds = Math.floor(ms / 1000);
-                    var nanoseconds = (ms % 1000) * 1000000;
-                    index_1.nanosleep(seconds, nanoseconds);
-                }
-            }
-            else {
-                if (ms > 1) {
-                    index_1.sched_yield();
-                }
-            }
-        }
-    };
-    return EventLoop;
-}());
-exports.EventLoop = EventLoop;
+var typebase_1 = __webpack_require__(30);
+exports.PATH_MAX = 4096;
+exports.isLE = true;
+// The C `NULL` pointer:
+exports.NULL = 0;
+// Basic types.
+var buf = Buffer.prototype;
+exports.int8 = typebase_1.Type.define(1, buf.readInt8, buf.writeInt8);
+exports.uint8 = typebase_1.Type.define(1, buf.readUInt8, buf.readUInt8);
+exports.int16 = typebase_1.Type.define(2, buf.readInt16LE, buf.writeInt16LE);
+exports.uint16 = typebase_1.Type.define(2, buf.readUInt16LE, buf.writeUInt16LE);
+exports.int32 = typebase_1.Type.define(4, buf.readInt32LE, buf.writeInt32LE);
+exports.uint32 = typebase_1.Type.define(4, buf.readUInt32LE, buf.writeUInt32LE);
+exports.int64 = typebase_1.Arr.define(exports.int32, 2);
+exports.uint64 = typebase_1.Arr.define(exports.uint32, 2);
+exports.size_t = exports.uint64;
+exports.time_t = exports.uint64;
+exports.pid_t = exports.uint32;
+exports.optval_t = exports.int32;
+exports.ipv4 = typebase_1.Type.define(4, function (offset) {
+    if (offset === void 0) { offset = 0; }
+    var buf = this;
+    var socket = __webpack_require__(31);
+    var octets = socket.Ipv4.type.unpack(buf, offset);
+    return new socket.Ipv4(octets);
+}, function (data, offset) {
+    if (offset === void 0) { offset = 0; }
+    var buf = this;
+    data.toBuffer().copy(buf, offset);
+});
+exports.pointer_t = exports.uint64;
+// See <asm/stat.h> line 82:
+//
+//     __kernel_ulong_t = unsigned long long // 64+ bits
+//     __kernel_long_t = long long // 64+ bits
+//     unsigned int // 32+ bits
+//
+// In `libc`:
+//
+//     struct stat {
+//         __kernel_ulong_t	st_dev;
+//         __kernel_ulong_t	st_ino;
+//         __kernel_ulong_t	st_nlink;
+//         unsigned int		st_mode;
+//         unsigned int		st_uid;
+//         unsigned int		st_gid;
+//         unsigned int		__pad0;
+//         __kernel_ulong_t	st_rdev;
+//         __kernel_long_t		st_size;
+//         __kernel_long_t		st_blksize;
+//         __kernel_long_t		st_blocks;	// Number 512-byte blocks allocated.
+//         __kernel_ulong_t	st_atime;
+//         __kernel_ulong_t	st_atime_nsec;
+//         __kernel_ulong_t	st_mtime;
+//         __kernel_ulong_t	st_mtime_nsec;
+//         __kernel_ulong_t	st_ctime;
+//         __kernel_ulong_t	st_ctime_nsec;
+//         __kernel_long_t		__unused[3];
+//     };
+exports.stat = typebase_1.Struct.define(32 * 4, [
+    [0, exports.uint32, 'dev'],
+    // dev_hi:         [1 * 4,     buffer.int32],
+    [2 * 4, exports.uint32, 'ino'],
+    // ino_hi:         [3 * 4,     buffer.int32],
+    [4 * 4, exports.uint32, 'nlink'],
+    // nlink_hi:       [5 * 4,     buffer.int32],
+    [6 * 4, exports.int32, 'mode'],
+    [7 * 4, exports.int32, 'uid'],
+    [8 * 4, exports.int32, 'gid'],
+    // __pad0:         [9 * 4,     buffer.int32],
+    [10 * 4, exports.uint32, 'rdev'],
+    // rdev_hi:        [11 * 4,    buffer.int32],
+    [12 * 4, exports.uint32, 'size'],
+    // size_hi:        [13 * 4,    buffer.int32],
+    [14 * 4, exports.uint32, 'blksize'],
+    // blksize_hi:     [15 * 4,    buffer.int32],
+    [16 * 4, exports.uint32, 'blocks'],
+    // blocks_hi:      [17 * 4,    buffer.int32],
+    [18 * 4, exports.uint32, 'atime'],
+    // atime_hi:       [19 * 4,    buffer.int32],
+    [20 * 4, exports.uint32, 'atime_nsec'],
+    // atime_nsec_hi:  [21 * 4,    buffer.int32],
+    [22 * 4, exports.uint32, 'mtime'],
+    // mtime_hi:       [23 * 4,    buffer.int32],
+    [24 * 4, exports.uint32, 'mtime_nsec'],
+    // mtime_nsec_hi:  [25 * 4,    buffer.int32],
+    [26 * 4, exports.uint32, 'ctime'],
+    // ctime_hi:       [27 * 4,    buffer.int32],
+    [28 * 4, exports.uint32, 'ctime_nsec'],
+]);
+// From http://beej.us/guide/bgnet/output/html/multipage/sockaddr_inman.html
+//
+//     struct sockaddr_in {
+//         short            sin_family;   // e.g. AF_INET
+//         unsigned short   sin_port;     // e.g. htons(3490)
+//         struct in_addr   sin_addr;     // see struct in_addr, below
+//         char             sin_zero[8];  // zero this if you want to
+//     };
+//     struct in_addr {
+//         unsigned long s_addr;  // load with inet_aton()
+//     };
+exports.in_addr = typebase_1.Struct.define(4, [
+    [0, exports.ipv4, 's_addr'],
+]);
+exports.sockaddr_in = typebase_1.Struct.define(16, [
+    [0, exports.int16, 'sin_family'],
+    [2, exports.uint16, 'sin_port'],
+    [4, exports.in_addr, 'sin_addr'],
+    [8, typebase_1.Arr.define(exports.int8, 8), 'sin_zero'],
+]);
+// IPv6 AF_INET6 sockets:
+//
+//     struct sockaddr_in6 {
+//         u_int16_t       sin6_family;   // address family, AF_INET6
+//         u_int16_t       sin6_port;     // port number, Network Byte Order
+//         u_int32_t       sin6_flowinfo; // IPv6 flow information
+//         struct in6_addr sin6_addr;     // IPv6 address
+//         u_int32_t       sin6_scope_id; // Scope ID
+//     };
+//     struct in6_addr {
+//         unsigned char   s6_addr[16];   // load with inet_pton()
+//     };
+//     struct sockaddr {
+//         sa_family_t sa_family;
+//         char        sa_data[14];
+//     }
+exports.sockaddr = typebase_1.Struct.define(1, [
+    [0, 'sa_family', exports.uint16],
+    [2, 'sa_data', typebase_1.Arr.define(exports.int8, 14)],
+]);
+//     typedef union epoll_data {
+//         void    *ptr;
+//         int      fd;
+//         uint32_t u32;
+//         uint64_t u64;
+//     } epoll_data_t;
+//
+//     struct epoll_event {
+//         uint32_t     events;    /* Epoll events */
+//         epoll_data_t data;      /* User data variable */
+//     };
+exports.epoll_event = typebase_1.Struct.define(4 + 8, [
+    [0, exports.uint32, 'events'],
+    [4, exports.uint64, 'data'],
+]);
+// In `libc`, <bits/ipc.h> line 42:
+//
+//     struct ipc_perm {
+//         __key_t __key;			// Key.
+//         __uid_t uid;			// Owner's user ID.
+//         __gid_t gid;			// Owner's group ID.
+//         __uid_t cuid;			// Creator's user ID.
+//         __gid_t cgid;			// Creator's group ID.
+//         unsigned short int mode;		// Read/write permission.
+//         unsigned short int __pad1;
+//         unsigned short int __seq;		// Sequence number.
+//         unsigned short int __pad2;
+//         __syscall_ulong_t __glibc_reserved1;
+//         __syscall_ulong_t __glibc_reserved2;
+//     };
+//
+// __syscall_ulong_t` is `unsigned long long int`
+exports.ipc_perm = typebase_1.Struct.define(48, [
+    [0, exports.int32, '__key'],
+    [4, exports.uint32, 'uid'],
+    [8, exports.uint32, 'gid'],
+    [12, exports.uint32, 'cuid'],
+    [16, exports.uint32, 'cgid'],
+    [20, exports.uint16, 'mode'],
+    // [22, uint16, '__pad1'],
+    [24, exports.uint16, '__seq'],
+]);
+// In `libc`, <bits/shm.h> line 49:
+//
+//     struct shmid_ds {
+//         struct ipc_perm shm_perm;		// operation permission struct
+//         size_t shm_segsz;			// size of segment in bytes
+//         __time_t shm_atime;			// time of last shmat()
+//     #ifndef __x86_64__
+//         unsigned long int __glibc_reserved1;
+//     #endif
+//         __time_t shm_dtime;			// time of last shmdt()
+//     #ifndef __x86_64__
+//         unsigned long int __glibc_reserved2;
+//     #endif
+//         __time_t shm_ctime;			// time of last change by shmctl()
+//     #ifndef __x86_64__
+//         unsigned long int __glibc_reserved3;
+//     #endif
+//         __pid_t shm_cpid;			// pid of creator
+//         __pid_t shm_lpid;			// pid of last shmop
+//         shmatt_t shm_nattch;		// number of current attaches
+//         __syscall_ulong_t __glibc_reserved4;
+//         __syscall_ulong_t __glibc_reserved5;
+//     };
+//
+// From internet:
+//
+//     struct shmid_ds {
+//         struct ipc_perm shm_perm;    // Ownership and permissions
+//         size_t          shm_segsz;   // Size of segment (bytes)
+//         time_t          shm_atime;   // Last attach time
+//         time_t          shm_dtime;   // Last detach time
+//         time_t          shm_ctime;   // Last change time
+//         pid_t           shm_cpid;    // PID of creator
+//         pid_t           shm_lpid;    // PID of last shmat(2)/shmdt(2)
+//         shmatt_t        shm_nattch;  // No. of current attaches
+//         // ...
+//     };
+exports.shmid_ds = typebase_1.Struct.define(112, [
+    [0, exports.ipc_perm, 'shm_perm'],
+    [48, exports.size_t, 'shm_segsz'],
+    [56, exports.time_t, 'shm_atime'],
+    [64, exports.time_t, 'shm_dtime'],
+    [72, exports.time_t, 'shm_ctime'],
+    [80, exports.pid_t, 'shm_cpid'],
+    [84, exports.pid_t, 'shm_lpid'],
+    [88, exports.uint64, 'shm_nattch'],
+]);
+// ## Time
+//
+//     struct utimbuf {
+//         time_t actime;       /* access time */
+//         time_t modtime;      /* modification time */
+//     };
+exports.utimbuf = typebase_1.Struct.define(16, [
+    [0, exports.uint64, 'actime'],
+    [8, exports.uint64, 'modtime'],
+]);
+exports.timeval = typebase_1.Struct.define(16, [
+    [0, exports.uint64, 'tv_sec'],
+    [8, exports.uint64, 'tv_nsec'],
+]);
+exports.timevalarr = typebase_1.Arr.define(exports.timeval, 2);
+exports.timespec = exports.timeval;
+exports.timespecarr = exports.timevalarr;
+//     struct linux_dirent64 {
+//         ino64_t        d_ino;    /* 64-bit inode number */
+//         off64_t        d_off;    /* 64-bit offset to next structure */
+//         unsigned short d_reclen; /* Size of this dirent */
+//         unsigned char  d_type;   /* File type */
+//         char           d_name[]; /* Filename (null-terminated) */
+//     };
+exports.linux_dirent64 = typebase_1.Struct.define(19, [
+    [0, exports.uint64, 'ino64_t'],
+    [8, exports.uint64, 'off64_t'],
+    [16, exports.uint16, 'd_reclen'],
+    [18, exports.uint8, 'd_type'],
+]);
+// Stucture that `inotify` returns when reading from one of its descriptors, in `libc`:
+//
+//     struct inotify_event {
+//         int      wd;       /* Watch descriptor */
+//         uint32_t mask;     /* Mask describing event */
+//         uint32_t cookie;   /* Unique cookie associating related events (for rename(2)) */
+//         uint32_t len;      /* Size of name field */
+//         char     name[];   /* Optional null-terminated name */
+//     };
+//
+// We create a representation of this struct in JavaScript:
+exports.inotify_event = typebase_1.Struct.define(16, [
+    [0, exports.int32, 'wd'],
+    [4, exports.uint32, 'mask'],
+    [8, exports.uint32, 'cookie'],
+    [12, exports.uint32, 'len'],
+]);
+// Relevant:
+// https://filippo.io/linux-syscall-table/
+// Linux:
+// apt-get install man manpages-dev
+// man 2 syscall
+// man 2 syscalls
+// x86:
+// /usr/include/asm/unistd.h
+// i386:
+// /usr/src/linux/arch/i386/kernel/entry.S
+// POSIX:
+// http://pubs.opengroup.org/onlinepubs/009695399/
+// http://pubs.opengroup.org/onlinepubs/009695399/idx/functions.html
+exports.SYS = {
+    read: 0,
+    write: 1,
+    open: 2,
+    close: 3,
+    stat: 4,
+    fstat: 5,
+    lstat: 6,
+    // poll:           7, // Use epoll instead.
+    lseek: 8,
+    mmap: 9,
+    mprotect: 10,
+    munmap: 11,
+    brk: 12,
+    rt_sigaction: 13,
+    rt_sigprocmask: 14,
+    rt_sigreturn: 15,
+    ioctl: 16,
+    pread64: 17,
+    pwrite64: 18,
+    readv: 19,
+    writev: 20,
+    access: 21,
+    pipe: 22,
+    // select:         23,
+    sched_yield: 24,
+    mremap: 25,
+    msync: 26,
+    mincore: 27,
+    madvise: 28,
+    shmget: 29,
+    shmat: 30,
+    shmctl: 31,
+    dup: 32,
+    dup2: 33,
+    pause: 34,
+    nanosleep: 35,
+    getitimer: 36,
+    alarm: 37,
+    setitimer: 38,
+    getpid: 39,
+    sendfile: 40,
+    socket: 41,
+    connect: 42,
+    accept: 43,
+    sendto: 44,
+    recvfrom: 45,
+    sendmsg: 46,
+    recvmsg: 47,
+    shutdown: 48,
+    bind: 49,
+    listen: 50,
+    getsockname: 51,
+    getpeername: 52,
+    socketpair: 53,
+    setsockopt: 54,
+    getsockopt: 55,
+    shmdt: 67,
+    fcntl: 72,
+    fsync: 74,
+    fdatasync: 75,
+    truncate: 76,
+    ftruncate: 77,
+    getdents: 78,
+    getcwd: 79,
+    chdir: 80,
+    fchdir: 81,
+    rename: 82,
+    mkdir: 83,
+    rmdir: 84,
+    creat: 85,
+    link: 86,
+    unlink: 87,
+    symlink: 88,
+    readlink: 89,
+    chmod: 90,
+    fchmod: 91,
+    chown: 92,
+    fchown: 93,
+    lchown: 94,
+    umask: 95,
+    gettimeofday: 96,
+    getrlimit: 97,
+    getrusage: 98,
+    getuid: 102,
+    getgid: 104,
+    geteuid: 107,
+    getegid: 108,
+    setpgid: 109,
+    getppid: 110,
+    utime: 132,
+    epoll_create: 213,
+    getdents64: 217,
+    epoll_wait: 232,
+    epoll_ctl: 233,
+    utimes: 235,
+    inotify_init: 253,
+    inotify_add_watch: 254,
+    inotify_rm_watch: 255,
+    mkdirat: 258,
+    futimesat: 261,
+    utimensat: 280,
+    accept4: 288,
+    epoll_create1: 291,
+    inotify_init1: 294,
+};
 
 
 /***/ }),
-/* 8 */
+/* 10 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+var EventEmitter = __webpack_require__(4).EventEmitter;
+var eloop = __webpack_require__(5);
+
+
+if(!process)
+    throw Error('`process` global not defined by JS runtime.');
+
+
+// The most important method Kappa
+process.noop = function() {};
+
+
+process.on = EventEmitter.prototype.on.bind(process);
+process.emit = EventEmitter.prototype.emit.bind(process);
+
+
+process.title = 'Bamboo';
+
+process.release = {
+    name: 'Bamboo',
+    lts: '',
+    sourceUrl: '',
+    headersUrl: ''
+};
+
+
+// Node.js does not allow to overwrite this property, so
+// in Node.js it will hold the Node.js version.
+process.version = 'v1.0.0';
+process.platform = 'linux';
+process.moduleLoadList = []; // For compatibility with node.
+process.versions = {
+    bamboo: '1.0.0'
+};
+// process.arch = process.arch;
+// process.platform = process.platform;
+// process.release = process.release;
+process.argv = process.argv || [];
+process.execArgv = [];
+
+process.env = process.env || {
+        NODE_VERSION: '',
+        HOSTNAME: '',
+        TERM: '',
+        NPM_CONFIG_LOGLEVEL: '',
+        PATH: '',
+        PWD: '',
+        SHLVL: '',
+        HOME: '',
+        _: '',
+        OLDPWD: '',
+    };
+process.env.NODE_DEBUG = '*';
+
+process.features = {
+    debug: false,
+    uv: false,
+    ipv6: false,
+    tls_npn: false,
+    tls_sni: false,
+    tls_ocsp: false,
+    tls: false
+};
+process.execPath = process.execPath || '';
+process.config = {};
+// reallyExit: [Function: reallyExit],
+
+
+var libjs = __webpack_require__(2);
+
+process.pid = libjs.getpid();
+
+process.getgid = function() {
+    return libjs.getgid();
+};
+
+process.cwd = function() {
+    try {
+        return libjs.getcwd();
+    } catch(e) {
+        console.log(e);
+        console.log(e.stack);
+        return '.';
+    }
+};
+
+process.yield = function() {
+    libjs.sched_yield();
+};
+
+process.nanosleep = function(seconds, nanoseconds) {
+    libjs.nanosleep(seconds, nanoseconds);
+};
+
+
+
+process.hrtime = function hrtime() {
+
+};
+
+
+const fs = __webpack_require__(11);
+const STDOUT = 1;
+const STDERR = 2;
+process.stdout = new fs.SyncWriteStream(STDOUT);
+process.stderr = new fs.SyncWriteStream(STDERR);
+
+// abort: [Function: abort],
+// chdir: [Function: chdir],
+// umask: [Function: umask],
+// getuid: [Function: getuid],
+// geteuid: [Function: geteuid],
+// setuid: [Function: setuid],
+// seteuid: [Function: seteuid],
+// setgid: [Function: setgid],
+// setegid: [Function: setegid],
+// getgid: [Function: getgid],
+// getegid: [Function: getegid],
+// getgroups: [Function: getgroups],
+// setgroups: [Function: setgroups],
+// initgroups: [Function: initgroups],
+// hrtime: [Function: hrtime],
+// dlopen: [Function: dlopen],
+
+// uptime: [Function: uptime],
+// memoryUsage: [Function: memoryUsage],
+
+
+// _linkedBinding: [Function: _linkedBinding],
+// _setupDomainUse: [Function: _setupDomainUse],
+// _events:
+// { newListener: [Function],
+//     removeListener: [Function],
+//     SIGWINCH: [ [Function], [Function] ] },
+// _rawDebug: [Function],
+//     _eventsCount: 3,
+//     domain: null,
+//     _maxListeners: undefined,
+//     EventEmitter:
+// { [Function: EventEmitter]
+//     EventEmitter: [Circular],
+//         usingDomains: false,
+//     defaultMaxListeners: 10,
+//     init: [Function],
+//     listenerCount: [Function] },
+// _fatalException: [Function],
+//     _exiting: false,
+//     assert: [Function],
+//     config:
+// { target_defaults:
+// { cflags: [],
+//     default_configuration: 'Release',
+//     defines: [],
+//     include_dirs: [],
+//     libraries: [] },
+//     variables:
+//     { asan: 0,
+//         gas_version: '2.23',
+//         host_arch: 'x64',
+//         icu_data_file: 'icudt56l.dat',
+//         icu_data_in: '../../deps/icu/source/data/in/icudt56l.dat',
+//         icu_endianness: 'l',
+//         icu_gyp_path: 'tools/icu/icu-generic.gyp',
+//         icu_locales: 'en,root',
+//         icu_path: './deps/icu',
+//         icu_small: true,
+//         icu_ver_major: '56',
+//         node_byteorder: 'little',
+//         node_install_npm: true,
+//         node_prefix: '/',
+//         node_release_urlbase: 'https://nodejs.org/download/release/',
+//         node_shared_http_parser: false,
+//         node_shared_libuv: false,
+//         node_shared_openssl: false,
+//         node_shared_zlib: false,
+//         node_tag: '',
+//         node_use_dtrace: false,
+//         node_use_etw: false,
+//         node_use_lttng: false,
+//         node_use_openssl: true,
+//         node_use_perfctr: false,
+//         openssl_fips: '',
+//         openssl_no_asm: 0,
+//         target_arch: 'x64',
+//         uv_parent_path: '/deps/uv/',
+//         uv_use_dtrace: false,
+//         v8_enable_gdbjit: 0,
+//         v8_enable_i18n_support: 1,
+//         v8_no_strict_aliasing: 1,
+//         v8_optimized_debug: 0,
+//         v8_random_seed: 0,
+//         v8_use_snapshot: true,
+//         want_separate_host_toolset: 0 } },
+// nextTick: [Function: nextTick],
+// _tickCallback: [Function: _tickCallback],
+// _tickDomainCallback: [Function: _tickDomainCallback],
+// stdout: [Getter],
+//     stderr: [Getter],
+//     stdin: [Getter],
+//     openStdin: [Function],
+//     exit: [Function],
+//     kill: [Function],
+//     mainModule:
+// Module {
+//     id: '.',
+//         exports: {},
+//     parent: null,
+//         filename: '/share/full-js/lib/boot.js',
+//         loaded: false,
+//         children: [ [Object], [Object] ],
+//         paths:
+//     [ '/share/full-js/lib/node_modules',
+//         '/share/full-js/node_modules',
+//         '/share/node_modules',
+//         '/node_modules' ] } }
+
+/* harmony default export */ __webpack_exports__["default"] = (process);
+
+
+/***/ }),
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -7177,13 +7930,13 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var libjs = __webpack_require__(2);
-var inotify_1 = __webpack_require__(20);
+var inotify_1 = __webpack_require__(32);
 var util = __webpack_require__(0);
-var pathModule = __webpack_require__(5);
+var pathModule = __webpack_require__(6);
 var events_1 = __webpack_require__(4);
 var buffer_1 = __webpack_require__(1);
 var static_buffer_1 = __webpack_require__(3);
-var stream_1 = __webpack_require__(6);
+var stream_1 = __webpack_require__(7);
 if (false) {
     exports.isFULLjs = true;
 }
@@ -8628,759 +9381,6 @@ SyncWriteStream.prototype.destroySoon = SyncWriteStream.prototype.destroy;
 
 
 /***/ }),
-/* 9 */
-/***/ (function(module, exports, __webpack_require__) {
-
-exports.StaticArrayBuffer = StaticArrayBuffer;
-
-// new StaticArrayBuffer(size);
-// StaticArrayBuffer.frame(address, size);
-// StaticArrayBuffer.alloc(size, protection);
-
-
-function prot2num(prot) {
-    if(typeof prot !== 'string')
-        throw TypeError('Protection must be a string.');
-    if(prot.match(/[^rwe]/))
-        throw TypeError('Protection string can contain only "r", "w" and "e" characters, given "' + prot + '".');
-
-    var val = 0 /* PROT_NONE */;
-    if(prot.indexOf('r') > -1) val |= 1 /* PROT_READ */;
-    if(prot.indexOf('w') > -1) val |= 2 /* PROT_WRITE */;
-    if(prot.indexOf('e') > -1) val |= 4 /* PROT_EXEC */;
-    return val;
-}
-
-
-// "frame" because it does not allocate,
-// just frames a slice of memory into ArrayBuffer.
-function frame(addr, size) {
-    var ab = process.frame(addr, size);
-    if(!(ab instanceof ArrayBuffer))
-        throw Error('Could not allocate ArrayBuffer.');
-    return ab;
-}
-
-
-function alloc(size, prot) {
-    if (typeof size !== 'number')
-        throw TypeError('size must be a number.');
-    if (size < 0)
-        throw TypeError('Invalid size argument.');
-
-    if (!prot) prot = 'rw';
-
-    var flags = 2 /* MAP_PRIVATE */ | 32 /* MAP_ANONYMOUS */;
-    var protnum = prot2num(prot);
-    var libjs = __webpack_require__(2);
-    var addr = libjs.mmap(0, size, protnum, flags, -1, 0);
-
-    // Address in 64-bit x86 can be negative and errors are from -1 to -124.
-    if ((addr[1] === -1) && ((addr[0] < 0) && (addr[0] > -125)))
-        throw Error('Could not allocate memory.');
-
-    var ab = frame(addr, size);
-    return ab;
-}
-
-
-// Two constructors, one exposed externally to user:
-//
-//  1. new StaticArrayBuffer(size)
-//
-// Another one that we just use internally here:
-//
-//  2. new StaticArrayBuffer(arrayBuffer);
-//
-function StaticArrayBuffer(size) {
-    var ab;
-    if(size instanceof ArrayBuffer) {
-        ab = size;
-    } else {
-        ab = new ArrayBuffer(size); // Let's pray it's actually 'static'.
-    }
-    ab.__proto__ = StaticArrayBuffer.prototype;
-    return ab;
-}
-
-
-// # Static methods
-
-// StaticArrayBuffers allocated with `alloc` have to be (currently) freed using `buffer.free`.
-StaticArrayBuffer.alloc = function(size, prot) {
-    return new StaticArrayBuffer(alloc(size, prot));
-};
-
-StaticArrayBuffer.frame = function(addr, size) {
-    return new StaticArrayBuffer(frame(addr, size));
-};
-
-StaticArrayBuffer.isStaticArrayBuffer = function(sab) {
-    if((sab instanceof StaticArrayBuffer) && (typeof sab.getAddress === 'function')) return true;
-    return false;
-};
-
-
-
-StaticArrayBuffer.prototype.__proto__ =
-    ArrayBuffer.prototype;
-
-
-
-// # Member instance methods
-
-StaticArrayBuffer.prototype.call = function(offset, args) {
-    if(typeof offset !== 'number') offset = 0;
-    if(offset < 0) offset = 0;
-    if(!isFinite(offset)) offset = 0;
-
-    if(!(args instanceof Array)) args = [];
-
-    return process.call(this, offset, args);
-};
-
-StaticArrayBuffer.prototype.setProtection = function(prot) {
-    var protnum = prot2num(prot);
-    // return libjs.mprotect(this, this.length, protnum);
-    var libjs = __webpack_require__(2);
-    var res = libjs.mprotect(this, this.length, protnum);
-    if(res < -1)
-        throw Error('Could not change protection level.');
-};
-
-StaticArrayBuffer.prototype.free = function() {
-    var libjs = __webpack_require__(2);
-    var res = libjs.munmap(this, this.length);
-    if(res < 0)
-        throw Error('Error on freeing memory.');
-};
-
-StaticArrayBuffer.prototype.getAddress = function(offset) {
-    return process.getAddress(this, offset);
-};
-
-
-/***/ }),
-/* 10 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-// # x86_64 Linux
-Object.defineProperty(exports, "__esModule", { value: true });
-var typebase_1 = __webpack_require__(31);
-exports.PATH_MAX = 4096;
-exports.isLE = true;
-// The C `NULL` pointer:
-exports.NULL = 0;
-// Basic types.
-var buf = Buffer.prototype;
-exports.int8 = typebase_1.Type.define(1, buf.readInt8, buf.writeInt8);
-exports.uint8 = typebase_1.Type.define(1, buf.readUInt8, buf.readUInt8);
-exports.int16 = typebase_1.Type.define(2, buf.readInt16LE, buf.writeInt16LE);
-exports.uint16 = typebase_1.Type.define(2, buf.readUInt16LE, buf.writeUInt16LE);
-exports.int32 = typebase_1.Type.define(4, buf.readInt32LE, buf.writeInt32LE);
-exports.uint32 = typebase_1.Type.define(4, buf.readUInt32LE, buf.writeUInt32LE);
-exports.int64 = typebase_1.Arr.define(exports.int32, 2);
-exports.uint64 = typebase_1.Arr.define(exports.uint32, 2);
-exports.size_t = exports.uint64;
-exports.time_t = exports.uint64;
-exports.pid_t = exports.uint32;
-exports.optval_t = exports.int32;
-exports.ipv4 = typebase_1.Type.define(4, function (offset) {
-    if (offset === void 0) { offset = 0; }
-    var buf = this;
-    var socket = __webpack_require__(32);
-    var octets = socket.Ipv4.type.unpack(buf, offset);
-    return new socket.Ipv4(octets);
-}, function (data, offset) {
-    if (offset === void 0) { offset = 0; }
-    var buf = this;
-    data.toBuffer().copy(buf, offset);
-});
-exports.pointer_t = exports.uint64;
-// See <asm/stat.h> line 82:
-//
-//     __kernel_ulong_t = unsigned long long // 64+ bits
-//     __kernel_long_t = long long // 64+ bits
-//     unsigned int // 32+ bits
-//
-// In `libc`:
-//
-//     struct stat {
-//         __kernel_ulong_t	st_dev;
-//         __kernel_ulong_t	st_ino;
-//         __kernel_ulong_t	st_nlink;
-//         unsigned int		st_mode;
-//         unsigned int		st_uid;
-//         unsigned int		st_gid;
-//         unsigned int		__pad0;
-//         __kernel_ulong_t	st_rdev;
-//         __kernel_long_t		st_size;
-//         __kernel_long_t		st_blksize;
-//         __kernel_long_t		st_blocks;	// Number 512-byte blocks allocated.
-//         __kernel_ulong_t	st_atime;
-//         __kernel_ulong_t	st_atime_nsec;
-//         __kernel_ulong_t	st_mtime;
-//         __kernel_ulong_t	st_mtime_nsec;
-//         __kernel_ulong_t	st_ctime;
-//         __kernel_ulong_t	st_ctime_nsec;
-//         __kernel_long_t		__unused[3];
-//     };
-exports.stat = typebase_1.Struct.define(32 * 4, [
-    [0, exports.uint32, 'dev'],
-    // dev_hi:         [1 * 4,     buffer.int32],
-    [2 * 4, exports.uint32, 'ino'],
-    // ino_hi:         [3 * 4,     buffer.int32],
-    [4 * 4, exports.uint32, 'nlink'],
-    // nlink_hi:       [5 * 4,     buffer.int32],
-    [6 * 4, exports.int32, 'mode'],
-    [7 * 4, exports.int32, 'uid'],
-    [8 * 4, exports.int32, 'gid'],
-    // __pad0:         [9 * 4,     buffer.int32],
-    [10 * 4, exports.uint32, 'rdev'],
-    // rdev_hi:        [11 * 4,    buffer.int32],
-    [12 * 4, exports.uint32, 'size'],
-    // size_hi:        [13 * 4,    buffer.int32],
-    [14 * 4, exports.uint32, 'blksize'],
-    // blksize_hi:     [15 * 4,    buffer.int32],
-    [16 * 4, exports.uint32, 'blocks'],
-    // blocks_hi:      [17 * 4,    buffer.int32],
-    [18 * 4, exports.uint32, 'atime'],
-    // atime_hi:       [19 * 4,    buffer.int32],
-    [20 * 4, exports.uint32, 'atime_nsec'],
-    // atime_nsec_hi:  [21 * 4,    buffer.int32],
-    [22 * 4, exports.uint32, 'mtime'],
-    // mtime_hi:       [23 * 4,    buffer.int32],
-    [24 * 4, exports.uint32, 'mtime_nsec'],
-    // mtime_nsec_hi:  [25 * 4,    buffer.int32],
-    [26 * 4, exports.uint32, 'ctime'],
-    // ctime_hi:       [27 * 4,    buffer.int32],
-    [28 * 4, exports.uint32, 'ctime_nsec'],
-]);
-// From http://beej.us/guide/bgnet/output/html/multipage/sockaddr_inman.html
-//
-//     struct sockaddr_in {
-//         short            sin_family;   // e.g. AF_INET
-//         unsigned short   sin_port;     // e.g. htons(3490)
-//         struct in_addr   sin_addr;     // see struct in_addr, below
-//         char             sin_zero[8];  // zero this if you want to
-//     };
-//     struct in_addr {
-//         unsigned long s_addr;  // load with inet_aton()
-//     };
-exports.in_addr = typebase_1.Struct.define(4, [
-    [0, exports.ipv4, 's_addr'],
-]);
-exports.sockaddr_in = typebase_1.Struct.define(16, [
-    [0, exports.int16, 'sin_family'],
-    [2, exports.uint16, 'sin_port'],
-    [4, exports.in_addr, 'sin_addr'],
-    [8, typebase_1.Arr.define(exports.int8, 8), 'sin_zero'],
-]);
-// IPv6 AF_INET6 sockets:
-//
-//     struct sockaddr_in6 {
-//         u_int16_t       sin6_family;   // address family, AF_INET6
-//         u_int16_t       sin6_port;     // port number, Network Byte Order
-//         u_int32_t       sin6_flowinfo; // IPv6 flow information
-//         struct in6_addr sin6_addr;     // IPv6 address
-//         u_int32_t       sin6_scope_id; // Scope ID
-//     };
-//     struct in6_addr {
-//         unsigned char   s6_addr[16];   // load with inet_pton()
-//     };
-//     struct sockaddr {
-//         sa_family_t sa_family;
-//         char        sa_data[14];
-//     }
-exports.sockaddr = typebase_1.Struct.define(1, [
-    [0, 'sa_family', exports.uint16],
-    [2, 'sa_data', typebase_1.Arr.define(exports.int8, 14)],
-]);
-//     typedef union epoll_data {
-//         void    *ptr;
-//         int      fd;
-//         uint32_t u32;
-//         uint64_t u64;
-//     } epoll_data_t;
-//
-//     struct epoll_event {
-//         uint32_t     events;    /* Epoll events */
-//         epoll_data_t data;      /* User data variable */
-//     };
-exports.epoll_event = typebase_1.Struct.define(4 + 8, [
-    [0, exports.uint32, 'events'],
-    [4, exports.uint64, 'data'],
-]);
-// In `libc`, <bits/ipc.h> line 42:
-//
-//     struct ipc_perm {
-//         __key_t __key;			// Key.
-//         __uid_t uid;			// Owner's user ID.
-//         __gid_t gid;			// Owner's group ID.
-//         __uid_t cuid;			// Creator's user ID.
-//         __gid_t cgid;			// Creator's group ID.
-//         unsigned short int mode;		// Read/write permission.
-//         unsigned short int __pad1;
-//         unsigned short int __seq;		// Sequence number.
-//         unsigned short int __pad2;
-//         __syscall_ulong_t __glibc_reserved1;
-//         __syscall_ulong_t __glibc_reserved2;
-//     };
-//
-// __syscall_ulong_t` is `unsigned long long int`
-exports.ipc_perm = typebase_1.Struct.define(48, [
-    [0, exports.int32, '__key'],
-    [4, exports.uint32, 'uid'],
-    [8, exports.uint32, 'gid'],
-    [12, exports.uint32, 'cuid'],
-    [16, exports.uint32, 'cgid'],
-    [20, exports.uint16, 'mode'],
-    // [22, uint16, '__pad1'],
-    [24, exports.uint16, '__seq'],
-]);
-// In `libc`, <bits/shm.h> line 49:
-//
-//     struct shmid_ds {
-//         struct ipc_perm shm_perm;		// operation permission struct
-//         size_t shm_segsz;			// size of segment in bytes
-//         __time_t shm_atime;			// time of last shmat()
-//     #ifndef __x86_64__
-//         unsigned long int __glibc_reserved1;
-//     #endif
-//         __time_t shm_dtime;			// time of last shmdt()
-//     #ifndef __x86_64__
-//         unsigned long int __glibc_reserved2;
-//     #endif
-//         __time_t shm_ctime;			// time of last change by shmctl()
-//     #ifndef __x86_64__
-//         unsigned long int __glibc_reserved3;
-//     #endif
-//         __pid_t shm_cpid;			// pid of creator
-//         __pid_t shm_lpid;			// pid of last shmop
-//         shmatt_t shm_nattch;		// number of current attaches
-//         __syscall_ulong_t __glibc_reserved4;
-//         __syscall_ulong_t __glibc_reserved5;
-//     };
-//
-// From internet:
-//
-//     struct shmid_ds {
-//         struct ipc_perm shm_perm;    // Ownership and permissions
-//         size_t          shm_segsz;   // Size of segment (bytes)
-//         time_t          shm_atime;   // Last attach time
-//         time_t          shm_dtime;   // Last detach time
-//         time_t          shm_ctime;   // Last change time
-//         pid_t           shm_cpid;    // PID of creator
-//         pid_t           shm_lpid;    // PID of last shmat(2)/shmdt(2)
-//         shmatt_t        shm_nattch;  // No. of current attaches
-//         // ...
-//     };
-exports.shmid_ds = typebase_1.Struct.define(112, [
-    [0, exports.ipc_perm, 'shm_perm'],
-    [48, exports.size_t, 'shm_segsz'],
-    [56, exports.time_t, 'shm_atime'],
-    [64, exports.time_t, 'shm_dtime'],
-    [72, exports.time_t, 'shm_ctime'],
-    [80, exports.pid_t, 'shm_cpid'],
-    [84, exports.pid_t, 'shm_lpid'],
-    [88, exports.uint64, 'shm_nattch'],
-]);
-// ## Time
-//
-//     struct utimbuf {
-//         time_t actime;       /* access time */
-//         time_t modtime;      /* modification time */
-//     };
-exports.utimbuf = typebase_1.Struct.define(16, [
-    [0, exports.uint64, 'actime'],
-    [8, exports.uint64, 'modtime'],
-]);
-exports.timeval = typebase_1.Struct.define(16, [
-    [0, exports.uint64, 'tv_sec'],
-    [8, exports.uint64, 'tv_nsec'],
-]);
-exports.timevalarr = typebase_1.Arr.define(exports.timeval, 2);
-exports.timespec = exports.timeval;
-exports.timespecarr = exports.timevalarr;
-//     struct linux_dirent64 {
-//         ino64_t        d_ino;    /* 64-bit inode number */
-//         off64_t        d_off;    /* 64-bit offset to next structure */
-//         unsigned short d_reclen; /* Size of this dirent */
-//         unsigned char  d_type;   /* File type */
-//         char           d_name[]; /* Filename (null-terminated) */
-//     };
-exports.linux_dirent64 = typebase_1.Struct.define(19, [
-    [0, exports.uint64, 'ino64_t'],
-    [8, exports.uint64, 'off64_t'],
-    [16, exports.uint16, 'd_reclen'],
-    [18, exports.uint8, 'd_type'],
-]);
-// Stucture that `inotify` returns when reading from one of its descriptors, in `libc`:
-//
-//     struct inotify_event {
-//         int      wd;       /* Watch descriptor */
-//         uint32_t mask;     /* Mask describing event */
-//         uint32_t cookie;   /* Unique cookie associating related events (for rename(2)) */
-//         uint32_t len;      /* Size of name field */
-//         char     name[];   /* Optional null-terminated name */
-//     };
-//
-// We create a representation of this struct in JavaScript:
-exports.inotify_event = typebase_1.Struct.define(16, [
-    [0, exports.int32, 'wd'],
-    [4, exports.uint32, 'mask'],
-    [8, exports.uint32, 'cookie'],
-    [12, exports.uint32, 'len'],
-]);
-// Relevant:
-// https://filippo.io/linux-syscall-table/
-// Linux:
-// apt-get install man manpages-dev
-// man 2 syscall
-// man 2 syscalls
-// x86:
-// /usr/include/asm/unistd.h
-// i386:
-// /usr/src/linux/arch/i386/kernel/entry.S
-// POSIX:
-// http://pubs.opengroup.org/onlinepubs/009695399/
-// http://pubs.opengroup.org/onlinepubs/009695399/idx/functions.html
-exports.SYS = {
-    read: 0,
-    write: 1,
-    open: 2,
-    close: 3,
-    stat: 4,
-    fstat: 5,
-    lstat: 6,
-    // poll:           7, // Use epoll instead.
-    lseek: 8,
-    mmap: 9,
-    mprotect: 10,
-    munmap: 11,
-    brk: 12,
-    rt_sigaction: 13,
-    rt_sigprocmask: 14,
-    rt_sigreturn: 15,
-    ioctl: 16,
-    pread64: 17,
-    pwrite64: 18,
-    readv: 19,
-    writev: 20,
-    access: 21,
-    pipe: 22,
-    // select:         23,
-    sched_yield: 24,
-    mremap: 25,
-    msync: 26,
-    mincore: 27,
-    madvise: 28,
-    shmget: 29,
-    shmat: 30,
-    shmctl: 31,
-    dup: 32,
-    dup2: 33,
-    pause: 34,
-    nanosleep: 35,
-    getitimer: 36,
-    alarm: 37,
-    setitimer: 38,
-    getpid: 39,
-    sendfile: 40,
-    socket: 41,
-    connect: 42,
-    accept: 43,
-    sendto: 44,
-    recvfrom: 45,
-    sendmsg: 46,
-    recvmsg: 47,
-    shutdown: 48,
-    bind: 49,
-    listen: 50,
-    getsockname: 51,
-    getpeername: 52,
-    socketpair: 53,
-    setsockopt: 54,
-    getsockopt: 55,
-    shmdt: 67,
-    fcntl: 72,
-    fsync: 74,
-    fdatasync: 75,
-    truncate: 76,
-    ftruncate: 77,
-    getdents: 78,
-    getcwd: 79,
-    chdir: 80,
-    fchdir: 81,
-    rename: 82,
-    mkdir: 83,
-    rmdir: 84,
-    creat: 85,
-    link: 86,
-    unlink: 87,
-    symlink: 88,
-    readlink: 89,
-    chmod: 90,
-    fchmod: 91,
-    chown: 92,
-    fchown: 93,
-    lchown: 94,
-    umask: 95,
-    gettimeofday: 96,
-    getrlimit: 97,
-    getrusage: 98,
-    getuid: 102,
-    getgid: 104,
-    geteuid: 107,
-    getegid: 108,
-    setpgid: 109,
-    getppid: 110,
-    utime: 132,
-    epoll_create: 213,
-    getdents64: 217,
-    epoll_wait: 232,
-    epoll_ctl: 233,
-    utimes: 235,
-    inotify_init: 253,
-    inotify_add_watch: 254,
-    inotify_rm_watch: 255,
-    mkdirat: 258,
-    futimesat: 261,
-    utimensat: 280,
-    accept4: 288,
-    epoll_create1: 291,
-    inotify_init1: 294,
-};
-
-
-/***/ }),
-/* 11 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-var EventEmitter = __webpack_require__(4).EventEmitter;
-var eloop = __webpack_require__(7);
-
-
-if(!process)
-    throw Error('`process` global not defined by JS runtime.');
-
-
-// The most important method Kappa
-process.noop = function() {};
-
-
-process.on = EventEmitter.prototype.on.bind(process);
-process.emit = EventEmitter.prototype.emit.bind(process);
-
-
-process.title = 'Bamboo';
-
-process.release = {
-    name: 'Bamboo',
-    lts: '',
-    sourceUrl: '',
-    headersUrl: ''
-};
-
-
-// Node.js does not allow to overwrite this property, so
-// in Node.js it will hold the Node.js version.
-process.version = 'v1.0.0';
-process.platform = 'linux';
-process.moduleLoadList = []; // For compatibility with node.
-process.versions = {
-    bamboo: '1.0.0'
-};
-// process.arch = process.arch;
-// process.platform = process.platform;
-// process.release = process.release;
-process.argv = process.argv || [];
-process.execArgv = [];
-
-process.env = process.env || {
-        NODE_VERSION: '',
-        HOSTNAME: '',
-        TERM: '',
-        NPM_CONFIG_LOGLEVEL: '',
-        PATH: '',
-        PWD: '',
-        SHLVL: '',
-        HOME: '',
-        _: '',
-        OLDPWD: '',
-    };
-process.env.NODE_DEBUG = '*';
-
-process.features = {
-    debug: false,
-    uv: false,
-    ipv6: false,
-    tls_npn: false,
-    tls_sni: false,
-    tls_ocsp: false,
-    tls: false
-};
-process.execPath = process.execPath || '';
-process.config = {};
-// reallyExit: [Function: reallyExit],
-
-
-var libjs = __webpack_require__(2);
-
-process.pid = libjs.getpid();
-
-process.getgid = function() {
-    return libjs.getgid();
-};
-
-process.cwd = function() {
-    try {
-        return libjs.getcwd();
-    } catch(e) {
-        console.log(e);
-        console.log(e.stack);
-        return '.';
-    }
-};
-
-process.yield = function() {
-    libjs.sched_yield();
-};
-
-process.nanosleep = function(seconds, nanoseconds) {
-    libjs.nanosleep(seconds, nanoseconds);
-};
-
-
-
-process.hrtime = function hrtime() {
-
-};
-
-
-const fs = __webpack_require__(8);
-const STDOUT = 1;
-const STDERR = 2;
-process.stdout = new fs.SyncWriteStream(STDOUT);
-process.stderr = new fs.SyncWriteStream(STDERR);
-
-// abort: [Function: abort],
-// chdir: [Function: chdir],
-// umask: [Function: umask],
-// getuid: [Function: getuid],
-// geteuid: [Function: geteuid],
-// setuid: [Function: setuid],
-// seteuid: [Function: seteuid],
-// setgid: [Function: setgid],
-// setegid: [Function: setegid],
-// getgid: [Function: getgid],
-// getegid: [Function: getegid],
-// getgroups: [Function: getgroups],
-// setgroups: [Function: setgroups],
-// initgroups: [Function: initgroups],
-// hrtime: [Function: hrtime],
-// dlopen: [Function: dlopen],
-
-// uptime: [Function: uptime],
-// memoryUsage: [Function: memoryUsage],
-
-
-// _linkedBinding: [Function: _linkedBinding],
-// _setupDomainUse: [Function: _setupDomainUse],
-// _events:
-// { newListener: [Function],
-//     removeListener: [Function],
-//     SIGWINCH: [ [Function], [Function] ] },
-// _rawDebug: [Function],
-//     _eventsCount: 3,
-//     domain: null,
-//     _maxListeners: undefined,
-//     EventEmitter:
-// { [Function: EventEmitter]
-//     EventEmitter: [Circular],
-//         usingDomains: false,
-//     defaultMaxListeners: 10,
-//     init: [Function],
-//     listenerCount: [Function] },
-// _fatalException: [Function],
-//     _exiting: false,
-//     assert: [Function],
-//     config:
-// { target_defaults:
-// { cflags: [],
-//     default_configuration: 'Release',
-//     defines: [],
-//     include_dirs: [],
-//     libraries: [] },
-//     variables:
-//     { asan: 0,
-//         gas_version: '2.23',
-//         host_arch: 'x64',
-//         icu_data_file: 'icudt56l.dat',
-//         icu_data_in: '../../deps/icu/source/data/in/icudt56l.dat',
-//         icu_endianness: 'l',
-//         icu_gyp_path: 'tools/icu/icu-generic.gyp',
-//         icu_locales: 'en,root',
-//         icu_path: './deps/icu',
-//         icu_small: true,
-//         icu_ver_major: '56',
-//         node_byteorder: 'little',
-//         node_install_npm: true,
-//         node_prefix: '/',
-//         node_release_urlbase: 'https://nodejs.org/download/release/',
-//         node_shared_http_parser: false,
-//         node_shared_libuv: false,
-//         node_shared_openssl: false,
-//         node_shared_zlib: false,
-//         node_tag: '',
-//         node_use_dtrace: false,
-//         node_use_etw: false,
-//         node_use_lttng: false,
-//         node_use_openssl: true,
-//         node_use_perfctr: false,
-//         openssl_fips: '',
-//         openssl_no_asm: 0,
-//         target_arch: 'x64',
-//         uv_parent_path: '/deps/uv/',
-//         uv_use_dtrace: false,
-//         v8_enable_gdbjit: 0,
-//         v8_enable_i18n_support: 1,
-//         v8_no_strict_aliasing: 1,
-//         v8_optimized_debug: 0,
-//         v8_random_seed: 0,
-//         v8_use_snapshot: true,
-//         want_separate_host_toolset: 0 } },
-// nextTick: [Function: nextTick],
-// _tickCallback: [Function: _tickCallback],
-// _tickDomainCallback: [Function: _tickDomainCallback],
-// stdout: [Getter],
-//     stderr: [Getter],
-//     stdin: [Getter],
-//     openStdin: [Function],
-//     exit: [Function],
-//     kill: [Function],
-//     mainModule:
-// Module {
-//     id: '.',
-//         exports: {},
-//     parent: null,
-//         filename: '/share/full-js/lib/boot.js',
-//         loaded: false,
-//         children: [ [Object], [Object] ],
-//         paths:
-//     [ '/share/full-js/lib/node_modules',
-//         '/share/full-js/node_modules',
-//         '/share/node_modules',
-//         '/node_modules' ] } }
-
-/* harmony default export */ __webpack_exports__["default"] = (process);
-
-
-/***/ }),
 /* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -9391,11 +9391,11 @@ module.exports = Readable;
 Readable.ReadableState = ReadableState;
 
 const EE = __webpack_require__(4);
-const Stream = __webpack_require__(6);
+const Stream = __webpack_require__(7);
 const Buffer = __webpack_require__(1).Buffer;
 const util = __webpack_require__(0);
 const debug = util.debuglog('stream');
-const BufferList = __webpack_require__(21);
+const BufferList = __webpack_require__(20);
 var StringDecoder;
 
 util.inherits(Readable, Stream);
@@ -10378,7 +10378,7 @@ Writable.WritableState = WritableState;
 
 const util = __webpack_require__(0);
 const internalUtil = __webpack_require__(14);
-const Stream = __webpack_require__(6);
+const Stream = __webpack_require__(7);
 const Buffer = __webpack_require__(1).Buffer;
 
 util.inherits(Writable, Stream);
@@ -11660,7 +11660,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var eloop_1 = __webpack_require__(7);
+var eloop_1 = __webpack_require__(5);
 // TODO: We can relax this to 53 bits, right?
 var TIMEOUT_MAX = 2147483647; // 2^31-1
 var Timeout = /** @class */ (function () {
@@ -11847,7 +11847,7 @@ process.hasBinaryUtils = process.call && process.frame;
 // Export `StaticArrayBuffer`, required by `StaticBuffer`.
 if(typeof StaticArrayBuffer === 'undefined') {
     StaticArrayBuffer = global.StaticArrayBuffer = process.hasBinaryUtils
-            ? __webpack_require__(9).StaticArrayBuffer
+            ? __webpack_require__(8).StaticArrayBuffer
             : ArrayBuffer;
 }
 
@@ -11860,18 +11860,16 @@ if(typeof StaticBuffer === 'undefined') {
 }
 
 
-
-
 // Set-up `process` global.
-__webpack_require__(11);
+__webpack_require__(10);
 
 
 // Create global `console` object.
-console = global.console = __webpack_require__(23);
+console = global.console = __webpack_require__(22);
 
 
 // The main event loop, attached to `process` as `loop` property.
-var eloop = __webpack_require__(7);
+var eloop = __webpack_require__(5);
 var EventLoop = eloop.EventLoop;
 var Task = eloop.Task;
 var loop = process.loop = new EventLoop;
@@ -11907,10 +11905,11 @@ task.callback = function() {
         } else {
             // Create fake asynchronous system calls by just wrapping the
             // synchronous version.
+            var slice = Array.prototype.slice;
             process.asyscall = function() {
                 var len = arguments.length - 1;
-                var args = new Array(len);
-                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var args = [];
+                for(var i = 0; i < len; i++) args.push(arguments[i]);
                 var res = process.syscall.apply(null, args);
                 arguments[len](res);
             };
@@ -11932,8 +11931,8 @@ task.callback = function() {
     try {
         // Eval the file specified in first argument `full app.js`
         if(process.argv[1]) {
-            var path = __webpack_require__(5);
-            var Module = __webpack_require__(24).Module;
+            var path = __webpack_require__(6);
+            var Module = __webpack_require__(23).Module;
             process.argv = process.argv.splice(1);
             process.argv[1] = path.resolve(process.argv[1]);
             setImmediate(function() {
@@ -11957,136 +11956,6 @@ loop.start();
 
 /***/ }),
 /* 20 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
-var libjs = __webpack_require__(2);
-var static_buffer_1 = __webpack_require__(3);
-// Bare-bones OOP wrapper around `inotify(7)`, to make it more user-friendly
-// you have to wrap it yourself into `EventEmitter` and use `path.resolve()` to
-// resolve full `filepath`.
-function noop() { }
-// Usage:
-//
-// ```js
-// var watcher = new Inotify;
-// watcher.onerror = function(err, errno) {
-//     console.log('error', err, errno);
-// };
-// watcher.onevent = function(event) {
-//     console.log('event', event);
-// };
-// watcher.start();
-// watcher.addPath('/tmp');
-// watcher.addPath('/tmp/tmp2');
-// watcher.removePath('/tmp');
-// watcher.stop();
-// ```
-var Inotify = /** @class */ (function () {
-    function Inotify(poll_interval, buffer_size) {
-        if (poll_interval === void 0) { poll_interval = 200; }
-        if (buffer_size === void 0) { buffer_size = 4096; }
-        this.onevent = noop;
-        this.onerror = noop;
-        this.wdCount = 0;
-        this.wd = {};
-        this.wdr = {};
-        this.pollBound = this.poll.bind(this);
-        this.encoding = 'utf8';
-        this.pollInterval = poll_interval;
-        this.bufSize = buffer_size;
-    }
-    Inotify.prototype.poll = function () {
-        var res = libjs.read(this.fd, this.buf);
-        if (res < 0) {
-            if (-res == 11 /* EAGAIN */) {
-                // We are in `NONBLOCK` mode, so `EAGAIN` "error" just means: "no events yet, try later".
-            }
-            else {
-                this.onerror(Error("Could not poll for events: errno = " + res), res);
-            }
-            this.nextTick();
-            return;
-        }
-        if (res > 0) {
-            var offset = 0;
-            var struct = libjs.inotify_event;
-            while (offset < res) {
-                var event = struct.unpack(this.buf, offset);
-                var name_off = offset + struct.size;
-                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
-                name = name.substr(0, name.indexOf("\0"));
-                event.name = name;
-                event.path = this.wdr[event.wd];
-                this.onevent(event);
-                offset += struct.size + event.len;
-            }
-        }
-        this.nextTick();
-    };
-    Inotify.prototype.nextTick = function () {
-        // if(this.isPolling()) process.nextTick(this.pollBound);
-        if (this.hasStarted() && this.wdCount)
-            this.timeout = setTimeout(this.pollBound, this.pollInterval);
-    };
-    Inotify.prototype.stopPolling = function () {
-        clearTimeout(this.timeout);
-        this.timeout = null;
-    };
-    Inotify.prototype.hasStarted = function () {
-        return !!this.fd;
-    };
-    Inotify.prototype.start = function () {
-        this.fd = libjs.inotify_init1(2048 /* NONBLOCK */);
-        if (this.fd < 0)
-            throw Error("Could not init: errno = " + this.fd);
-        this.buf = new static_buffer_1.StaticBuffer(this.bufSize);
-        return this.fd;
-    };
-    Inotify.prototype.stop = function () {
-        this.stopPolling();
-        for (var pathname in this.wd)
-            this.removePath(pathname);
-        var fd = this.fd;
-        this.fd = 0;
-        return libjs.close(fd);
-    };
-    Inotify.prototype.addPath = function (pathname, events) {
-        if (events === void 0) { events = 4095 /* ALL_EVENTS */; }
-        if (!this.fd)
-            throw Error("inotify file descriptor not initialized, call .init() first.");
-        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
-        if (wd < 0)
-            throw Error("Could not add watch: errno = " + wd);
-        this.wdCount++;
-        this.wd[pathname] = wd;
-        this.wdr[wd] = pathname;
-        /* First path added, so we start polling. */
-        if (this.wdCount == 1)
-            this.nextTick();
-        return wd;
-    };
-    // Intentionally does not throw error if we are not watching a path, simply returns -1.
-    // Also returns the result of `inotify_rm_watch` system call, if negative, represents an error.
-    Inotify.prototype.removePath = function (pathname) {
-        var wd = this.wd[pathname];
-        if (!wd)
-            return -1;
-        delete this.wd[pathname];
-        delete this.wdr[wd];
-        /* Stop polling loop, if we don't have any paths to watch for. */
-        this.wdCount--;
-        return libjs.inotify_rm_watch(this.fd, wd);
-    };
-    return Inotify;
-}());
-exports.Inotify = Inotify;
-
-
-/***/ }),
-/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -12165,7 +12034,7 @@ BufferList.prototype.concat = function(n) {
 
 
 /***/ }),
-/* 22 */
+/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -12194,7 +12063,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
 
 
 /***/ }),
-/* 23 */
+/* 22 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var util = __webpack_require__(0);
@@ -12311,7 +12180,7 @@ module.exports.Console = Console;
 
 
 /***/ }),
-/* 24 */
+/* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -12328,14 +12197,14 @@ module.exports.Console = Console;
 // though it might not be 100% compatible with Node.js.
 
 
-var NativeModule = __webpack_require__(25).NativeModule;
+var NativeModule = __webpack_require__(24).NativeModule;
 var util = __webpack_require__(0);
-var internalModule = __webpack_require__(27);
+var internalModule = __webpack_require__(26);
 var internalUtil = __webpack_require__(14);
-var vm = __webpack_require__(30);
+var vm = __webpack_require__(29);
 var assert = __webpack_require__(17).ok;
-var fs = __webpack_require__(8);
-var path = __webpack_require__(5);
+var fs = __webpack_require__(11);
+var path = __webpack_require__(6);
 var libjs = __webpack_require__(2);
 
 // const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
@@ -13039,7 +12908,7 @@ Module.Module = Module;
 
 
 /***/ }),
-/* 25 */
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 function NativeModule(id) {
@@ -13205,7 +13074,7 @@ exports.NativeModule = NativeModule;
 
 
 /***/ }),
-/* 26 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -13216,9 +13085,9 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var libjs = __webpack_require__(2);
-var inotify_1 = __webpack_require__(20);
+var inotify_1 = __webpack_require__(32);
 var extend = __webpack_require__(0).extend;
-var pathModule = __webpack_require__(5);
+var pathModule = __webpack_require__(6);
 var buffer_1 = __webpack_require__(1);
 var static_buffer_1 = __webpack_require__(3);
 if (false) {
@@ -14443,7 +14312,7 @@ function writeFile(file, data, options, cb) {
 
 
 /***/ }),
-/* 27 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -14547,7 +14416,7 @@ function addBuiltinLibsToObject(object) {
 
 
 /***/ }),
-/* 28 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15065,7 +14934,7 @@ module.exports = punycode;
 
 
 /***/ }),
-/* 29 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15484,7 +15353,7 @@ function decodeStr(s, decoder) {
 
 
 /***/ }),
-/* 30 */
+/* 29 */
 /***/ (function(module, exports) {
 
 // Taken from https://github.com/substack/vm-browserify
@@ -15647,7 +15516,7 @@ exports.runInThisContext = function(code) {
 
 
 /***/ }),
-/* 31 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15757,7 +15626,7 @@ exports.Struct = Struct;
 
 
 /***/ }),
-/* 32 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -15773,9 +15642,9 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var typebase_1 = __webpack_require__(31);
+var typebase_1 = __webpack_require__(30);
 var buffer_1 = __webpack_require__(1);
-var x86_64_linux_1 = __webpack_require__(10);
+var x86_64_linux_1 = __webpack_require__(9);
 function flip(buf, offset, len) {
     if (offset === void 0) { offset = 0; }
     if (len === void 0) { len = buf.length; }
@@ -15875,6 +15744,136 @@ exports.Ipv6 = Ipv6;
 
 
 /***/ }),
+/* 32 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var libjs = __webpack_require__(2);
+var static_buffer_1 = __webpack_require__(3);
+// Bare-bones OOP wrapper around `inotify(7)`, to make it more user-friendly
+// you have to wrap it yourself into `EventEmitter` and use `path.resolve()` to
+// resolve full `filepath`.
+function noop() { }
+// Usage:
+//
+// ```js
+// var watcher = new Inotify;
+// watcher.onerror = function(err, errno) {
+//     console.log('error', err, errno);
+// };
+// watcher.onevent = function(event) {
+//     console.log('event', event);
+// };
+// watcher.start();
+// watcher.addPath('/tmp');
+// watcher.addPath('/tmp/tmp2');
+// watcher.removePath('/tmp');
+// watcher.stop();
+// ```
+var Inotify = /** @class */ (function () {
+    function Inotify(poll_interval, buffer_size) {
+        if (poll_interval === void 0) { poll_interval = 200; }
+        if (buffer_size === void 0) { buffer_size = 4096; }
+        this.onevent = noop;
+        this.onerror = noop;
+        this.wdCount = 0;
+        this.wd = {};
+        this.wdr = {};
+        this.pollBound = this.poll.bind(this);
+        this.encoding = 'utf8';
+        this.pollInterval = poll_interval;
+        this.bufSize = buffer_size;
+    }
+    Inotify.prototype.poll = function () {
+        var res = libjs.read(this.fd, this.buf);
+        if (res < 0) {
+            if (-res == 11 /* EAGAIN */) {
+                // We are in `NONBLOCK` mode, so `EAGAIN` "error" just means: "no events yet, try later".
+            }
+            else {
+                this.onerror(Error("Could not poll for events: errno = " + res), res);
+            }
+            this.nextTick();
+            return;
+        }
+        if (res > 0) {
+            var offset = 0;
+            var struct = libjs.inotify_event;
+            while (offset < res) {
+                var event = struct.unpack(this.buf, offset);
+                var name_off = offset + struct.size;
+                var name = this.buf.slice(name_off, name_off + event.len).toString(this.encoding);
+                name = name.substr(0, name.indexOf("\0"));
+                event.name = name;
+                event.path = this.wdr[event.wd];
+                this.onevent(event);
+                offset += struct.size + event.len;
+            }
+        }
+        this.nextTick();
+    };
+    Inotify.prototype.nextTick = function () {
+        // if(this.isPolling()) process.nextTick(this.pollBound);
+        if (this.hasStarted() && this.wdCount)
+            this.timeout = setTimeout(this.pollBound, this.pollInterval);
+    };
+    Inotify.prototype.stopPolling = function () {
+        clearTimeout(this.timeout);
+        this.timeout = null;
+    };
+    Inotify.prototype.hasStarted = function () {
+        return !!this.fd;
+    };
+    Inotify.prototype.start = function () {
+        this.fd = libjs.inotify_init1(2048 /* NONBLOCK */);
+        if (this.fd < 0)
+            throw Error("Could not init: errno = " + this.fd);
+        this.buf = new static_buffer_1.StaticBuffer(this.bufSize);
+        return this.fd;
+    };
+    Inotify.prototype.stop = function () {
+        this.stopPolling();
+        for (var pathname in this.wd)
+            this.removePath(pathname);
+        var fd = this.fd;
+        this.fd = 0;
+        return libjs.close(fd);
+    };
+    Inotify.prototype.addPath = function (pathname, events) {
+        if (events === void 0) { events = 4095 /* ALL_EVENTS */; }
+        if (!this.fd)
+            throw Error("inotify file descriptor not initialized, call .init() first.");
+        var wd = libjs.inotify_add_watch(this.fd, pathname, events);
+        if (wd < 0)
+            throw Error("Could not add watch: errno = " + wd);
+        this.wdCount++;
+        this.wd[pathname] = wd;
+        this.wdr[wd] = pathname;
+        /* First path added, so we start polling. */
+        if (this.wdCount == 1)
+            this.nextTick();
+        return wd;
+    };
+    // Intentionally does not throw error if we are not watching a path, simply returns -1.
+    // Also returns the result of `inotify_rm_watch` system call, if negative, represents an error.
+    Inotify.prototype.removePath = function (pathname) {
+        var wd = this.wd[pathname];
+        if (!wd)
+            return -1;
+        delete this.wd[pathname];
+        delete this.wdr[wd];
+        /* Stop polling loop, if we don't have any paths to watch for. */
+        this.wdCount--;
+        return libjs.inotify_rm_watch(this.fd, wd);
+    };
+    return Inotify;
+}());
+exports.Inotify = Inotify;
+
+
+/***/ }),
 /* 33 */
 /***/ (function(module, exports) {
 
@@ -15905,7 +15904,7 @@ var __extends = (this && this.__extends) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 var events_1 = __webpack_require__(4);
 var buffer_1 = __webpack_require__(1);
-var process_1 = __webpack_require__(11);
+var process_1 = __webpack_require__(10);
 var util = __webpack_require__(0);
 var errnoException = util._errnoException;
 var exceptionWithHostPort = util._exceptionWithHostPort;
@@ -16192,7 +16191,7 @@ throw new Error("Module build failed: Error: Typescript emitted no output for /m
 // for the stream, one conventional and one non-conventional.
 
 
-const stream = __webpack_require__(6);
+const stream = __webpack_require__(7);
 const util = __webpack_require__(0);
 
 module.exports = LazyTransform;
@@ -16247,7 +16246,7 @@ throw new Error("Module build failed: Error: Typescript emitted no output for /m
 // 'use strict';
 
 
-var toASCII = __webpack_require__(28).toASCII;
+var toASCII = __webpack_require__(27).toASCII;
 
 exports.parse = urlParse;
 exports.resolve = urlResolve;
@@ -16306,7 +16305,7 @@ var slashedProtocol = {
     'file:': true
 };
 
-var querystring = __webpack_require__(29);
+var querystring = __webpack_require__(28);
 
 // This constructor is used to store parsed query string values. Instantiating
 // this is faster than explicitly calling `Object.create(null)` to get a
@@ -18014,11 +18013,11 @@ exports.default = [72, 199, 199, 1, 0, 0, 0, 232, 13, 0, 0, 0, 72, 199, 199, 2, 
 /***/ (function(module, exports, __webpack_require__) {
 
 var map = {
-	"./": 26,
+	"./": 25,
 	"./_stream_duplex": 15,
 	"./_stream_duplex.js": 15,
-	"./_stream_passthrough": 22,
-	"./_stream_passthrough.js": 22,
+	"./_stream_passthrough": 21,
+	"./_stream_passthrough.js": 21,
 	"./_stream_readable": 12,
 	"./_stream_readable.js": 12,
 	"./_stream_transform": 16,
@@ -18033,62 +18032,61 @@ var map = {
 	"./buffer.d": 34,
 	"./buffer.d.ts": 34,
 	"./buffer.js": 1,
-	"./console": 23,
-	"./console.js": 23,
+	"./console": 22,
+	"./console.js": 22,
 	"./dgram": 35,
 	"./dgram.ts": 35,
 	"./dns": 36,
 	"./dns.js": 36,
-	"./eloop": 7,
-	"./eloop.ts": 7,
+	"./eloop": 5,
+	"./eloop.ts": 5,
 	"./events": 4,
 	"./events.d": 37,
 	"./events.d.ts": 37,
 	"./events.js": 4,
-	"./fs": 8,
-	"./fs.js": 54,
-	"./fs.ts": 8,
-	"./index": 26,
-	"./index.js": 26,
-	"./internal/module": 27,
-	"./internal/module.js": 27,
-	"./internal/streams/BufferList": 21,
-	"./internal/streams/BufferList.js": 21,
+	"./fs": 11,
+	"./fs.ts": 11,
+	"./index": 25,
+	"./index.js": 25,
+	"./internal/module": 26,
+	"./internal/module.js": 26,
+	"./internal/streams/BufferList": 20,
+	"./internal/streams/BufferList.js": 20,
 	"./internal/streams/lazy_transform": 38,
 	"./internal/streams/lazy_transform.js": 38,
 	"./internal/util": 14,
 	"./internal/util.js": 14,
-	"./module": 24,
-	"./module.js": 24,
-	"./native_module": 25,
-	"./native_module.js": 25,
-	"./path": 5,
-	"./path.js": 5,
-	"./process": 11,
-	"./process.js": 11,
-	"./punycode": 28,
-	"./punycode.js": 28,
-	"./querystring": 29,
-	"./querystring.js": 29,
-	"./static-arraybuffer": 9,
-	"./static-arraybuffer.js": 9,
+	"./module": 23,
+	"./module.js": 23,
+	"./native_module": 24,
+	"./native_module.js": 24,
+	"./path": 6,
+	"./path.js": 6,
+	"./process": 10,
+	"./process.js": 10,
+	"./punycode": 27,
+	"./punycode.js": 27,
+	"./querystring": 28,
+	"./querystring.js": 28,
+	"./static-arraybuffer": 8,
+	"./static-arraybuffer.js": 8,
 	"./static-buffer": 3,
 	"./static-buffer.d": 39,
 	"./static-buffer.d.ts": 39,
 	"./static-buffer.js": 3,
-	"./stream": 6,
+	"./stream": 7,
 	"./stream.d": 40,
 	"./stream.d.ts": 40,
-	"./stream.js": 6,
+	"./stream.js": 7,
 	"./timers": 18,
-	"./timers.js": 56,
+	"./timers.js": 55,
 	"./timers.ts": 18,
 	"./url": 41,
 	"./url.js": 41,
 	"./util": 0,
 	"./util.js": 0,
-	"./vm": 30,
-	"./vm.js": 30
+	"./vm": 29,
+	"./vm.js": 29
 };
 function webpackContext(req) {
 	return __webpack_require__(webpackContextResolve(req));
@@ -18108,1363 +18106,6 @@ webpackContext.id = 53;
 
 /***/ }),
 /* 54 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var libjs = __webpack_require__(2);
-var inotify_1 = __webpack_require__(20);
-var util = __webpack_require__(0);
-var pathModule = __webpack_require__(5);
-var events_1 = __webpack_require__(4);
-var buffer_1 = __webpack_require__(1);
-var static_buffer_1 = __webpack_require__(3);
-var stream_1 = __webpack_require__(6);
-if (false) {
-    exports.isFULLjs = true;
-}
-function noop() { }
-var isSB = static_buffer_1.StaticBuffer.isStaticBuffer;
-var ERRSTR = {
-    PATH_STR: 'path must be a string',
-    FD: 'file descriptor must be a unsigned 32-bit integer',
-    MODE_INT: 'mode must be an integer',
-    CB: 'callback must be a function',
-    UID: 'uid must be an unsigned int',
-    GID: 'gid must be an unsigned int',
-    LEN: 'len must be an integer',
-    ATIME: 'atime must be an integer',
-    MTIME: 'mtime must be an integer',
-    PREFIX: 'filename prefix is required',
-    BUFFER: 'buffer must be an instance of Buffer or StaticBuffer',
-    OFFSET: 'offset must be an integer',
-    LENGTH: 'length must be an integer',
-    POSITION: 'position must be an integer'
-};
-var ERRSTR_OPTS = function (tipeof) { return ("Expected options to be either an object or a string, but got " + tipeof + " instead"); };
-function formatError(errno, func, path, path2) {
-    if (func === void 0) { func = ''; }
-    if (path === void 0) { path = ''; }
-    if (path2 === void 0) { path2 = ''; }
-    switch (-errno) {
-        case 2: return "ENOENT: no such file or directory, " + func + " '" + path + "'";
-        case 9: return "EBADF: bad file descriptor, " + func;
-        case 22: return "EINVAL: invalid argument, " + func;
-        case 1: return "EPERM: operation not permitted, " + func + " '" + path + "' -> '" + path2 + "'";
-        case 71: return "EPROTO: protocol error, " + func + " '" + path + "' -> '" + path2 + "'";
-        case 17: return "EEXIST: file already exists, " + func + " '" + path + "' -> '" + path2 + "'";
-        default: return "Error occurred in " + func + ": errno = " + errno;
-    }
-}
-function throwError(errno, func, path, path2) {
-    if (func === void 0) { func = ''; }
-    if (path === void 0) { path = ''; }
-    if (path2 === void 0) { path2 = ''; }
-    throw Error(formatError(errno, func, path, path2));
-}
-function pathOrError(path, encoding) {
-    if (path instanceof buffer_1.Buffer)
-        path = path.toString(encoding);
-    if (typeof path !== 'string')
-        return TypeError(ERRSTR.PATH_STR);
-    return path;
-}
-function validPathOrThrow(path, encoding) {
-    var p = pathOrError(path, encoding);
-    if (p instanceof TypeError)
-        throw p;
-    else
-        return p;
-}
-function assertEncoding(encoding) {
-    if (encoding && !buffer_1.Buffer.isEncoding(encoding))
-        throw Error('Unknown encoding: ' + encoding);
-}
-function validateFd(fd) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-}
-function getOptions(defaults, options) {
-    if (!options)
-        return defaults;
-    else {
-        var tipeof = typeof options;
-        switch (tipeof) {
-            case 'string': return util.extend({}, defaults, { encoding: options });
-            case 'object': return util.extend({}, defaults, options);
-            default: throw TypeError(ERRSTR_OPTS(tipeof));
-        }
-    }
-}
-var optionGenerator = function (defaults) { return function (options) { return getOptions(defaults, options); }; };
-function validateCallback(callback) {
-    if (typeof callback !== 'function')
-        throw TypeError(ERRSTR.CB);
-    return callback;
-}
-var optionAndCallbackGenerator = function (getOpts) {
-    return function (options, callback) { return typeof options === 'function'
-        ? [getOpts(), options]
-        : [getOpts(options), validateCallback(callback)]; };
-};
-(function (flags) {
-    flags[flags["r"] = 0] = "r";
-    flags[flags['r+'] = 2] = 'r+';
-    flags[flags["rs"] = 1069056] = "rs";
-    flags[flags['rs+'] = 1069058] = 'rs+';
-    flags[flags["w"] = 577] = "w";
-    flags[flags["wx"] = 705] = "wx";
-    flags[flags['w+'] = 578] = 'w+';
-    flags[flags['wx+'] = 706] = 'wx+';
-    flags[flags["a"] = 1089] = "a";
-    flags[flags["ax"] = 1217] = "ax";
-    flags[flags['a+'] = 1090] = 'a+';
-    flags[flags['ax+'] = 1218] = 'ax+';
-})(exports.flags || (exports.flags = {}));
-var flags = exports.flags;
-var CHUNK = 4096;
-exports.F_OK = 0;
-exports.R_OK = 4;
-exports.W_OK = 2;
-exports.X_OK = 1;
-var appendFileDefaults = {
-    encoding: 'utf8',
-    mode: 438,
-    flag: 'a'
-};
-var writeFileDefaults = {
-    encoding: 'utf8',
-    mode: 438,
-    flag: 'w'
-};
-function flagsToFlagsValue(f) {
-    if (typeof f === 'number')
-        return f;
-    if (typeof f !== 'string')
-        throw TypeError("flags must be string or number");
-    var flagsval = flags[f];
-    if (typeof flagsval !== 'number')
-        throw TypeError("Invalid flags string value '" + f + "'");
-    return flagsval;
-}
-var optionsDefaults = {
-    encoding: 'utf8'
-};
-var readFileOptionsDefaults = {
-    flag: 'r'
-};
-var Stats = (function () {
-    function Stats() {
-    }
-    Stats.prototype.isFile = function () {
-        return (this.mode & 32768) == 32768;
-    };
-    Stats.prototype.isDirectory = function () {
-        return (this.mode & 16384) == 16384;
-    };
-    Stats.prototype.isBlockDevice = function () {
-        return (this.mode & 24576) == 24576;
-    };
-    Stats.prototype.isCharacterDevice = function () {
-        return (this.mode & 8192) == 8192;
-    };
-    Stats.prototype.isSymbolicLink = function () {
-        return (this.mode & 40960) == 40960;
-    };
-    Stats.prototype.isFIFO = function () {
-        return (this.mode & 4096) == 4096;
-    };
-    Stats.prototype.isSocket = function () {
-        return (this.mode & 49152) == 49152;
-    };
-    return Stats;
-}());
-exports.Stats = Stats;
-function accessSync(path, mode) {
-    if (mode === void 0) { mode = exports.F_OK; }
-    var vpath = validPathOrThrow(path);
-    var res = libjs.access(vpath, mode);
-    if (res < 0)
-        throwError(res, 'access', vpath);
-}
-exports.accessSync = accessSync;
-function access(path, a, b) {
-    var mode, callback;
-    if (typeof a === 'function') {
-        callback = a;
-        mode = exports.F_OK;
-    }
-    else {
-        mode = a;
-        callback = b;
-        validateCallback(callback);
-    }
-    var vpath = pathOrError(path);
-    if (vpath instanceof TypeError)
-        return callback(vpath);
-    libjs.accessAsync(vpath, mode, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'access', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.access = access;
-function appendFileSync(file, data, options) {
-    if (!options)
-        options = appendFileDefaults;
-    else {
-        var tipof = typeof options;
-        switch (tipof) {
-            case 'object':
-                options = util.extend({}, appendFileDefaults, options);
-                break;
-            case 'string':
-                options = util.extend({ encoding: options }, appendFileDefaults);
-                break;
-            default:
-                throw TypeError(ERRSTR_OPTS(tipof));
-        }
-    }
-    var b;
-    if (buffer_1.Buffer.isBuffer(data))
-        b = data;
-    else
-        b = new buffer_1.Buffer(String(data), options.encoding);
-    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
-    var fd;
-    var is_fd = typeof file === 'number';
-    if (is_fd) {
-        fd = file;
-    }
-    else {
-        var filename;
-        if (buffer_1.Buffer.isBuffer(file))
-            filename = file.toString();
-        else if (typeof file === 'string')
-            filename = file;
-        else
-            throw TypeError(ERRSTR.PATH_STR);
-        var flags = flagsToFlagsValue(options.flag);
-        if (typeof options.mode !== 'number')
-            throw TypeError(ERRSTR.MODE_INT);
-        fd = libjs.open(filename, flags, options.mode);
-        if (fd < 0)
-            throwError(fd, 'appendFile', filename);
-    }
-    var res = libjs.write(fd, sb);
-    if (res < 0)
-        throwError(res, 'appendFile', String(file));
-    if (!is_fd)
-        libjs.close(fd);
-}
-exports.appendFileSync = appendFileSync;
-function appendFile(file, data, options, callback) {
-    var opts;
-    if (typeof options === 'function') {
-        callback = options;
-        opts = appendFileDefaults;
-    }
-    else {
-        var tipof = typeof options;
-        switch (tipof) {
-            case 'object':
-                opts = util.extend({}, appendFileDefaults, options);
-                break;
-            case 'string':
-                opts = util.extend({ encoding: options }, appendFileDefaults);
-                break;
-            default:
-                throw TypeError(ERRSTR_OPTS(tipof));
-        }
-        validateCallback(callback);
-    }
-    var b;
-    if (buffer_1.Buffer.isBuffer(data))
-        b = data;
-    else
-        b = new buffer_1.Buffer(String(data), opts.encoding);
-    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(b) ? b : static_buffer_1.StaticBuffer.from(b);
-    function on_open(fd, is_fd) {
-        var res = libjs.write(fd, sb);
-        if (res < 0)
-            throwError(res, 'appendFile', String(file));
-        if (!is_fd)
-            libjs.closeAsync(fd, noop);
-    }
-    var fd;
-    var is_fd = typeof file === 'number';
-    if (is_fd) {
-        fd = file;
-        on_open(fd, is_fd);
-    }
-    else {
-        var filename;
-        if (buffer_1.Buffer.isBuffer(file))
-            filename = file.toString();
-        else if (typeof file === 'string')
-            filename = file;
-        else
-            throw TypeError(ERRSTR.PATH_STR);
-        var flags = flagsToFlagsValue(opts.flag);
-        if (typeof opts.mode !== 'number')
-            throw TypeError(ERRSTR.MODE_INT);
-        libjs.openAsync(filename, flags, opts.mode, function (fd) {
-            if (fd < 0)
-                return callback(Error(formatError(fd, 'appendFile', filename)));
-            on_open(fd, is_fd);
-        });
-    }
-}
-exports.appendFile = appendFile;
-function chmodSync(path, mode) {
-    var vpath = validPathOrThrow(path);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    var result = libjs.chmod(vpath, mode);
-    if (result < 0)
-        throwError(result, 'chmod', vpath);
-}
-exports.chmodSync = chmodSync;
-function chmod(path, mode, callback) {
-    var vpath = validPathOrThrow(path);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    libjs.chmodAsync(vpath, mode, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'chmod', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.chmod = chmod;
-function fchmodSync(fd, mode) {
-    validateFd(fd);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    var result = libjs.fchmod(fd, mode);
-    if (result < 0)
-        throwError(result, 'chmod');
-}
-exports.fchmodSync = fchmodSync;
-function fchmod(fd, mode, callback) {
-    validateFd(fd);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    libjs.fchmodAsync(fd, mode, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'chmod')));
-        else
-            callback(null);
-    });
-}
-exports.fchmod = fchmod;
-function chownSync(path, uid, gid) {
-    var vpath = validPathOrThrow(path);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    var result = libjs.chown(vpath, uid, gid);
-    if (result < 0)
-        throwError(result, 'chown', vpath);
-}
-exports.chownSync = chownSync;
-function chown(path, uid, gid, callback) {
-    var vpath = validPathOrThrow(path);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    libjs.chownAsync(vpath, uid, gid, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'chown', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.chown = chown;
-function fchownSync(fd, uid, gid) {
-    validateFd(fd);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    var result = libjs.fchown(fd, uid, gid);
-    if (result < 0)
-        throwError(result, 'fchown');
-}
-exports.fchownSync = fchownSync;
-function fchown(fd, uid, gid, callback) {
-    validateFd(fd);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    libjs.fchownAsync(fd, uid, gid, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'fchown')));
-        else
-            callback(null);
-    });
-}
-exports.fchown = fchown;
-function lchownSync(path, uid, gid) {
-    var vpath = validPathOrThrow(path);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    var result = libjs.lchown(vpath, uid, gid);
-    if (result < 0)
-        throwError(result, 'lchown', vpath);
-}
-exports.lchownSync = lchownSync;
-function lchown(path, uid, gid, callback) {
-    var vpath = validPathOrThrow(path);
-    if (typeof uid !== 'number')
-        throw TypeError(ERRSTR.UID);
-    if (typeof gid !== 'number')
-        throw TypeError(ERRSTR.GID);
-    libjs.lchownAsync(vpath, uid, gid, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'lchown', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.lchown = lchown;
-function closeSync(fd) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    var result = libjs.close(fd);
-    if (result < 0)
-        throwError(result, 'close');
-}
-exports.closeSync = closeSync;
-function close(fd, callback) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    libjs.closeAsync(fd, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'close')));
-        else
-            callback(null);
-    });
-}
-exports.close = close;
-function existsSync(path) {
-    try {
-        accessSync(path);
-        return true;
-    }
-    catch (e) {
-        return false;
-    }
-}
-exports.existsSync = existsSync;
-function exists(path, callback) {
-    access(path, function (err) { callback(!err); });
-}
-exports.exists = exists;
-function fsyncSync(fd) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    var result = libjs.fsync(fd);
-    if (result < 0)
-        throwError(result, 'fsync');
-}
-exports.fsyncSync = fsyncSync;
-function fsync(fd, callback) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    libjs.fsyncAsync(fd, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'fsync')));
-        else
-            callback(null);
-    });
-}
-exports.fsync = fsync;
-function fdatasyncSync(fd) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    var result = libjs.fdatasync(fd);
-    if (result < 0)
-        throwError(result, 'fdatasync');
-}
-exports.fdatasyncSync = fdatasyncSync;
-function fdatasync(fd, callback) {
-    if (typeof fd !== 'number')
-        throw TypeError(ERRSTR.FD);
-    libjs.fdatasyncAsync(fd, function (result) {
-        if (result < 0)
-            callback(Error(formatError(result, 'fdatasync')));
-        else
-            callback(null);
-    });
-}
-exports.fdatasync = fdatasync;
-function createStatsObject(res) {
-    var stats = new Stats;
-    stats.dev = res.dev;
-    stats.mode = res.mode;
-    stats.nlink = res.nlink;
-    stats.uid = res.uid;
-    stats.gid = res.gid;
-    stats.rdev = res.rdev;
-    stats.blksize = res.blksize;
-    stats.ino = res.ino;
-    stats.size = res.size;
-    stats.blocks = res.blocks;
-    stats.atime = new Date((res.atime * 1000) + Math.floor(res.atime_nsec / 1000000));
-    stats.mtime = new Date((res.mtime * 1000) + Math.floor(res.mtime_nsec / 1000000));
-    stats.ctime = new Date((res.ctime * 1000) + Math.floor(res.ctime_nsec / 1000000));
-    stats.birthtime = stats.ctime;
-    return stats;
-}
-function statSync(path) {
-    var vpath = validPathOrThrow(path);
-    try {
-        var res = libjs.stat(vpath);
-        return createStatsObject(res);
-    }
-    catch (errno) {
-        throwError(errno, 'stat', vpath);
-    }
-}
-exports.statSync = statSync;
-function stat(path, callback) {
-    var vpath = validPathOrThrow(path);
-    libjs.statAsync(vpath, function (err, res) {
-        if (err)
-            callback(Error(formatError(err, 'stat', vpath)));
-        else
-            callback(null, createStatsObject(res));
-    });
-}
-exports.stat = stat;
-function fstatSync(fd) {
-    validateFd(fd);
-    try {
-        var res = libjs.fstat(fd);
-        return createStatsObject(res);
-    }
-    catch (errno) {
-        throwError(errno, 'fstat');
-    }
-}
-exports.fstatSync = fstatSync;
-function fstat(fd, callback) {
-    validateFd(fd);
-    libjs.fstatAsync(fd, function (err, res) {
-        if (err)
-            callback(Error(formatError(err, 'fstat')));
-        else
-            callback(null, createStatsObject(res));
-    });
-}
-exports.fstat = fstat;
-function lstatSync(path) {
-    var vpath = validPathOrThrow(path);
-    try {
-        var res = libjs.lstat(vpath);
-        return createStatsObject(res);
-    }
-    catch (errno) {
-        throwError(errno, 'lstat', vpath);
-    }
-}
-exports.lstatSync = lstatSync;
-function lstat(path, callback) {
-    var vpath = validPathOrThrow(path);
-    libjs.lstatAsync(vpath, function (err, res) {
-        if (err)
-            callback(Error(formatError(err, 'lstat', vpath)));
-        else
-            callback(null, createStatsObject(res));
-    });
-}
-exports.lstat = lstat;
-function truncateSync(path, len) {
-    var vpath = validPathOrThrow(path);
-    if (typeof len !== 'number')
-        throw TypeError(ERRSTR.LEN);
-    var res = libjs.truncate(vpath, len);
-    if (res < 0)
-        throwError(res, 'truncate', vpath);
-}
-exports.truncateSync = truncateSync;
-function truncate(path, len, callback) {
-    var vpath = validPathOrThrow(path);
-    if (typeof len !== 'number')
-        throw TypeError(ERRSTR.LEN);
-    libjs.truncateAsync(vpath, len, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'truncate', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.truncate = truncate;
-function ftruncateSync(fd, len) {
-    validateFd(fd);
-    if (typeof len !== 'number')
-        throw TypeError(ERRSTR.LEN);
-    var res = libjs.ftruncate(fd, len);
-    if (res < 0)
-        throwError(res, 'ftruncate');
-}
-exports.ftruncateSync = ftruncateSync;
-function ftruncate(fd, len, callback) {
-    validateFd(fd);
-    if (typeof len !== 'number')
-        throw TypeError(ERRSTR.LEN);
-    libjs.ftruncateAsync(fd, len, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'ftruncate')));
-        else
-            callback(null);
-    });
-}
-exports.ftruncate = ftruncate;
-function utimesSync(path, atime, mtime) {
-    var vpath = validPathOrThrow(path);
-    if (typeof atime !== 'number')
-        throw TypeError(ERRSTR.ATIME);
-    if (typeof mtime !== 'number')
-        throw TypeError(ERRSTR.MTIME);
-    var vatime = atime;
-    var vmtime = mtime;
-    if (!isFinite(vatime))
-        vatime = Date.now();
-    if (!isFinite(vmtime))
-        vmtime = Date.now();
-    vatime = Math.round(vatime / 1000);
-    vmtime = Math.round(vmtime / 1000);
-    var times = {
-        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
-        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
-    };
-    var res = libjs.utime(vpath, times);
-    if (res < 0)
-        throwError(res, 'utimes', vpath);
-}
-exports.utimesSync = utimesSync;
-function utimes(path, atime, mtime, callback) {
-    var vpath = validPathOrThrow(path);
-    if (typeof atime !== 'number')
-        throw TypeError(ERRSTR.ATIME);
-    if (typeof mtime !== 'number')
-        throw TypeError(ERRSTR.MTIME);
-    var vatime = atime;
-    var vmtime = mtime;
-    if (!isFinite(vatime))
-        vatime = Date.now();
-    if (!isFinite(vmtime))
-        vmtime = Date.now();
-    vatime = Math.round(vatime / 1000);
-    vmtime = Math.round(vmtime / 1000);
-    var times = {
-        actime: [libjs.UInt64.lo(vatime), libjs.UInt64.hi(vatime)],
-        modtime: [libjs.UInt64.lo(vmtime), libjs.UInt64.hi(vmtime)]
-    };
-    libjs.utimeAsync(vpath, times, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'utimes', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.utimes = utimes;
-function linkSync(srcpath, dstpath) {
-    var vsrcpath = validPathOrThrow(srcpath);
-    var vdstpath = validPathOrThrow(dstpath);
-    var res = libjs.link(vsrcpath, vdstpath);
-    if (res < 0)
-        throwError(res, 'link', vsrcpath, vdstpath);
-}
-exports.linkSync = linkSync;
-function link(srcpath, dstpath, callback) {
-    var vsrcpath = validPathOrThrow(srcpath);
-    var vdstpath = validPathOrThrow(dstpath);
-    libjs.linkAsync(vsrcpath, vdstpath, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'link', vsrcpath, vdstpath)));
-        else
-            callback(null);
-    });
-}
-exports.link = link;
-function mkdirSync(path, mode) {
-    if (mode === void 0) { mode = 511; }
-    var vpath = validPathOrThrow(path);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    var res = libjs.mkdir(vpath, mode);
-    if (res < 0)
-        throwError(res, 'mkdir', vpath);
-}
-exports.mkdirSync = mkdirSync;
-function mkdir(path, mode, callback) {
-    if (mode === void 0) { mode = 511; }
-    var vpath = validPathOrThrow(path);
-    if (typeof mode === 'function') {
-        callback = mode;
-        mode = 511;
-    }
-    else {
-        if (typeof mode !== 'number')
-            throw TypeError(ERRSTR.MODE_INT);
-        if (typeof callback !== 'function')
-            throw TypeError(ERRSTR.CB);
-    }
-    libjs.mkdirAsync(vpath, mode, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'mkdir', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.mkdir = mkdir;
-function rndStr6() {
-    return (+new Date).toString(36).slice(-6);
-}
-function mkdtempSync(prefix) {
-    if (!prefix || typeof prefix !== 'string')
-        throw new TypeError(ERRSTR.PREFIX);
-    var retries = 10;
-    var fullname;
-    var found_tmp_name = false;
-    for (var i = 0; i < retries; i++) {
-        fullname = prefix + rndStr6();
-        try {
-            accessSync(fullname);
-        }
-        catch (e) {
-            found_tmp_name = true;
-            break;
-        }
-    }
-    if (found_tmp_name) {
-        mkdirSync(fullname);
-        return fullname;
-    }
-    else {
-        throw Error("Could not find a new name, mkdtemp");
-    }
-}
-exports.mkdtempSync = mkdtempSync;
-function mkdtemp(prefix, callback) {
-    if (!prefix || typeof prefix !== 'string')
-        throw new TypeError(ERRSTR.PREFIX);
-    var retries = 10;
-    var fullname;
-    function mk_dir() {
-        mkdir(fullname, function (err) {
-            if (err)
-                callback(err);
-            else
-                callback(null, fullname);
-        });
-    }
-    function name_loop() {
-        if (retries < 1) {
-            callback(Error('Could not find a new name, mkdtemp'));
-            return;
-        }
-        retries--;
-        fullname = prefix + rndStr6();
-        access(fullname, function (err) {
-            if (err)
-                mk_dir();
-            else
-                name_loop();
-        });
-    }
-    name_loop();
-}
-exports.mkdtemp = mkdtemp;
-function openSync(path, flags, mode) {
-    if (mode === void 0) { mode = 438; }
-    var vpath = validPathOrThrow(path);
-    var flagsval = flagsToFlagsValue(flags);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    var res = libjs.open(vpath, flagsval, mode);
-    if (res < 0)
-        throwError(res, 'open', vpath);
-    return res;
-}
-exports.openSync = openSync;
-function open(path, flags, mode, callback) {
-    if (typeof mode === 'function') {
-        callback = mode;
-        mode = 438;
-    }
-    var vpath = validPathOrThrow(path);
-    var flagsval = flagsToFlagsValue(flags);
-    if (typeof mode !== 'number')
-        throw TypeError(ERRSTR.MODE_INT);
-    libjs.openAsync(vpath, flagsval, mode, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'open', vpath)));
-        return callback(null, res);
-    });
-}
-exports.open = open;
-function readSync(fd, buffer, offset, length, position) {
-    validateFd(fd);
-    if (!(buffer instanceof buffer_1.Buffer))
-        throw TypeError(ERRSTR.BUFFER);
-    if (typeof offset !== 'number')
-        throw TypeError(ERRSTR.OFFSET);
-    if (typeof length !== 'number')
-        throw TypeError(ERRSTR.LENGTH);
-    if (position !== null) {
-        if (typeof position !== 'number')
-            throw TypeError(ERRSTR.POSITION);
-        var seekres = libjs.lseek(fd, position, 0);
-        if (seekres < 0)
-            throwError(seekres, 'read');
-    }
-    var buf = buffer.slice(offset, offset + length);
-    var res = libjs.read(fd, buf);
-    if (res < 0)
-        throwError(res, 'read');
-    return res;
-}
-exports.readSync = readSync;
-function read(fd, buffer, offset, length, position, callback) {
-    validateFd(fd);
-    if (!(buffer instanceof buffer_1.Buffer))
-        throw TypeError(ERRSTR.BUFFER);
-    if (typeof offset !== 'number')
-        throw TypeError(ERRSTR.OFFSET);
-    if (typeof length !== 'number')
-        throw TypeError(ERRSTR.LENGTH);
-    function do_read() {
-        var buf = buffer.slice(offset, offset + length);
-        libjs.readAsync(fd, buf, function (res) {
-            if (res < 0)
-                callback(Error(formatError(res, 'read')));
-            else
-                callback(null, res, buffer);
-        });
-    }
-    if (position !== null) {
-        if (typeof position !== 'number')
-            throw TypeError(ERRSTR.POSITION);
-        libjs.lseekAsync(fd, position, 0, function (seekres) {
-            if (seekres < 0)
-                callback(Error(formatError(seekres, 'read')));
-            else
-                do_read();
-        });
-    }
-    else {
-        do_read();
-    }
-}
-exports.read = read;
-function optsEncoding(options) {
-    if (!options)
-        return optionsDefaults.encoding;
-    else {
-        var typeofopt = typeof options;
-        switch (typeofopt) {
-            case 'string': return options;
-            case 'object':
-                return options.encoding
-                    ? options.encoding : optionsDefaults.encoding;
-            default: throw TypeError(ERRSTR_OPTS(typeofopt));
-        }
-    }
-}
-function readdirSync(path, options) {
-    var vpath = validPathOrThrow(path);
-    var encoding = optsEncoding(options);
-    return libjs.readdirList(vpath, encoding);
-}
-exports.readdirSync = readdirSync;
-function readdir(path, options, callback) {
-    var vpath = validPathOrThrow(path);
-    var encoding;
-    if (typeof options === 'function') {
-        callback = options;
-        encoding = optionsDefaults.encoding;
-    }
-    else {
-        encoding = optsEncoding(options);
-        validateCallback(callback);
-    }
-    options = util.extend(options, optionsDefaults);
-    libjs.readdirListAsync(vpath, encoding, function (errno, list) {
-        if (errno < 0)
-            callback(Error(formatError(errno, 'readdir', vpath)));
-        else
-            callback(null, list);
-    });
-}
-exports.readdir = readdir;
-var getReadFileOptions = optionGenerator(readFileOptionsDefaults);
-function readFileSync(file, options) {
-    var opts = getReadFileOptions(options);
-    var fd;
-    var is_fd = typeof file === 'number';
-    if (is_fd)
-        fd = file;
-    else {
-        var vfile = validPathOrThrow(file);
-        var flag = flagsToFlagsValue(opts.flag);
-        fd = libjs.open(vfile, flag, 438);
-        if (fd < 0)
-            throwError(fd, 'readFile', vfile);
-    }
-    var list = [];
-    do {
-        var buf = new buffer_1.Buffer(CHUNK);
-        var res = libjs.read(fd, buf);
-        if (res < 0)
-            throwError(res, 'readFile');
-        if (res < CHUNK)
-            buf = buf.slice(0, res);
-        list.push(buf);
-    } while (res > 0);
-    if (!is_fd)
-        libjs.close(fd);
-    var buffer = buffer_1.Buffer.concat(list);
-    if (opts.encoding)
-        return buffer.toString(opts.encoding);
-    else
-        return buffer;
-}
-exports.readFileSync = readFileSync;
-var getReadFileOptionsAndCallback = optionAndCallbackGenerator(getReadFileOptions);
-function readFile(file, options, cb) {
-    if (options === void 0) { options = {}; }
-    var _a = getReadFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
-    var is_fd = typeof file === 'number';
-    function on_open(fd) {
-        var list = [];
-        function done() {
-            var buffer = buffer_1.Buffer.concat(list);
-            if (opts.encoding)
-                callback(null, buffer.toString(opts.encoding));
-            else
-                callback(null, buffer);
-            if (!is_fd)
-                libjs.closeAsync(fd, noop);
-        }
-        function loop() {
-            var buf = new static_buffer_1.StaticBuffer(CHUNK);
-            libjs.readAsync(fd, buf, function (res) {
-                if (res < 0)
-                    return callback(Error(formatError(res, 'readFile')));
-                if (res < CHUNK)
-                    buf = buf.slice(0, res);
-                list.push(buf);
-                if (res > 0)
-                    loop();
-                else
-                    done();
-            });
-        }
-        loop();
-    }
-    if (is_fd)
-        on_open(file);
-    else {
-        var vfile = validPathOrThrow(file);
-        var flag = flagsToFlagsValue(opts.flag);
-        libjs.openAsync(vfile, flag, 438, function (fd) {
-            if (fd < 0)
-                callback(Error(formatError(fd, 'readFile', vfile)));
-            else
-                on_open(fd);
-        });
-    }
-}
-exports.readFile = readFile;
-function readlinkSync(path, options) {
-    if (options === void 0) { options = null; }
-    var vpath = validPathOrThrow(path);
-    var encBuffer = false;
-    var filename;
-    if (typeof path === 'string') {
-        filename = path;
-    }
-    else if (buffer_1.Buffer.isBuffer(path)) {
-        var encoding = optsEncoding(options);
-        if (encoding === 'buffer') {
-            filename = path.toString();
-            encBuffer = true;
-        }
-        else {
-            filename = path.toString(encoding);
-        }
-    }
-    else
-        throw TypeError(ERRSTR.PATH_STR);
-    try {
-        var res = libjs.readlink(filename);
-    }
-    catch (errno) {
-        throwError(errno, 'readlink', vpath);
-    }
-    return !encBuffer ? res : new buffer_1.Buffer(res);
-}
-exports.readlinkSync = readlinkSync;
-function renameSync(oldPath, newPath) {
-    var voldPath = validPathOrThrow(oldPath);
-    var vnewPath = validPathOrThrow(newPath);
-    var res = libjs.rename(voldPath, vnewPath);
-    if (res < 0)
-        throwError(res, 'rename', voldPath, vnewPath);
-}
-exports.renameSync = renameSync;
-function rename(oldPath, newPath, callback) {
-    var voldPath = validPathOrThrow(oldPath);
-    var vnewPath = validPathOrThrow(newPath);
-    libjs.renameAsync(voldPath, vnewPath, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'rename', voldPath, vnewPath)));
-        else
-            callback(null);
-    });
-}
-exports.rename = rename;
-function rmdirSync(path) {
-    var vpath = validPathOrThrow(path);
-    var res = libjs.rmdir(vpath);
-    if (res < 0)
-        throwError(res, 'rmdir', vpath);
-}
-exports.rmdirSync = rmdirSync;
-function rmdir(path, callback) {
-    var vpath = validPathOrThrow(path);
-    libjs.rmdirAsync(vpath, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'rmdir', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.rmdir = rmdir;
-function symlinkSync(target, path) {
-    var vtarget = validPathOrThrow(target);
-    var vpath = validPathOrThrow(path);
-    var res = libjs.symlink(vtarget, vpath);
-    if (res < 0)
-        throwError(res, 'symlink', vtarget, vpath);
-}
-exports.symlinkSync = symlinkSync;
-function symlink(target, path, type, callback) {
-    var vtarget = validPathOrThrow(target);
-    var vpath = validPathOrThrow(path);
-    if (typeof type === 'function') {
-        callback = type;
-    }
-    validateCallback(callback);
-    libjs.symlinkAsync(vtarget, vpath, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'symlink', vtarget, vpath)));
-        else
-            callback(null);
-    });
-}
-exports.symlink = symlink;
-function unlinkSync(path) {
-    var vpath = validPathOrThrow(path);
-    var res = libjs.unlink(vpath);
-    if (res < 0)
-        throwError(res, 'unlink', vpath);
-}
-exports.unlinkSync = unlinkSync;
-function unlink(path, callback) {
-    var vpath = validPathOrThrow(path);
-    libjs.unlinkAsync(vpath, function (res) {
-        if (res < 0)
-            callback(Error(formatError(res, 'unlink', vpath)));
-        else
-            callback(null);
-    });
-}
-exports.unlink = unlink;
-function watchFile(filename, a, b) {
-    if (a === void 0) { a = {}; }
-    var vfilename = validPathOrThrow(filename);
-    vfilename = pathModule.resolve(vfilename);
-    var opts;
-    var listener;
-    if (typeof a !== 'object') {
-        opts = watchFileOptionDefaults;
-        listener = a;
-    }
-    else {
-        opts = util.extend(a, watchFileOptionDefaults);
-        listener = b;
-    }
-    if (typeof listener !== 'function')
-        throw new Error('"watchFile()" requires a listener function');
-    var watcher = StatWatcher.map[vfilename];
-    if (!watcher) {
-        watcher = new StatWatcher;
-        watcher.start(vfilename, opts.persistent, opts.interval);
-        StatWatcher.map[vfilename] = watcher;
-    }
-    watcher.on('change', listener);
-    return watcher;
-}
-exports.watchFile = watchFile;
-function writeSync(fd, data, a, b, c) {
-    validateFd(fd);
-    var buf;
-    var position;
-    if (typeof b === 'number') {
-        if (!(data instanceof buffer_1.Buffer))
-            throw TypeError('buffer must be instance of Buffer.');
-        var offset = a;
-        if (typeof offset !== 'number')
-            throw TypeError('offset must be an integer');
-        var length = b;
-        buf = data.slice(offset, offset + length);
-        position = c;
-    }
-    else {
-        var encoding = 'utf8';
-        if (b) {
-            if (typeof b !== 'string')
-                throw TypeError('encoding must be a string');
-            encoding = b;
-        }
-        if (data instanceof buffer_1.Buffer)
-            buf = data;
-        else if (typeof data === 'string') {
-            buf = new buffer_1.Buffer(data, encoding);
-        }
-        else
-            throw TypeError('data must be a Buffer or a string.');
-        position = a;
-    }
-    if (typeof position === 'number') {
-        var sres = libjs.lseek(fd, position, 0);
-        if (sres < 0)
-            throwError(sres, 'write:lseek');
-    }
-    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(buf)
-        ? buf : static_buffer_1.StaticBuffer.from(buf);
-    var res = libjs.write(fd, sb);
-    if (res < 0)
-        throwError(res, 'write');
-}
-exports.writeSync = writeSync;
-var getWriteFileOptions = optionGenerator(writeFileDefaults);
-function writeFileSync(file, data, options) {
-    var opts = getWriteFileOptions(options);
-    var fd;
-    var vpath;
-    var is_fd = typeof file === 'number';
-    if (is_fd) {
-        fd = file;
-    }
-    else {
-        vpath = validPathOrThrow(file);
-        var flags = flagsToFlagsValue(opts.flag);
-        fd = libjs.open(vpath, flags, opts.mode);
-        if (fd < 0)
-            throwError(fd, 'writeFile', vpath);
-    }
-    var sb = static_buffer_1.StaticBuffer.isStaticBuffer(data) ? data : static_buffer_1.StaticBuffer.from(data);
-    var res = libjs.write(fd, sb);
-    if (res < 0)
-        throwError(res, 'writeFile', is_fd ? String(fd) : vpath);
-    if (!is_fd)
-        libjs.close(fd);
-}
-exports.writeFileSync = writeFileSync;
-var getWriteFileOptionsAndCallback = optionAndCallbackGenerator(getWriteFileOptions);
-function writeFile(file, data, options, cb) {
-    var _a = getWriteFileOptionsAndCallback(options, cb), opts = _a[0], callback = _a[1];
-    var is_fd = typeof file === 'number';
-    function on_write(fd) {
-        var sb = isSB(data) ? data : static_buffer_1.StaticBuffer.from(data);
-        libjs.writeAsync(fd, sb, function (res) {
-            if (res < 0)
-                callback(Error(formatError(res, 'writeFile', is_fd ? String(fd) : vpath)));
-            else
-                callback(null, sb);
-            setTimeout(function () {
-                sb.print();
-            }, 100);
-            if (!is_fd)
-                libjs.closeAsync(fd, noop);
-        });
-    }
-    if (is_fd)
-        on_write(file);
-    else {
-        var vpath = validPathOrThrow(file);
-        var flags = flagsToFlagsValue(opts.flag);
-        libjs.openAsync(vpath, flags, opts.mode, function (fd) {
-            if (fd < 0)
-                callback(Error(formatError(fd, 'writeFile', vpath)));
-            else
-                on_write(fd);
-        });
-    }
-}
-exports.writeFile = writeFile;
-function createWriteStream(path, options) { }
-exports.createWriteStream = createWriteStream;
-var FSWatcher = (function (_super) {
-    __extends(FSWatcher, _super);
-    function FSWatcher() {
-        _super.apply(this, arguments);
-        this.inotify = new inotify_1.Inotify;
-    }
-    FSWatcher.prototype.start = function (filename, persistent, recursive, encoding) {
-        var _this = this;
-        this.inotify.encoding = encoding;
-        this.inotify.onerror = noop;
-        this.inotify.onevent = function (event) {
-            var is_rename = (event.mask & 192) || (event.mask & 256);
-            if (is_rename) {
-                _this.emit('change', 'rename', event.name);
-            }
-            else {
-                _this.emit('change', 'change', event.name);
-            }
-        };
-        this.inotify.start();
-        this.inotify.addPath(filename);
-    };
-    FSWatcher.prototype.close = function () {
-        this.inotify.stop();
-        this.inotify = null;
-    };
-    return FSWatcher;
-}(events_1.EventEmitter));
-exports.FSWatcher = FSWatcher;
-var watchOptionsDefaults = {
-    encoding: 'utf8',
-    persistent: true,
-    recursive: false
-};
-var StatWatcher = (function (_super) {
-    __extends(StatWatcher, _super);
-    function StatWatcher() {
-        _super.apply(this, arguments);
-        this.last = null;
-    }
-    StatWatcher.prototype.loop = function () {
-        var _this = this;
-        stat(this.filename, function (err, stats) {
-            if (err)
-                return _this.emit('error', err);
-            if (_this.last instanceof Stats) {
-                if (_this.last.atime.getTime() != stats.atime.getTime()) {
-                    _this.emit('change', stats, _this.last);
-                }
-            }
-            _this.last = stats;
-        });
-    };
-    StatWatcher.prototype.start = function (filename, persistent, interval) {
-        var _this = this;
-        this.filename = filename;
-        stat(filename, function (err, stats) {
-            if (err)
-                return _this.emit('error', err);
-            _this.last = stats;
-            _this.interval = setInterval(_this.loop.bind(_this), interval);
-        });
-    };
-    StatWatcher.prototype.stop = function () {
-        clearInterval(this.interval);
-        this.last = null;
-    };
-    StatWatcher.map = {};
-    return StatWatcher;
-}(events_1.EventEmitter));
-exports.StatWatcher = StatWatcher;
-var watchFileOptionDefaults = {
-    persistent: true,
-    interval: 5007
-};
-function unwatchFile(filename, listener) {
-    var vfilename = validPathOrThrow(filename);
-    vfilename = pathModule.resolve(vfilename);
-    var watcher = StatWatcher.map[vfilename];
-    if (!watcher)
-        return;
-    if (typeof listener === 'function')
-        watcher.removeListener('change', listener);
-    else
-        watcher.removeAllListeners('change');
-    if (watcher.listenerCount('change') === 0) {
-        watcher.stop();
-        delete StatWatcher.map[vfilename];
-    }
-}
-exports.unwatchFile = unwatchFile;
-function SyncWriteStream(fd, options) {
-    stream_1.Stream.call(this);
-    options = options || {};
-    validateFd(fd);
-    this.fd = fd;
-    this.writable = true;
-    this.readable = false;
-    this.autoClose = options.autoClose === undefined ? true : options.autoClose;
-}
-exports.SyncWriteStream = SyncWriteStream;
-util.inherits(SyncWriteStream, stream_1.Stream);
-SyncWriteStream.prototype.write = function (data, arg1, arg2) {
-    var encoding, cb;
-    if (arg1) {
-        if (typeof arg1 === 'string') {
-            encoding = arg1;
-            cb = arg2;
-        }
-        else if (typeof arg1 === 'function') {
-            cb = arg1;
-        }
-        else {
-            throw Error('Bad arguments');
-        }
-    }
-    assertEncoding(encoding);
-    if (typeof data === 'string') {
-        data = buffer_1.Buffer.from(data, encoding);
-    }
-    writeSync(this.fd, data, 0, data.length);
-    if (cb)
-        process.nextTick(cb);
-    return true;
-};
-SyncWriteStream.prototype.end = function (data, arg1, arg2) {
-    if (data) {
-        this.write(data, arg1, arg2);
-    }
-    this.destroy();
-};
-SyncWriteStream.prototype.destroy = function () {
-    if (this.autoClose)
-        closeSync(this.fd);
-    this.fd = null;
-    this.emit('close');
-    return true;
-};
-SyncWriteStream.prototype.destroySoon = SyncWriteStream.prototype.destroy;
-
-
-/***/ }),
-/* 55 */
 /***/ (function(module, exports) {
 
 function webpackEmptyContext(req) {
@@ -19473,10 +18114,10 @@ function webpackEmptyContext(req) {
 webpackEmptyContext.keys = function() { return []; };
 webpackEmptyContext.resolve = webpackEmptyContext;
 module.exports = webpackEmptyContext;
-webpackEmptyContext.id = 55;
+webpackEmptyContext.id = 54;
 
 /***/ }),
-/* 56 */
+/* 55 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -19486,7 +18127,7 @@ var __extends = (this && this.__extends) || function (d, b) {
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
-var eloop_1 = __webpack_require__(7);
+var eloop_1 = __webpack_require__(5);
 var TIMEOUT_MAX = 2147483647;
 var Timeout = (function () {
     function Timeout(callback, args) {

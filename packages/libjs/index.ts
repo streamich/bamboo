@@ -18,8 +18,8 @@
 
 
 // `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
-import {Buffer} from "../lib/buffer";
-import {StaticBuffer} from "../lib/static-buffer";
+import {Buffer} from "../bamboo-core/src/lib/buffer";
+import {StaticBuffer} from "../bamboo-core/src/lib/static-buffer";
 var p = process as any;
 
 // Import syscall functions from `process` or require from `libsys` package if we

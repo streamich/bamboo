@@ -66,7 +66,7 @@ process.config = {};
 // reallyExit: [Function: reallyExit],
 
 
-var libjs = require('../libjs/index');
+var libjs = require('../../../libjs/index');
 
 process.pid = libjs.getpid();
 

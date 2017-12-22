@@ -1,5 +1,5 @@
 import {Arr} from './typebase';
-import {Buffer} from '../lib/buffer';
+import {Buffer} from '../bamboo-core/src/lib/buffer';
 import {isLE as IS_LE, uint8, uint16} from './platforms/x86_64_linux';
 
 

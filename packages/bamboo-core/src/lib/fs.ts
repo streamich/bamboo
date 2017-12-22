@@ -1,4 +1,4 @@
-import * as libjs from '../libjs/index';
+import * as libjs from '../../../libjs/index';
 import {Inotify, IInotifyEvent} from '../libaio/inotify';
 var util = require('./util');
 var pathModule = require('./path');

@@ -1,4 +1,4 @@
-// g++ /share/full-js/src/libjs/consts.cc -o /share/full-js/src/libjs/consts && /share/full-js/src/libjs/consts
+// g++ .consts.cc -o .consts && .consts
 #include <iostream>
 #include <stdint.h>
 #include <string.h>

@@ -19,7 +19,7 @@ var vm = require('./vm');
 var assert = require('./assert').ok;
 var fs = require('./fs');
 var path = require('./path');
-var libjs = require('../libjs/index');
+var libjs = require('../../../libjs/index');
 
 // const internalModuleReadFile = process.binding('fs').internalModuleReadFile;
 // const internalModuleStat = process.binding('fs').internalModuleStat;

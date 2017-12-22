@@ -55,8 +55,6 @@ if(typeof StaticBuffer === 'undefined') {
 }
 
 
-
-
 // Set-up `process` global.
 require('./process');
 
@@ -102,10 +100,11 @@ task.callback = function() {
         } else {
             // Create fake asynchronous system calls by just wrapping the
             // synchronous version.
+            var slice = Array.prototype.slice;
             process.asyscall = function() {
                 var len = arguments.length - 1;
-                var args = new Array(len);
-                for(var i = 0; i < len; i++) args[i] = arguments[i];
+                var args = [];
+                for(var i = 0; i < len; i++) args.push(arguments[i]);
                 var res = process.syscall.apply(null, args);
                 arguments[len](res);
             };

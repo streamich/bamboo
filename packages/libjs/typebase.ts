@@ -1,4 +1,4 @@
-import {Buffer} from "../lib/buffer";
+import {Buffer} from "../bamboo-core/src/lib/buffer";
 
 // When less data provided than the C structs hold, the `.pack()` commad
 // should still generate a `Buffer` of the kernel's C struct size, otherwise
@@ -36,7 +36,7 @@ export class Type implements IType {
     pack(data: any, buf?: Buffer, offset: number = 0) {
         if(!buf) buf = new Buffer(this.size);
         if(data instanceof Buffer) data.copy(buf, offset);
-        else if(typeof data == 'object') data.toBuffer().copy(buf, offset);
+        else if(typeof data == 'object') (data as any).toBuffer().copy(buf, offset);
         else this.packF.call(buf, data, offset);
         return buf;
     }
