@@ -9,7 +9,7 @@
 export interface IType {
     size: number;
     unpack(buf:Buffer, offset?:number):any;
-    pack(data: any, buf: Buffer, offset);
+    pack(data: any, buf?: Buffer, offset?);
 }
 
 export class Type implements IType {

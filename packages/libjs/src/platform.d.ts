@@ -28,6 +28,20 @@ import SHUT from './consts/SHUT';
 import SO from './consts/SO';
 import SOCK from './consts/SOCK';
 import SOL from './consts/SOL';
+import ipv4 from './structs/ipv4';
+import stat, {Istat} from './structs/stat';
+import in_addr, {Iin_addr} from './structs/in_addr';
+import sockaddr_in, {Isockaddr_in} from './structs/sockaddr_in';
+import sockaddr, {Isockaddr} from './structs/sockaddr';
+import epoll_event, {Iepoll_event} from './structs/epoll_event';
+import ipc_perm, {Iipc_perm} from './structs/ipc_perm';
+import shmid_ds, {Ishmid_ds} from './structs/shmid_ds';
+import utimbuf, {Iutimbuf} from './structs/utimbuf';
+import timeval, {Itimeval} from './structs/timeval';
+import timevalarr, {Itimevalarr} from './structs/timevalarr';
+import timespec from './structs/timespec';
+import linux_dirent64, {Ilinux_dirent64} from './structs/linux_dirent64';
+import inotify_event, {Iinotify_event} from './structs/inotify_event';
 
 export {
     SYS,
@@ -58,9 +72,37 @@ export {
     SO,
     SOCK,
     SOL,
+
+    ipv4,
+    stat,
+    Istat,
+    in_addr,
+    Iin_addr,
+    sockaddr_in,
+    Isockaddr_in,
+    sockaddr,
+    Isockaddr,
+    epoll_event,
+    Iepoll_event,
+    ipc_perm,
+    Iipc_perm,
+    shmid_ds,
+    Ishmid_ds,
+    utimbuf,
+    Iutimbuf,
+    timeval,
+    Itimeval,
+    timevalarr,
+    Itimevalarr,
+    timespec,
+    linux_dirent64,
+    Ilinux_dirent64,
+    inotify_event,
+    Iinotify_event,
 };
 
 export const isLE: boolean;
+export const PATH_MAX: number;
 
 export const NULL: number;
 export const int8: IType;
