@@ -2,7 +2,7 @@
   "name": "libjs",
   "version": "0.1.0",
   "scripts": {
-    "test": "tap ./test/*.test.js"
+    "test": "./test/run.sh"
   },
   "dependencies": {
     "fast-extend": "^0.0.2"

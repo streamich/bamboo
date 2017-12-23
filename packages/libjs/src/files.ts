@@ -49,7 +49,8 @@ export function open(pathname: string, flags: FLAG, mode?: S|number): number {
     return process.syscall.apply(null, args);
 }
 export function openAsync(pathname: string, flags: FLAG, mode: S|number, callback: TCallback) {
-    process.asyscall(SYS.open, pathname, flags, mode, callback);
+    const buf = Buffer.from(pathname + '\0');
+    process.asyscall(SYS.open, buf, flags, mode, callback);
 }
 
 
@@ -76,10 +77,12 @@ export function closeAsync(fd: number, callback: TCallback) {
 // Check user's permissions for a file.
 //
 export function access(pathname: string, mode: number): number {
-    return process.syscall(SYS.access, pathname, mode);
+    const buf = Buffer.from(pathname + '\0');
+    return process.syscall(SYS.access, buf, mode);
 }
 export function accessAsync(pathname: string, mode: number, callback: TCallback) {
-    process.asyscall(SYS.access, pathname, mode, callback);
+    const buf = Buffer.from(pathname + '\0');
+    process.asyscall(SYS.access, buf, mode, callback);
 }
 
 

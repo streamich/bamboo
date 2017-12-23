@@ -1,13 +1,12 @@
 // Fetches and returns statistics about a file.
 import {SYS} from './platform';
 import statStruct, {Istat} from './structs/stat';
-const {unpack, size} = statStruct;
 
 
 function unpackStats(buf: Buffer, result: number, callback: TCallbackWithError <Error|number, Istat>) {
     if(result === 0) {
         try {
-            callback(null, unpack(buf));
+            callback(null, statStruct.unpack(buf));
         } catch(e) {
             callback(e);
         }
@@ -50,14 +49,16 @@ function unpackStats(buf: Buffer, result: number, callback: TCallbackWithError <
 
 // Throws number
 export function stat(filepath: string): Istat {
-    const buf = new Buffer(size + 200);
-    const result = process.syscall(SYS.stat, filepath, buf);
-    if(result == 0) return unpack(buf);
+    const buf = new Buffer(statStruct.size + 200);
+    const filepathBuffer = Buffer.from(filepath + '\0');
+    const result = process.syscall(SYS.stat, filepathBuffer, buf);
+    console.log('buf', buf);
+    if(result == 0) return statStruct.unpack(buf);
     throw result;
 }
 
 export function statAsync(filepath: string, callback: TCallbackWithError <Error|number, Istat>) {
-    const buf = new Buffer(size + 100);
+    const buf = new Buffer(statStruct.size + 100);
     process.asyscall(SYS.stat, filepath, buf, (result) => unpackStats(buf, result as number, callback));
 }
 
@@ -65,24 +66,24 @@ export function statAsync(filepath: string, callback: TCallbackWithError <Error|
 export function lstat(linkpath: string): Istat {
     const buf = new Buffer(statStruct.size + 100);
     const result = process.syscall(SYS.lstat, linkpath, buf);
-    if(result == 0) return unpack(buf);
+    if(result == 0) return statStruct.unpack(buf);
     throw result;
 }
 
 export function lstatAsync(linkpath: string, callback: TCallbackWithError <Error|number, Istat>) {
-    const buf = new Buffer(size + 100);
+    const buf = new Buffer(statStruct.size + 100);
     process.asyscall(SYS.lstat, linkpath, buf, (result) => unpackStats(buf, result as number, callback));
 }
 
 // Throws number
 export function fstat(fd: number): Istat {
-    const buf = new Buffer(size + 100);
+    const buf = new Buffer(statStruct.size + 100);
     const result = process.syscall(SYS.fstat, fd, buf);
-    if(result == 0) return unpack(buf);
+    if(result == 0) return statStruct.unpack(buf);
     throw result;
 }
 
 export function fstatAsync(fd: number, callback: TCallbackWithError <Error|number, Istat>) {
-    const buf = new Buffer(size + 100);
+    const buf = new Buffer(statStruct.size + 100);
     process.asyscall(SYS.fstat, fd, buf, (result) => unpackStats(buf, result as number, callback));
 }

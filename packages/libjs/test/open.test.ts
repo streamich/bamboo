@@ -1,7 +1,7 @@
 require('./setup');
-const {open} = require('../src/index');
-const {pass} = require('tap');
-const {equal, ok} = require('assert');
+import {open} from '../src/index';
+import {pass} from 'tap';
+import {equal, ok} from 'assert';
 
 equal(typeof open, 'function');
 pass('is a function');

@@ -1,7 +1,7 @@
-require('./setup');
-const {getpid} = require('../src/index');
-const {pass} = require('tap');
-const {equal} = require('assert');
+import './setup';
+import {getpid} from '../src/index';
+import {pass} from 'tap';
+import {equal} from 'assert';
 
 equal(typeof getpid, 'function');
 pass('is a function');
