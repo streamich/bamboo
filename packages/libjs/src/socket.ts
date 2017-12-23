@@ -1,6 +1,5 @@
 import {Arr} from './typebase';
-import {Buffer} from '../bamboo-core/src/lib/buffer';
-import {isLE as IS_LE, uint8, uint16} from './platforms/x86_64_linux';
+import {isLE as IS_LE, uint8, uint16} from './platform';
 
 
 export function flip(buf: Buffer, offset = 0, len = buf.length) {

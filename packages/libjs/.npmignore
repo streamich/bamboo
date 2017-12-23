@@ -2,5 +2,7 @@
 node_modules
 /docs
 /examples
-/snip
+/scratch
 .idea
+package-lock.json
+yarn.lock

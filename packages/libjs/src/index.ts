@@ -1,3 +1,4 @@
+import FLAG from './consts/FLAG';
 
 // # libjs
 //
@@ -18,9 +19,8 @@
 
 
 // `libjs` creates wrappers around system calls, similar to what `libc` does for `C` language.
-import {Buffer} from "../bamboo-core/src/lib/buffer";
-import {StaticBuffer} from "../bamboo-core/src/lib/static-buffer";
-var p = process as any;
+import {noop} from './util';
+const p = process as any;
 
 // Import syscall functions from `process` or require from `libsys` package if we
 // are running under Node.js
@@ -47,10 +47,8 @@ function malloc(size): Buffer {
 
 // `defs` provides platform specific constants and structs, the default one we use is `x86_64_linux`.
 // import {SYS, types} from './definitions';
-import {SYS} from './platforms/x86_64_linux';
-import * as types from './platforms/x86_64_linux';
-export * from './platforms/x86_64_linux';
-import {Type, Arr, Struct} from './typebase';
+import {SYS, AF} from './platform';
+import {Struct} from './typebase';
 
 
 // In development mode we use `debug` library to trace all our system calls.
@@ -59,15 +57,6 @@ import {Type, Arr, Struct} from './typebase';
 // To see the debug output, set `DEBUG` environment variable to `libjs:*`, example:
 //
 //     DEBUG=libjs:* node script.js
-
-// Export definitions and other modules all as part of the library.
-export var arch = {
-    isLE: true,
-    kernel: 'linux',
-    int: 64,
-    SYS,
-    types,
-};
 export * from './ctypes';
 // export * from './definitions';
 export * from './socket';
@@ -78,9 +67,6 @@ export type Taddr = number|number64|Buffer|StaticBuffer|ArrayBuffer|Uint8Array;
 export type TcallbackTyped <T> = (result: T) => void;
 export type TcallbackErrTyped <E, T> = (err?: E, result?: T) => void;
 export type Tcallback = TcallbackTyped <number>;
-
-
-function noop() {}
 
 
 // ## Files
@@ -137,7 +123,7 @@ export function writeAsync(fd: number, buf: string|StaticBuffer, callback: Tcall
 //
 // Opens a file, returns file descriptor on success or a negative number representing an error.
 
-export function open(pathname: string, flags: types.FLAG, mode?: types.S|number): number {
+export function open(pathname: string, flags: FLAG, mode?: types.S|number): number {
     // debug('open', pathname, flags, mode);
     var args = [SYS.open, pathname, flags];
     if(typeof mode === 'number') args.push(mode);
@@ -145,7 +131,7 @@ export function open(pathname: string, flags: types.FLAG, mode?: types.S|number)
     return syscall.apply(null, args);
 }
 
-export function openAsync(pathname: string, flags: types.FLAG, mode: types.S|number, callback: Tcallback) {
+export function openAsync(pathname: string, flags: FLAG, mode: types.S|number, callback: Tcallback) {
     p.asyscall(SYS.open, pathname, flags, mode, callback);
 }
 
@@ -988,23 +974,23 @@ export function sendAsync(fd: number, buf: Buffer, flags: types.MSG = 0, callbac
 
 export function sendto(fd: number, buf: Buffer, flags: types.MSG = 0, addr?: types.sockaddr_in, addr_type?: Struct): number {
     // debug('sendto', fd, buf.toString(), buf.length, flags, addr);
-    var params = [SYS.sendto, fd, buf, buf.length, flags, 0, 0];
+    var params: any = [SYS.sendto, fd, buf, buf.length, flags, 0, 0];
     if(addr) {
         var addrbuf = addr_type.pack(addr);
         params[5] = addrbuf;
         params[6] = addrbuf.length;
     }
-    return syscall.apply(null, params);
+    return syscall(...params);
 }
 
 export function sendtoAsync(fd: number, buf: Buffer, flags: types.MSG = 0, addr: types.sockaddr_in, addr_type: Struct, callback: Tcallback) {
-    var params = [SYS.sendto, fd, buf, buf.length, flags, 0, 0, callback];
+    const params: any = [SYS.sendto, fd, buf, buf.length, flags, 0, 0, callback];
     if(addr) {
-        var addrbuf = addr_type.pack(addr);
+        const addrbuf = addr_type.pack(addr);
         params[5] = addrbuf;
         params[6] = addrbuf.length;
     }
-    syscall.apply(null, params);
+    syscall(...params);
 }
 
 

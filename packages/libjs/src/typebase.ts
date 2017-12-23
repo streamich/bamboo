@@ -1,5 +1,3 @@
-import {Buffer} from "../bamboo-core/src/lib/buffer";
-
 // When less data provided than the C structs hold, the `.pack()` commad
 // should still generate a `Buffer` of the kernel's C struct size, otherwise
 // kernel read/overwrite some memory that does not belong to us ^^.
@@ -8,16 +6,14 @@ import {Buffer} from "../bamboo-core/src/lib/buffer";
 // that specifies its size in bytes, so even if we are not using some data
 // from C structs, we still produce the correctly sized `Buffers`.
 
-
 export interface IType {
     size: number;
     unpack(buf:Buffer, offset?:number):any;
     pack(data: any, buf: Buffer, offset);
 }
 
-
 export class Type implements IType {
-    static define(size, unpack, pack) {
+    static define(size, unpack, pack): Type {
         var new_type = new Type;
         new_type.size = size;
         new_type.unpackF = unpack;
@@ -42,9 +38,8 @@ export class Type implements IType {
     }
 }
 
-
 export class Arr {
-    static define(type: IType, len: number) {
+    static define(type: IType, len: number): Arr {
         var new_arr = new Arr;
         new_arr.len = len;
         new_arr.type = type;
@@ -79,7 +74,6 @@ export class Arr {
         return buf;
     }
 }
-
 
 export class Struct implements IType {
     static define(size, defs) {
