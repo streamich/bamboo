@@ -380,12 +380,15 @@ int main(int argc, char *argv[]) {
     if (ctx) {
         duk_eval_string(ctx,
             "process = {runtime: 'Duktape', platform: 'linux', arch: 'x64'};"
+            "libsys = {};"
             "global = Duktape;"
             "global.process = process;"
+            "global.libsys = libsys;"
             "Duktape.global = global;"
-            "Duktape.process = process;");
+            "Duktape.process = process;"
+            "Duktape.libsys = libsys;");
 
-        duk_eval_string(ctx, "(process)");
+        duk_eval_string(ctx, "(libsys)");
 
         duk_push_c_function(ctx, fulljs_api_syscall, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "syscall");
