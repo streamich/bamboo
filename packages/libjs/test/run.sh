@@ -12,3 +12,6 @@ ts-node test/write.test.ts
 
 echo "access";
 ts-node test/access.test.ts
+
+echo "stat":
+ts-node test/access.test.ts
