@@ -7,6 +7,6 @@
     "preferGlobal": true,
     "dependencies": {
         "bamboo-core": "^0.1.0",
-        "yargs-parser": "8.1.0"
+        "yargs-parser": "13.1.2"
     }
 }
